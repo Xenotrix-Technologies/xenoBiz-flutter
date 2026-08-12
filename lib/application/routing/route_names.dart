@@ -1,0 +1,52 @@
+abstract class RouteNames {
+  static const String splash = '/';
+  static const String login = '/login';
+  static const String onboarding = '/onboarding';
+  static const String dashboard = '/dashboard';
+  static const String subscription = '/subscription';
+
+  // Customers
+  static const String customers = '/customers';
+  static const String customerDetails = '/customer-details';
+  static const String customerTimeline = '/customer-timeline';
+
+  // Products & Inventory
+  static const String products = '/products';
+  static const String productDetails = '/product-details';
+  static const String stockManagement = '/stock-management';
+  static const String stockAdjustment = '/stock-adjustment';
+
+  // Invoices & Sales
+  static const String invoices = '/invoices';
+  static const String createInvoice = '/create-invoice';
+  static const String invoiceDetails = '/invoice-details';
+  static const String salesOverview = '/sales-overview';
+
+  // CRM
+  static const String leadPipeline = '/lead-pipeline';
+  static const String addLead = '/add-lead';
+  static const String leadDetails = '/lead-details';
+  static const String followUps = '/follow-ups';
+
+  // Analytics & Reports
+  static const String salesAnalytics = '/sales-analytics';
+  static const String financialAnalytics = '/financial-analytics';
+  static const String inventoryAnalytics = '/inventory-analytics';
+  static const String reports = '/reports';
+
+  // Purchases & Suppliers
+  static const String purchaseManagement = '/purchase-management';
+  static const String createPurchaseOrder = '/create-purchase-order';
+  static const String supplierDirectory = '/supplier-directory';
+  static const String supplierDetails = '/supplier-details';
+
+  // WhatsApp & Reminders
+  static const String automatedReminders = '/automated-reminders';
+  static const String editRule = '/edit-rule';
+  static const String whatsappTemplates = '/whatsapp-templates';
+  static const String newTemplate = '/new-template';
+
+  // Sync & Settings
+  static const String offlineSync = '/offline-sync';
+  static const String settings = '/settings';
+}
