@@ -40,7 +40,7 @@ async function seed() {
   `);
 
   const passwordHash = await bcrypt.hash('Demo@12345', 10);
-  const adminHash = await bcrypt.hash('Admin@12345', 10);
+  const adminHash = await bcrypt.hash('admin', 10);
 
   // 1. Create Admin Account
   const adminUser = userRepository.create({
