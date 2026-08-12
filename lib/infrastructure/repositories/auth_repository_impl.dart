@@ -45,10 +45,11 @@ class AuthRepositoryImpl implements AuthRepository {
           await boxBiz.put('name', bizData['name']?.toString() ?? '');
           await boxBiz.put('email', bizData['email']?.toString());
           await boxBiz.put('gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString());
-          await boxBiz.put('category', (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString());
+          await boxBiz.put('category', (bizData['category'] ?? bizData['business_type'] ?? '').toString());
           await boxBiz.put('currency', (bizData['currency'] ?? '₹').toString());
           await boxBiz.put('phone', bizData['phone']?.toString() ?? '');
           await boxBiz.put('address', bizData['address']?.toString() ?? '');
+          await boxBiz.put('logoUrl', (bizData['logoUrl'] ?? bizData['logo'])?.toString());
         } else {
           await boxBiz.clear();
         }
@@ -88,10 +89,11 @@ class AuthRepositoryImpl implements AuthRepository {
               name: (bizData['name'] ?? '').toString(),
               email: bizData['email']?.toString(),
               gstin: (bizData['gstin'] ?? bizData['tax_number'])?.toString(),
-              category: (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString(),
+              category: (bizData['category'] ?? bizData['business_type'] ?? '').toString(),
               currency: (bizData['currency'] ?? '₹').toString(),
               phone: bizData['phone']?.toString() ?? '',
               address: bizData['address']?.toString() ?? '',
+              logoUrl: (bizData['logoUrl'] ?? bizData['logo'])?.toString(),
               createdAt: DateTime.tryParse(bizData['createdAt']?.toString() ?? bizData['created_at']?.toString() ?? '') ?? DateTime.now(),
             );
           } else {
@@ -113,10 +115,11 @@ class AuthRepositoryImpl implements AuthRepository {
       name: name,
       email: box.get('email')?.toString(),
       gstin: box.get('gstin')?.toString(),
-      category: box.get('category')?.toString() ?? 'Retail Store',
+      category: box.get('category')?.toString() ?? '',
       currency: box.get('currency')?.toString() ?? '₹',
       phone: box.get('phone')?.toString() ?? '',
       address: box.get('address')?.toString() ?? '',
+      logoUrl: box.get('logoUrl')?.toString(),
       createdAt: DateTime.now(),
     );
   }
