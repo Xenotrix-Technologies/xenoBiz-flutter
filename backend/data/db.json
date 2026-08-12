@@ -1,0 +1,46 @@
+{
+  "users": [
+    {
+      "id": "usr_owner",
+      "name": "Business Owner",
+      "email": "owner@xenobiz.com",
+      "phone": "+919847011223",
+      "passwordHash": "$2a$10$w8T0hR.tQ4SjPZz4eD0EHevK3wU6z7Xp8/n1a1y8y9k0c1d2e3f4g",
+      "role": "OWNER",
+      "createdAt": "2026-08-10T18:16:28.106Z"
+    },
+    {
+      "id": "usr_admin",
+      "name": "admin",
+      "email": "admin@xenobiz.com",
+      "phone": "admin",
+      "passwordHash": "$2a$10$I7mJhWJCZaYKYn2C8hY3HelYuCIhfs6mngW9np.M3STpYRkcBtHcK",
+      "role": "ADMIN",
+      "createdAt": "2026-08-10T18:17:54.524Z"
+    }
+  ],
+  "businesses": [
+    {
+      "id": "biz_101",
+      "userId": "usr_owner",
+      "name": "Apex Technologies Pvt Ltd",
+      "phone": "+91 98470 11223",
+      "email": "finance@apextech.in",
+      "address": "Kalamassery, Kochi, Kerala",
+      "gstin": "32ABCDE1234F1Z5",
+      "category": "Retail Store",
+      "createdAt": "2026-08-10T18:16:28.107Z"
+    },
+    {
+      "id": "biz_19db436f",
+      "userId": "usr_admin",
+      "name": "nivin",
+      "phone": "+91 98470 11223",
+      "email": "admin@xenobiz.com",
+      "address": "Kochi, Kerala",
+      "gstin": null,
+      "category": "Retail Store",
+      "createdAt": "2026-08-10T18:18:13.287Z"
+    }
+  ]
+}

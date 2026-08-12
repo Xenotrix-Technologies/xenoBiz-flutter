@@ -1,0 +1,33 @@
+name: xenobiz_flutter
+description: "XenoBiz Business Manager - Mobile Business Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^8.1.3
+  get_it: ^7.6.0
+  dio: ^5.4.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.0.0
+  equatable: ^2.0.5
+  intl: ^0.19.0
+  fl_chart: ^0.68.0
+  connectivity_plus: ^6.0.3
+  url_launcher: ^6.3.0
+  go_router: ^14.2.0
+  google_fonts: ^6.2.1
+  uuid: ^4.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
