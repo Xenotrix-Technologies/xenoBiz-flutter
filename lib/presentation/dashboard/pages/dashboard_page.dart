@@ -8,6 +8,7 @@ import '../../../const/sizes.dart';
 import '../../../const/strings.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/quick_actions_bottom_sheet.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
 
@@ -19,33 +20,10 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  int _currentBottomNavIndex = 0;
-
   @override
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(FetchDashboardDataEvent());
-  }
-
-  void _onBottomNavTapped(int index) {
-    if (index == _currentBottomNavIndex) return;
-    setState(() => _currentBottomNavIndex = index);
-    switch (index) {
-      case 0:
-        break; // Dashboard home
-      case 1:
-        context.push(RouteNames.invoices);
-        break;
-      case 2:
-        context.push(RouteNames.products);
-        break;
-      case 3:
-        context.push(RouteNames.customers);
-        break;
-      case 4:
-        context.push(RouteNames.settings);
-        break;
-    }
   }
 
   @override
@@ -54,7 +32,7 @@ class _DashboardPageState extends State<DashboardPage> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(AppStrings.appName),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.deepNavy,
         elevation: 0,
         actions: [
           IconButton(
@@ -73,19 +51,12 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentBottomNavIndex,
-        onTap: _onBottomNavTapped,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.onSurfaceVariant,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Invoices'),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Inventory'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Customers'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.primaryBlue,
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        onPressed: () => QuickActionsBottomSheet.show(context),
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
       ),
       body: BlocBuilder<DashboardBloc, DashboardState>(
         builder: (context, state) {
@@ -181,53 +152,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-
-                    // Quick Actions Suite
-                    const Text(
-                      'Quick Actions',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _QuickActionButton(
-                            icon: Icons.add_chart,
-                            label: 'New Invoice',
-                            color: AppColors.primary,
-                            onTap: () => context.push(RouteNames.createInvoice),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _QuickActionButton(
-                            icon: Icons.person_add_alt_1,
-                            label: 'Add Lead',
-                            color: AppColors.secondary,
-                            onTap: () => context.push(RouteNames.addLead),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _QuickActionButton(
-                            icon: Icons.chat,
-                            label: 'WhatsApp',
-                            color: AppColors.success,
-                            onTap: () => context.push(RouteNames.whatsappTemplates),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _QuickActionButton(
-                            icon: Icons.bar_chart,
-                            label: 'Reports',
-                            color: AppColors.warning,
-                            onTap: () => context.push(RouteNames.reports),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
 
                     // Additional Navigation Grid
                     AppCard(
@@ -368,46 +292,6 @@ class _KpiSubMetric extends StatelessWidget {
         const SizedBox(height: 4),
         Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
       ],
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -49,4 +49,5 @@ abstract class RouteNames {
   // Sync & Settings
   static const String offlineSync = '/offline-sync';
   static const String settings = '/settings';
+  static const String more = '/more';
 }
