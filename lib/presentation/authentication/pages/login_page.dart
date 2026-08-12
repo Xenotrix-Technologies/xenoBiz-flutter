@@ -17,8 +17,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController(text: 'admin');
-  final _passwordController = TextEditingController(text: 'admin');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   void _onLoginPressed() {
     final email = _emailController.text.trim();
@@ -28,7 +28,7 @@ class _LoginPageState extends State<LoginPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter your username/email and password.'),
+          content: Text('Please enter your email/username and password.'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -179,7 +179,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 32),
                 AppTextField(
                   label: AppStrings.emailOrPhoneLabel,
-                  hint: 'Username / Email / Mobile (e.g. admin)',
+                  hint: 'Email / Username / Phone (e.g. demo@xenobiz.local)',
                   controller: _emailController,
                   prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
@@ -187,7 +187,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 16),
                 AppTextField(
                   label: AppStrings.passwordLabel,
-                  hint: 'Enter password (e.g. admin)',
+                  hint: 'Enter your password',
                   controller: _passwordController,
                   prefixIcon: Icons.lock_outline,
                   obscureText: true,

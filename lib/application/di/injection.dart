@@ -48,19 +48,19 @@ Future<void> configureDependencies() async {
   );
 
   getIt.registerLazySingleton<CustomerRepository>(
-    () => CustomerRepositoryImpl(hiveService: getIt()),
+    () => CustomerRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
   );
 
   getIt.registerLazySingleton<ProductRepository>(
-    () => ProductRepositoryImpl(hiveService: getIt()),
+    () => ProductRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
   );
 
   getIt.registerLazySingleton<InvoiceRepository>(
-    () => InvoiceRepositoryImpl(hiveService: getIt()),
+    () => InvoiceRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
   );
 
   getIt.registerLazySingleton<LeadRepository>(
-    () => LeadRepositoryImpl(hiveService: getIt()),
+    () => LeadRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
   );
 
   getIt.registerLazySingleton<ExpenseRepository>(
@@ -68,7 +68,7 @@ Future<void> configureDependencies() async {
   );
 
   getIt.registerLazySingleton<PurchaseRepository>(
-    () => PurchaseRepositoryImpl(hiveService: getIt()),
+    () => PurchaseRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
   );
 
   getIt.registerLazySingleton<SyncRepository>(
