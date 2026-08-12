@@ -1,56 +1,70 @@
 import 'package:flutter/material.dart';
 
-/// Centralized application color palette following Stitch "Executive Precision" theme.
+/// Centralized application color palette following the XENO PALETTE specification.
 abstract class AppColors {
-  // Brand Colors
-  static const Color primary = Color(0xFF050C1F); // Deep Navy
+  // XENO PALETTE Constants
+  static const Color primaryBlue = Color(0xFF2563EB); // #2563EB Primary Blue
+  static const Color deepNavy = Color(0xFF0F172A); // #0F172A Deep Navy
+  static const Color darkBlueText = Color(0xFF1E3A5F); // #1E3A5F Dark Blue Text
+  static const Color secondaryText = Color(0xFF64748B); // #64748B Secondary Text
+  static const Color pageBackground = Color(0xFFF8FAFC); // #F8FAFC Page Background
+  static const Color cardSurface = Color(0xFFFFFFFF); // #FFFFFF Card / Surface
+  static const Color border = Color(0xFFE2E8F0); // #E2E8F0 Border
+  static const Color blueTint = Color(0xFFEFF6FF); // #EFF6FF Blue Tint
+  static const Color success = Color(0xFF059669); // #059669 Success
+  static const Color successTint = Color(0xFFECFDF5); // #ECFDF5 Success Tint
+  static const Color warning = Color(0xFFF59E0B); // #F59E0B Warning
+  static const Color warningTint = Color(0xFFFFFBEB); // #FFFBEB Warning Tint
+  static const Color danger = Color(0xFFEF4444); // #EF4444 Danger
+
+  // Semantic Palette Aliases for App Widgets & Material Theme
+  static const Color primary = primaryBlue;
   static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color primaryContainer = Color(0xFF141B2E);
-  static const Color onPrimaryContainer = Color(0xFF7C839B);
+  static const Color primaryContainer = blueTint;
+  static const Color onPrimaryContainer = darkBlueText;
 
-  static const Color secondary = Color(0xFF00BAFF); // Bright Blue accent
+  static const Color secondary = deepNavy;
   static const Color onSecondary = Color(0xFFFFFFFF);
-  static const Color secondaryContainer = Color(0xFFC6E7FF);
-  static const Color onSecondaryContainer = Color(0xFF004663);
+  static const Color secondaryContainer = blueTint;
+  static const Color onSecondaryContainer = darkBlueText;
 
-  static const Color tertiary = Color(0xFFECEEDC); // Soft Cream
-  static const Color onTertiary = Color(0xFF1A1D12);
+  static const Color tertiary = blueTint;
+  static const Color onTertiary = darkBlueText;
 
   // Surface & Backgrounds
-  static const Color background = Color(0xFFF9F9F9);
-  static const Color onBackground = Color(0xFF1A1C1C);
-  
-  static const Color surface = Color(0xFFF9F9F9);
-  static const Color surfaceCard = Color(0xFFFFFFFF);
-  static const Color surfaceContainerLow = Color(0xFFF3F3F3);
-  static const Color surfaceContainer = Color(0xFFEEEEEE);
-  static const Color surfaceContainerHigh = Color(0xFFE8E8E8);
-  
-  static const Color onSurface = Color(0xFF1A1C1C);
-  static const Color onSurfaceVariant = Color(0xFF45464D);
-  static const Color outline = Color(0xFF76777D);
-  static const Color outlineVariant = Color(0xFFC6C6CD);
+  static const Color background = pageBackground;
+  static const Color onBackground = darkBlueText;
+
+  static const Color surface = cardSurface;
+  static const Color surfaceCard = cardSurface;
+  static const Color surfaceContainerLow = blueTint;
+  static const Color surfaceContainer = pageBackground;
+  static const Color surfaceContainerHigh = border;
+
+  static const Color onSurface = darkBlueText;
+  static const Color onSurfaceVariant = secondaryText;
+  static const Color outline = secondaryText;
+  static const Color outlineVariant = border;
 
   // Status & Feedback Colors
-  static const Color success = Color(0xFF12B76A);
-  static const Color successContainer = Color(0xFFD1FADF);
+  static const Color successContainer = successTint;
   static const Color onSuccess = Color(0xFFFFFFFF);
 
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color warningContainer = Color(0xFFFEF08A);
-  static const Color onWarning = Color(0xFF78350F);
+  static const Color warningContainer = warningTint;
+  static const Color onWarning = darkBlueText;
 
-  static const Color error = Color(0xFFBA1A1A);
-  static const Color errorContainer = Color(0xFFFFDAD6);
+  static const Color error = danger;
+  static const Color errorContainer = Color(0xFFFEF2F2);
   static const Color onError = Color(0xFFFFFFFF);
-  static const Color onErrorContainer = Color(0xFF93000A);
+  static const Color onErrorContainer = danger;
 
-  static const Color info = Color(0xFF00BAFF);
-  static const Color infoContainer = Color(0xFFE0F2FE);
+  static const Color info = primaryBlue;
+  static const Color infoContainer = blueTint;
 
   // Neutral Tints
-  static const Color divider = Color(0xFFE2E2E2);
-  static const Color disabled = Color(0xFFC6C6CD);
-  static const Color shimmerBase = Color(0xFFE0E0E0);
-  static const Color shimmerHighlight = Color(0xFFF5F5F5);
+  static const Color divider = border;
+  static const Color disabled = border;
+  static const Color shimmerBase = border;
+  static const Color shimmerHighlight = pageBackground;
 }
+

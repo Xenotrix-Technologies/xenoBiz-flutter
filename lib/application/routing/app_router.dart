@@ -15,6 +15,7 @@ import '../../presentation/leads/pages/add_lead_page.dart';
 import '../../presentation/leads/pages/followups_page.dart';
 import '../../presentation/leads/pages/lead_details_page.dart';
 import '../../presentation/leads/pages/lead_pipeline_page.dart';
+import '../../presentation/main/pages/main_shell_page.dart';
 import '../../presentation/onboarding/pages/business_onboarding_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
 import '../../presentation/products/pages/product_list_page.dart';
@@ -26,6 +27,7 @@ import '../../presentation/reports/pages/financial_analytics_page.dart';
 import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
+import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
 import '../../presentation/suppliers/pages/supplier_details_page.dart';
@@ -53,19 +55,65 @@ class AppRouter {
         path: RouteNames.onboarding,
         builder: (context, state) => const BusinessOnboardingPage(),
       ),
+
+      // Persistent Shell Navigation for the 5 Main Tabs
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainShellPage(navigationShell: navigationShell);
+        },
+        branches: [
+          // Branch 0: Home (Dashboard)
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.dashboard,
+                builder: (context, state) => const DashboardPage(),
+              ),
+            ],
+          ),
+          // Branch 1: Sales
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.salesOverview,
+                builder: (context, state) => const SalesOverviewPage(),
+              ),
+            ],
+          ),
+          // Branch 2: Customers
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.customers,
+                builder: (context, state) => const CustomerListPage(),
+              ),
+            ],
+          ),
+          // Branch 3: Stock
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.stockManagement,
+                builder: (context, state) => const StockManagementPage(),
+              ),
+            ],
+          ),
+          // Branch 4: More
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.more,
+                builder: (context, state) => const MoreMenuPage(),
+              ),
+            ],
+          ),
+        ],
+      ),
+
+      // Standalone / Pushed Detail Sub-Routes
       GoRoute(
         path: RouteNames.subscription,
         builder: (context, state) => const SubscriptionPaywallPage(),
-      ),
-      GoRoute(
-        path: RouteNames.dashboard,
-        builder: (context, state) => const DashboardPage(),
-      ),
-
-      // Customers
-      GoRoute(
-        path: RouteNames.customers,
-        builder: (context, state) => const CustomerListPage(),
       ),
       GoRoute(
         path: RouteNames.customerDetails,
@@ -75,8 +123,6 @@ class AppRouter {
         path: RouteNames.customerTimeline,
         builder: (context, state) => const CustomerTimelinePage(),
       ),
-
-      // Products & Inventory
       GoRoute(
         path: RouteNames.products,
         builder: (context, state) => const ProductListPage(),
@@ -86,15 +132,9 @@ class AppRouter {
         builder: (context, state) => const ProductDetailsPage(),
       ),
       GoRoute(
-        path: RouteNames.stockManagement,
-        builder: (context, state) => const StockManagementPage(),
-      ),
-      GoRoute(
         path: RouteNames.stockAdjustment,
         builder: (context, state) => const StockAdjustmentPage(),
       ),
-
-      // Invoices & Sales
       GoRoute(
         path: RouteNames.invoices,
         builder: (context, state) => const InvoiceListPage(),
@@ -107,12 +147,6 @@ class AppRouter {
         path: RouteNames.invoiceDetails,
         builder: (context, state) => const InvoiceDetailsPage(),
       ),
-      GoRoute(
-        path: RouteNames.salesOverview,
-        builder: (context, state) => const SalesOverviewPage(),
-      ),
-
-      // CRM
       GoRoute(
         path: RouteNames.leadPipeline,
         builder: (context, state) => const LeadPipelinePage(),
@@ -129,8 +163,6 @@ class AppRouter {
         path: RouteNames.followUps,
         builder: (context, state) => const FollowUpsPage(),
       ),
-
-      // Reports
       GoRoute(
         path: RouteNames.reports,
         builder: (context, state) => const ReportsPage(),
@@ -147,8 +179,6 @@ class AppRouter {
         path: RouteNames.inventoryAnalytics,
         builder: (context, state) => const InventoryAnalyticsPage(),
       ),
-
-      // Purchases & Suppliers
       GoRoute(
         path: RouteNames.purchaseManagement,
         builder: (context, state) => const PurchaseManagementPage(),
@@ -165,8 +195,6 @@ class AppRouter {
         path: RouteNames.supplierDetails,
         builder: (context, state) => const SupplierDetailsPage(),
       ),
-
-      // WhatsApp & Reminders
       GoRoute(
         path: RouteNames.automatedReminders,
         builder: (context, state) => const AutomatedRemindersPage(),
@@ -183,8 +211,6 @@ class AppRouter {
         path: RouteNames.newTemplate,
         builder: (context, state) => const NewTemplatePage(),
       ),
-
-      // Sync & Settings
       GoRoute(
         path: RouteNames.offlineSync,
         builder: (context, state) => const OfflineSyncCenterPage(),

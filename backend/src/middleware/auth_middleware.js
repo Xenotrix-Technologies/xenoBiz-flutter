@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'xenobiz_jwt_secret_key_2026_production';
+const env = require('../config/env');
+const userRepository = require('../repositories/user_repository');
+const businessRepository = require('../repositories/business_repository');
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -9,23 +10,43 @@ function authenticateToken(req, res, next) {
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: 'Access token missing or unauthorized.',
+      message: 'Authentication token missing or unauthorized.',
     });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, env.JWT_SECRET, (err, decoded) => {
     if (err) {
       return res.status(403).json({
         success: false,
         message: 'Invalid or expired authentication token.',
       });
     }
-    req.user = user;
+
+    const user = userRepository.findById(decoded.userId);
+    if (!user || user.account_status !== 'active') {
+      return res.status(401).json({
+        success: false,
+        message: 'User account disabled or not found.',
+      });
+    }
+
+    req.user = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      fullName: user.full_name,
+    };
+
+    // Attach primary businessId if available
+    const primaryBiz = businessRepository.findPrimaryByUserId(user.id);
+    if (primaryBiz) {
+      req.user.businessId = primaryBiz.id;
+    }
+
     next();
   });
 }
 
 module.exports = {
   authenticateToken,
-  JWT_SECRET,
 };

@@ -56,20 +56,20 @@ class XenoBizApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.light,
-          primaryColor: AppColors.primary,
-          scaffoldBackgroundColor: AppColors.background,
+          primaryColor: AppColors.primaryBlue,
+          scaffoldBackgroundColor: AppColors.pageBackground,
           textTheme: GoogleFonts.manropeTextTheme(
             ThemeData.light().textTheme,
           ),
           colorScheme: ColorScheme.fromSeed(
-            seedColor: AppColors.primary,
-            primary: AppColors.primary,
-            secondary: AppColors.secondary,
-            surface: AppColors.surface,
-            error: AppColors.error,
+            seedColor: AppColors.primaryBlue,
+            primary: AppColors.primaryBlue,
+            secondary: AppColors.deepNavy,
+            surface: AppColors.cardSurface,
+            error: AppColors.danger,
           ),
           appBarTheme: AppBarTheme(
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.deepNavy,
             foregroundColor: Colors.white,
             elevation: 0,
             titleTextStyle: GoogleFonts.manrope(

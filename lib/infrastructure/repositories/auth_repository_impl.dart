@@ -26,29 +26,31 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final response = await dioClient.dio.get(ApiEndpoints.me);
       if (response.data != null && response.data['success'] == true) {
-        final userData = response.data['data']['user'];
+        final userData = response.data['data']['user'] ?? {};
         final bizData = response.data['data']['business'];
 
         final user = UserEntity(
-          id: userData['id'],
-          name: userData['name'] ?? 'Business Owner',
-          email: userData['email'] ?? '',
-          phone: userData['phone'] ?? '',
-          businessId: bizData != null ? bizData['id'] : null,
-          role: userData['role'] ?? 'OWNER',
-          createdAt: DateTime.tryParse(userData['createdAt'] ?? '') ?? DateTime.now(),
+          id: (userData['id'] ?? '').toString(),
+          name: (userData['name'] ?? userData['full_name'] ?? 'Business Owner').toString(),
+          email: (userData['email'] ?? '').toString(),
+          phone: (userData['phone'] ?? '').toString(),
+          businessId: bizData != null ? bizData['id']?.toString() : null,
+          role: (userData['role'] ?? 'OWNER').toString(),
+          createdAt: DateTime.tryParse(userData['createdAt']?.toString() ?? userData['created_at']?.toString() ?? '') ?? DateTime.now(),
         );
 
+        final boxBiz = hiveService.getBox(HiveService.boxBusiness);
         if (bizData != null) {
-          final box = hiveService.getBox(HiveService.boxBusiness);
-          await box.put('id', bizData['id']);
-          await box.put('name', bizData['name']);
-          await box.put('email', bizData['email']);
-          await box.put('gstin', bizData['gstin']);
-          await box.put('category', bizData['category']);
-          await box.put('currency', '₹');
-          await box.put('phone', bizData['phone']);
-          await box.put('address', bizData['address']);
+          await boxBiz.put('id', bizData['id']?.toString() ?? '');
+          await boxBiz.put('name', bizData['name']?.toString() ?? '');
+          await boxBiz.put('email', bizData['email']?.toString());
+          await boxBiz.put('gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString());
+          await boxBiz.put('category', (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString());
+          await boxBiz.put('currency', (bizData['currency'] ?? '₹').toString());
+          await boxBiz.put('phone', bizData['phone']?.toString() ?? '');
+          await boxBiz.put('address', bizData['address']?.toString() ?? '');
+        } else {
+          await boxBiz.clear();
         }
 
         return user;
@@ -56,14 +58,14 @@ class AuthRepositoryImpl implements AuthRepository {
     } catch (e) {
       // Fallback to cached Hive user if offline
       final box = hiveService.getBox(HiveService.boxAuth);
-      final userId = box.get('userId');
-      if (userId != null) {
+      final userId = box.get('userId')?.toString();
+      if (userId != null && userId.isNotEmpty) {
         return UserEntity(
           id: userId,
-          name: box.get('userName', defaultValue: 'Business Owner'),
-          email: box.get('userEmail', defaultValue: 'owner@xenobiz.com'),
-          phone: box.get('userPhone', defaultValue: '+91 98470 11223'),
-          businessId: box.get('businessId', defaultValue: 'biz_101'),
+          name: box.get('userName')?.toString() ?? 'Business Owner',
+          email: box.get('userEmail')?.toString() ?? 'owner@xenobiz.com',
+          phone: box.get('userPhone')?.toString() ?? '+91 98470 11223',
+          businessId: box.get('businessId')?.toString() ?? 'biz_101',
           role: 'OWNER',
           createdAt: DateTime.now(),
         );
@@ -74,42 +76,47 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<BusinessEntity?> getBusinessProfile() async {
-    final box = hiveService.getBox(HiveService.boxBusiness);
-    final name = box.get('name');
-    if (name == null) {
-      // Check backend for business profile if token is available
-      final token = await secureStorage.getAccessToken();
-      if (token != null && token.isNotEmpty) {
-        try {
-          final response = await dioClient.dio.get(ApiEndpoints.me);
-          if (response.data != null && response.data['data']['business'] != null) {
-            final b = response.data['data']['business'];
+    final token = await secureStorage.getAccessToken();
+    if (token != null && token.isNotEmpty) {
+      try {
+        final response = await dioClient.dio.get(ApiEndpoints.me);
+        if (response.data != null && response.data['success'] == true) {
+          final bizData = response.data['data']['business'];
+          if (bizData != null) {
             return BusinessEntity(
-              id: b['id'],
-              name: b['name'],
-              email: b['email'],
-              gstin: b['gstin'],
-              category: b['category'] ?? 'Retail Store',
-              currency: '₹',
-              phone: b['phone'] ?? '',
-              address: b['address'] ?? '',
-              createdAt: DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime.now(),
+              id: (bizData['id'] ?? '').toString(),
+              name: (bizData['name'] ?? '').toString(),
+              email: bizData['email']?.toString(),
+              gstin: (bizData['gstin'] ?? bizData['tax_number'])?.toString(),
+              category: (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString(),
+              currency: (bizData['currency'] ?? '₹').toString(),
+              phone: bizData['phone']?.toString() ?? '',
+              address: bizData['address']?.toString() ?? '',
+              createdAt: DateTime.tryParse(bizData['createdAt']?.toString() ?? bizData['created_at']?.toString() ?? '') ?? DateTime.now(),
             );
+          } else {
+            return null;
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
+    }
+
+    final box = hiveService.getBox(HiveService.boxBusiness);
+    final id = box.get('id')?.toString();
+    final name = box.get('name')?.toString();
+    if (id == null || id.isEmpty || name == null || name.isEmpty) {
       return null;
     }
 
     return BusinessEntity(
-      id: box.get('id', defaultValue: ''),
+      id: id,
       name: name,
-      email: box.get('email'),
-      gstin: box.get('gstin'),
-      category: box.get('category', defaultValue: 'Retail Store'),
-      currency: box.get('currency', defaultValue: '₹'),
-      phone: box.get('phone', defaultValue: ''),
-      address: box.get('address', defaultValue: ''),
+      email: box.get('email')?.toString(),
+      gstin: box.get('gstin')?.toString(),
+      category: box.get('category')?.toString() ?? 'Retail Store',
+      currency: box.get('currency')?.toString() ?? '₹',
+      phone: box.get('phone')?.toString() ?? '',
+      address: box.get('address')?.toString() ?? '',
       createdAt: DateTime.now(),
     );
   }
@@ -126,20 +133,22 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (response.data != null && response.data['success'] == true) {
-        final token = response.data['data']['token'];
-        final userData = response.data['data']['user'];
+        final token = response.data['data']['token']?.toString();
+        final userData = response.data['data']['user'] ?? {};
         final bizData = response.data['data']['business'];
 
-        await secureStorage.saveAccessToken(token);
+        if (token != null) {
+          await secureStorage.saveAccessToken(token);
+        }
 
         final user = UserEntity(
-          id: userData['id'],
-          name: userData['name'] ?? 'Business Owner',
-          email: userData['email'] ?? emailOrPhone,
-          phone: userData['phone'] ?? emailOrPhone,
-          businessId: bizData != null ? bizData['id'] : null,
-          role: userData['role'] ?? 'OWNER',
-          createdAt: DateTime.tryParse(userData['createdAt'] ?? '') ?? DateTime.now(),
+          id: (userData['id'] ?? '').toString(),
+          name: (userData['name'] ?? userData['full_name'] ?? 'Business Owner').toString(),
+          email: (userData['email'] ?? emailOrPhone).toString(),
+          phone: (userData['phone'] ?? emailOrPhone).toString(),
+          businessId: bizData != null ? bizData['id']?.toString() : null,
+          role: (userData['role'] ?? 'OWNER').toString(),
+          createdAt: DateTime.tryParse(userData['createdAt']?.toString() ?? userData['created_at']?.toString() ?? '') ?? DateTime.now(),
         );
 
         final boxAuth = hiveService.getBox(HiveService.boxAuth);
@@ -149,18 +158,22 @@ class AuthRepositoryImpl implements AuthRepository {
         await boxAuth.put('userPhone', user.phone);
         if (user.businessId != null) {
           await boxAuth.put('businessId', user.businessId);
+        } else {
+          await boxAuth.delete('businessId');
         }
 
+        final boxBiz = hiveService.getBox(HiveService.boxBusiness);
         if (bizData != null) {
-          final boxBiz = hiveService.getBox(HiveService.boxBusiness);
-          await boxBiz.put('id', bizData['id']);
-          await boxBiz.put('name', bizData['name']);
-          await boxBiz.put('email', bizData['email']);
-          await boxBiz.put('gstin', bizData['gstin']);
-          await boxBiz.put('category', bizData['category']);
-          await boxBiz.put('currency', '₹');
-          await boxBiz.put('phone', bizData['phone']);
-          await boxBiz.put('address', bizData['address']);
+          await boxBiz.put('id', bizData['id']?.toString() ?? '');
+          await boxBiz.put('name', bizData['name']?.toString() ?? '');
+          await boxBiz.put('email', bizData['email']?.toString());
+          await boxBiz.put('gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString());
+          await boxBiz.put('category', (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString());
+          await boxBiz.put('currency', (bizData['currency'] ?? '₹').toString());
+          await boxBiz.put('phone', bizData['phone']?.toString() ?? '');
+          await boxBiz.put('address', bizData['address']?.toString() ?? '');
+        } else {
+          await boxBiz.clear();
         }
 
         return user;
@@ -186,18 +199,20 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (response.data != null && response.data['success'] == true) {
-        final token = response.data['data']['token'];
-        final userData = response.data['data']['user'];
+        final token = response.data['data']['token']?.toString();
+        final userData = response.data['data']['user'] ?? {};
 
-        await secureStorage.saveAccessToken(token);
+        if (token != null) {
+          await secureStorage.saveAccessToken(token);
+        }
 
         final user = UserEntity(
-          id: userData['id'],
-          name: userData['name'],
-          email: userData['email'] ?? email,
-          phone: userData['phone'] ?? phone,
+          id: (userData['id'] ?? '').toString(),
+          name: (userData['name'] ?? userData['full_name'] ?? name).toString(),
+          email: (userData['email'] ?? email).toString(),
+          phone: (userData['phone'] ?? phone).toString(),
           businessId: null,
-          role: userData['role'] ?? 'OWNER',
+          role: (userData['role'] ?? 'OWNER').toString(),
           createdAt: DateTime.now(),
         );
 
@@ -233,17 +248,17 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (response.data != null && response.data['success'] == true) {
-        final b = response.data['data'];
+        final b = response.data['data'] ?? {};
         final saved = BusinessEntity(
-          id: b['id'],
-          name: b['name'],
-          email: b['email'],
-          gstin: b['gstin'],
-          category: b['category'] ?? 'Retail Store',
-          currency: '₹',
-          phone: b['phone'] ?? business.phone,
-          address: b['address'] ?? business.address,
-          createdAt: DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime.now(),
+          id: (b['id'] ?? business.id).toString(),
+          name: (b['name'] ?? business.name).toString(),
+          email: b['email']?.toString() ?? business.email,
+          gstin: (b['gstin'] ?? b['tax_number'])?.toString() ?? business.gstin,
+          category: (b['category'] ?? b['business_type'] ?? business.category).toString(),
+          currency: (b['currency'] ?? '₹').toString(),
+          phone: (b['phone'] ?? business.phone).toString(),
+          address: (b['address'] ?? business.address).toString(),
+          createdAt: DateTime.tryParse(b['createdAt']?.toString() ?? b['created_at']?.toString() ?? '') ?? DateTime.now(),
         );
 
         final box = hiveService.getBox(HiveService.boxBusiness);
