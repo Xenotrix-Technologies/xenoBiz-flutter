@@ -1,270 +1,370 @@
+import 'package:uuid/uuid.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/entities/payment_entity.dart';
+import '../../domain/entities/sync_item_entity.dart';
 import '../../domain/repositories/invoice_repository.dart';
+import '../../domain/repositories/sync_repository.dart';
 import '../network/api_endpoints.dart';
 import '../network/dio_client.dart';
+import '../network/network_checker.dart';
 import '../storage/hive_service.dart';
 
 class InvoiceRepositoryImpl implements InvoiceRepository {
   final DioClient dioClient;
   final HiveService hiveService;
-  final List<InvoiceEntity> _invoices = [];
-  final List<PaymentEntity> _payments = [];
+  final NetworkChecker networkChecker;
+  final SyncRepository syncRepository;
 
   InvoiceRepositoryImpl({
     required this.dioClient,
     required this.hiveService,
+    required this.networkChecker,
+    required this.syncRepository,
   });
 
   InvoiceStatus _parseStatus(String? statusStr) {
-    if (statusStr == 'paid') return InvoiceStatus.paid;
-    if (statusStr == 'partially_paid') return InvoiceStatus.partiallyPaid;
-    if (statusStr == 'cancelled') return InvoiceStatus.cancelled;
-    if (statusStr == 'draft') return InvoiceStatus.draft;
+    if (statusStr == 'paid' || statusStr == 'InvoiceStatus.paid') return InvoiceStatus.paid;
+    if (statusStr == 'partiallyPaid' || statusStr == 'partially_paid' || statusStr == 'InvoiceStatus.partiallyPaid') {
+      return InvoiceStatus.partiallyPaid;
+    }
+    if (statusStr == 'cancelled' || statusStr == 'InvoiceStatus.cancelled') return InvoiceStatus.cancelled;
+    if (statusStr == 'draft' || statusStr == 'InvoiceStatus.draft') return InvoiceStatus.draft;
     return InvoiceStatus.unpaid;
+  }
+
+  Map<String, dynamic> _invoiceToMap(InvoiceEntity inv, {String syncStatus = 'synced'}) {
+    return {
+      'id': inv.id,
+      'invoiceNumber': inv.invoiceNumber,
+      'customerId': inv.customerId,
+      'customerName': inv.customerName,
+      'customerPhone': inv.customerPhone,
+      'items': inv.items.map((i) => {
+        'productId': i.productId,
+        'productName': i.productName,
+        'quantity': i.quantity,
+        'unitPrice': i.unitPrice,
+        'taxPercentage': i.taxPercentage,
+      }).toList(),
+      'subtotal': inv.subtotal,
+      'taxTotal': inv.taxTotal,
+      'discountTotal': inv.discountTotal,
+      'grandTotal': inv.grandTotal,
+      'paidAmount': inv.paidAmount,
+      'status': inv.status.name,
+      'issueDate': inv.issueDate.toIso8601String(),
+      'dueDate': inv.dueDate.toIso8601String(),
+      'notes': inv.notes,
+      'syncStatus': syncStatus,
+    };
+  }
+
+  InvoiceEntity _mapToInvoice(Map<dynamic, dynamic> map) {
+    final List rawItems = map['items'] is List ? map['items'] : [];
+    final items = rawItems.map((itm) {
+      if (itm is Map) {
+        return InvoiceItemEntity(
+          productId: itm['productId']?.toString() ?? itm['product_id']?.toString() ?? '',
+          productName: itm['productName']?.toString() ?? itm['product_name']?.toString() ?? 'Item',
+          quantity: (itm['quantity'] as num?)?.toInt() ?? 1,
+          unitPrice: (itm['unitPrice'] as num?)?.toDouble() ??
+              (itm['unit_price'] as num?)?.toDouble() ?? 0.0,
+          taxPercentage: (itm['taxPercentage'] as num?)?.toDouble() ??
+              (itm['tax_percentage'] as num?)?.toDouble() ?? 0.0,
+        );
+      }
+      return const InvoiceItemEntity(productId: '', productName: '', quantity: 1, unitPrice: 0.0);
+    }).toList();
+
+    return InvoiceEntity(
+      id: map['id']?.toString() ?? '',
+      invoiceNumber: map['invoiceNumber']?.toString() ?? map['invoice_number']?.toString() ?? 'INV-000',
+      customerId: map['customerId']?.toString() ?? map['customer_id']?.toString() ?? '',
+      customerName: map['customerName']?.toString() ?? map['customer_name']?.toString() ?? 'Guest Customer',
+      customerPhone: map['customerPhone']?.toString() ?? map['customer_phone']?.toString() ?? '',
+      items: items,
+      subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
+      taxTotal: (map['taxTotal'] as num?)?.toDouble() ?? (map['tax_total'] as num?)?.toDouble() ?? 0.0,
+      discountTotal: (map['discountTotal'] as num?)?.toDouble() ?? (map['discount_total'] as num?)?.toDouble() ?? 0.0,
+      grandTotal: (map['grandTotal'] as num?)?.toDouble() ?? (map['grand_total'] as num?)?.toDouble() ?? 0.0,
+      paidAmount: (map['paidAmount'] as num?)?.toDouble() ?? (map['paid_amount'] as num?)?.toDouble() ?? 0.0,
+      status: _parseStatus(map['status']?.toString() ?? map['payment_status']?.toString()),
+      issueDate: DateTime.tryParse(map['issueDate']?.toString() ?? map['issue_date']?.toString() ?? '') ?? DateTime.now(),
+      dueDate: DateTime.tryParse(map['dueDate']?.toString() ?? map['due_date']?.toString() ?? '') ?? DateTime.now(),
+      notes: map['notes']?.toString() ?? '',
+    );
+  }
+
+  PaymentEntity _mapToPayment(Map<dynamic, dynamic> map) {
+    return PaymentEntity(
+      id: map['id']?.toString() ?? '',
+      invoiceId: map['invoiceId']?.toString() ?? map['invoice_id']?.toString() ?? '',
+      customerId: map['customerId']?.toString() ?? map['customer_id']?.toString() ?? '',
+      customerName: map['customerName']?.toString() ?? map['customer_name']?.toString() ?? 'Customer',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+      paymentMode: map['paymentMode']?.toString() ?? map['payment_method']?.toString() ?? 'Cash',
+      paymentDate: DateTime.tryParse(map['paymentDate']?.toString() ?? map['payment_date']?.toString() ?? map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      notes: map['notes']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> _paymentToMap(PaymentEntity p, {String syncStatus = 'synced'}) {
+    return {
+      'id': p.id,
+      'invoiceId': p.invoiceId,
+      'customerId': p.customerId,
+      'customerName': p.customerName,
+      'amount': p.amount,
+      'paymentMode': p.paymentMode,
+      'paymentDate': p.paymentDate.toIso8601String(),
+      'notes': p.notes,
+      'syncStatus': syncStatus,
+    };
   }
 
   @override
   Future<List<InvoiceEntity>> getInvoices({InvoiceStatus? status, String? query}) async {
-    try {
-      final queryParams = <String, dynamic>{};
-      if (query != null && query.isNotEmpty) queryParams['search'] = query;
+    final box = hiveService.getBox(HiveService.boxInvoices);
+    final List<InvoiceEntity> localInvoices = [];
 
-      final response = await dioClient.dio.get(
-        ApiEndpoints.invoices,
-        queryParameters: queryParams.isNotEmpty ? queryParams : null,
-      );
-
-      if (response.data != null && response.data['success'] == true) {
-        final List list = response.data['data'] ?? [];
-        final fetched = list.map((item) {
-          final List rawItems = item['items'] ?? [];
-          final invoiceItems = rawItems.map((itm) {
-            return InvoiceItemEntity(
-              productId: itm['product_id'] ?? '',
-              productName: itm['product_name'] ?? 'Item',
-              quantity: (itm['quantity'] as num?)?.toInt() ?? 1,
-              unitPrice: (itm['unit_price'] as num?)?.toDouble() ?? 0.0,
-              taxPercentage: (itm['tax_percentage'] as num?)?.toDouble() ?? 0.0,
-            );
-          }).toList();
-
-          return InvoiceEntity(
-            id: item['id'],
-            invoiceNumber: item['invoice_number'] ?? 'INV-000',
-            customerId: item['customer_id'] ?? '',
-            customerName: item['customer_name'] ?? 'Guest Customer',
-            customerPhone: item['customer_phone'] ?? '',
-            items: invoiceItems,
-            subtotal: (item['subtotal'] as num?)?.toDouble() ?? 0.0,
-            taxTotal: (item['tax_total'] as num?)?.toDouble() ?? 0.0,
-            discountTotal: (item['discount_total'] as num?)?.toDouble() ?? 0.0,
-            grandTotal: (item['grand_total'] as num?)?.toDouble() ?? 0.0,
-            paidAmount: (item['paid_amount'] as num?)?.toDouble() ?? 0.0,
-            status: _parseStatus(item['payment_status'] ?? item['status']),
-            issueDate: DateTime.tryParse(item['issue_date'] ?? '') ?? DateTime.now(),
-            dueDate: DateTime.tryParse(item['due_date'] ?? '') ?? DateTime.now(),
-            notes: item['notes'] ?? '',
-          );
-        }).toList();
-
-        _invoices.clear();
-        _invoices.addAll(fetched);
-
-        List<InvoiceEntity> filtered = List.from(fetched);
-        if (status != null) {
-          filtered = filtered.where((i) => i.status == status).toList();
-        }
-        return filtered;
+    for (var key in box.keys) {
+      final val = box.get(key);
+      if (val is Map) {
+        localInvoices.add(_mapToInvoice(val));
       }
-    } catch (_) {}
+    }
 
-    List<InvoiceEntity> list = List.from(_invoices);
+    localInvoices.sort((a, b) => b.issueDate.compareTo(a.issueDate));
+
+    List<InvoiceEntity> filtered = localInvoices;
     if (status != null) {
-      list = list.where((i) => i.status == status).toList();
+      filtered = filtered.where((i) => i.status == status).toList();
     }
     if (query != null && query.isNotEmpty) {
       final q = query.toLowerCase();
-      list = list.where((i) {
+      filtered = filtered.where((i) {
         return i.invoiceNumber.toLowerCase().contains(q) ||
             i.customerName.toLowerCase().contains(q);
       }).toList();
     }
-    return list;
+    return filtered;
   }
 
   @override
   Future<InvoiceEntity> getInvoice(String id) async {
-    try {
-      final response = await dioClient.dio.get('${ApiEndpoints.invoices}/$id');
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final List rawItems = item['items'] ?? [];
-        final invoiceItems = rawItems.map((itm) {
-          return InvoiceItemEntity(
-            productId: itm['product_id'] ?? '',
-            productName: itm['product_name'] ?? 'Item',
-            quantity: (itm['quantity'] as num?)?.toInt() ?? 1,
-            unitPrice: (itm['unit_price'] as num?)?.toDouble() ?? 0.0,
-            taxPercentage: (itm['tax_percentage'] as num?)?.toDouble() ?? 0.0,
-          );
-        }).toList();
-
-        return InvoiceEntity(
-          id: item['id'],
-          invoiceNumber: item['invoice_number'] ?? 'INV-000',
-          customerId: item['customer_id'] ?? '',
-          customerName: item['customer_name'] ?? 'Guest Customer',
-          customerPhone: item['customer_phone'] ?? '',
-          items: invoiceItems,
-          subtotal: (item['subtotal'] as num?)?.toDouble() ?? 0.0,
-          taxTotal: (item['tax_total'] as num?)?.toDouble() ?? 0.0,
-          discountTotal: (item['discount_total'] as num?)?.toDouble() ?? 0.0,
-          grandTotal: (item['grand_total'] as num?)?.toDouble() ?? 0.0,
-          paidAmount: (item['paid_amount'] as num?)?.toDouble() ?? 0.0,
-          status: _parseStatus(item['payment_status'] ?? item['status']),
-          issueDate: DateTime.tryParse(item['issue_date'] ?? '') ?? DateTime.now(),
-          dueDate: DateTime.tryParse(item['due_date'] ?? '') ?? DateTime.now(),
-          notes: item['notes'] ?? '',
-        );
-      }
-    } catch (_) {}
-
-    return _invoices.firstWhere(
-      (i) => i.id == id,
-      orElse: () => InvoiceEntity(
-        id: id,
-        invoiceNumber: 'INV-000',
-        customerId: '',
-        customerName: 'Unknown',
-        customerPhone: '',
-        items: const [],
-        subtotal: 0.0,
-        taxTotal: 0.0,
-        grandTotal: 0.0,
-        paidAmount: 0.0,
-        status: InvoiceStatus.unpaid,
-        issueDate: DateTime.now(),
-        dueDate: DateTime.now(),
-      ),
+    final box = hiveService.getBox(HiveService.boxInvoices);
+    final val = box.get(id);
+    if (val is Map) {
+      return _mapToInvoice(val);
+    }
+    return InvoiceEntity(
+      id: id,
+      invoiceNumber: 'INV-000',
+      customerId: '',
+      customerName: 'Unknown',
+      customerPhone: '',
+      items: const [],
+      subtotal: 0.0,
+      taxTotal: 0.0,
+      grandTotal: 0.0,
+      paidAmount: 0.0,
+      status: InvoiceStatus.unpaid,
+      issueDate: DateTime.now(),
+      dueDate: DateTime.now(),
     );
   }
 
   @override
   Future<InvoiceEntity> createInvoice(InvoiceEntity invoice) async {
-    try {
-      final itemsPayload = invoice.items.map((itm) {
-        return {
-          'productId': itm.productId,
-          'productName': itm.productName,
-          'quantity': itm.quantity,
-          'unitPrice': itm.unitPrice,
-          'taxPercentage': itm.taxPercentage,
-        };
-      }).toList();
+    final box = hiveService.getBox(HiveService.boxInvoices);
+    final String invId = invoice.id.isNotEmpty ? invoice.id : const Uuid().v4();
+    final String invNum = invoice.invoiceNumber.isNotEmpty && invoice.invoiceNumber != 'INV-000'
+        ? invoice.invoiceNumber
+        : 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
-      final response = await dioClient.dio.post(
-        ApiEndpoints.invoices,
-        data: {
-          'customerId': invoice.customerId,
-          'customerName': invoice.customerName,
-          'customerPhone': invoice.customerPhone,
-          'items': itemsPayload,
-          'subtotal': invoice.subtotal,
-          'taxTotal': invoice.taxTotal,
-          'discountTotal': invoice.discountTotal,
-          'grandTotal': invoice.grandTotal,
-          'paidAmount': invoice.paidAmount,
-          'paymentMethod': invoice.paidAmount > 0 ? 'Cash' : null,
-          'dueDate': invoice.dueDate.toIso8601String(),
-          'notes': invoice.notes,
+    final localInvoice = invoice.copyWith(id: invId, invoiceNumber: invNum);
+
+    // 1. Write to Hive immediately
+    await box.put(invId, _invoiceToMap(localInvoice, syncStatus: 'pendingCreate'));
+
+    // 2. Try online sync
+    if (await networkChecker.isConnected) {
+      try {
+        final itemsPayload = localInvoice.items.map((itm) {
+          return {
+            'productId': itm.productId,
+            'productName': itm.productName,
+            'quantity': itm.quantity,
+            'unitPrice': itm.unitPrice,
+            'taxPercentage': itm.taxPercentage,
+          };
+        }).toList();
+
+        final response = await dioClient.dio.post(
+          ApiEndpoints.invoices,
+          data: {
+            'customerId': localInvoice.customerId,
+            'customerName': localInvoice.customerName,
+            'customerPhone': localInvoice.customerPhone,
+            'items': itemsPayload,
+            'subtotal': localInvoice.subtotal,
+            'taxTotal': localInvoice.taxTotal,
+            'discountTotal': localInvoice.discountTotal,
+            'grandTotal': localInvoice.grandTotal,
+            'paidAmount': localInvoice.paidAmount,
+            'paymentMethod': localInvoice.paidAmount > 0 ? 'Cash' : null,
+            'dueDate': localInvoice.dueDate.toIso8601String(),
+            'notes': localInvoice.notes,
+          },
+        );
+
+        if (response.data != null && response.data['success'] == true) {
+          final item = response.data['data'];
+          final serverId = item['id']?.toString() ?? invId;
+          final serverNum = item['invoice_number']?.toString() ?? invNum;
+          final syncedInvoice = localInvoice.copyWith(id: serverId, invoiceNumber: serverNum);
+
+          if (serverId != invId) {
+            await box.delete(invId);
+          }
+          await box.put(serverId, _invoiceToMap(syncedInvoice, syncStatus: 'synced'));
+          return syncedInvoice;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Enqueue if offline or failed
+    await syncRepository.enqueueSyncItem(
+      SyncItemEntity(
+        id: const Uuid().v4(),
+        entityType: 'INVOICE',
+        action: SyncAction.create,
+        payload: {
+          'localId': invId,
+          'invoiceNumber': invNum,
+          'customerId': localInvoice.customerId,
+          'customerName': localInvoice.customerName,
+          'customerPhone': localInvoice.customerPhone,
+          'items': localInvoice.items.map((i) => {
+            'productId': i.productId,
+            'productName': i.productName,
+            'quantity': i.quantity,
+            'unitPrice': i.unitPrice,
+            'taxPercentage': i.taxPercentage,
+          }).toList(),
+          'subtotal': localInvoice.subtotal,
+          'taxTotal': localInvoice.taxTotal,
+          'discountTotal': localInvoice.discountTotal,
+          'grandTotal': localInvoice.grandTotal,
+          'paidAmount': localInvoice.paidAmount,
+          'dueDate': localInvoice.dueDate.toIso8601String(),
+          'notes': localInvoice.notes,
         },
-      );
+        createdAt: DateTime.now(),
+      ),
+    );
 
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final created = invoice.copyWith(id: item['id'], invoiceNumber: item['invoice_number']);
-        _invoices.insert(0, created);
-        return created;
-      }
-    } catch (_) {}
-
-    _invoices.insert(0, invoice);
-    return invoice;
+    return localInvoice;
   }
 
   @override
   Future<InvoiceEntity> updateInvoice(InvoiceEntity invoice) async {
-    final index = _invoices.indexWhere((i) => i.id == invoice.id);
-    if (index != -1) {
-      _invoices[index] = invoice;
-    } else {
-      _invoices.add(invoice);
-    }
+    final box = hiveService.getBox(HiveService.boxInvoices);
+    await box.put(invoice.id, _invoiceToMap(invoice, syncStatus: 'synced'));
     return invoice;
   }
 
   @override
   Future<PaymentEntity> recordPayment(PaymentEntity payment) async {
-    try {
-      final response = await dioClient.dio.post(
-        ApiEndpoints.payments,
-        data: {
+    final box = hiveService.getBox(HiveService.boxPayments);
+    final String payId = payment.id.isNotEmpty ? payment.id : const Uuid().v4();
+    final localPayment = PaymentEntity(
+      id: payId,
+      invoiceId: payment.invoiceId,
+      customerId: payment.customerId,
+      customerName: payment.customerName,
+      amount: payment.amount,
+      paymentMode: payment.paymentMode,
+      paymentDate: payment.paymentDate,
+      notes: payment.notes,
+    );
+
+    // 1. Write payment to Hive
+    await box.put(payId, _paymentToMap(localPayment, syncStatus: 'pendingCreate'));
+
+    // 2. Try online sync
+    if (await networkChecker.isConnected) {
+      try {
+        final response = await dioClient.dio.post(
+          ApiEndpoints.payments,
+          data: {
+            'invoiceId': payment.invoiceId,
+            'customerId': payment.customerId,
+            'amount': payment.amount,
+            'paymentMethod': payment.paymentMode,
+            'paymentType': 'IN',
+            'notes': payment.notes,
+          },
+        );
+
+        if (response.data != null && response.data['success'] == true) {
+          final item = response.data['data'];
+          final serverId = item['id']?.toString() ?? payId;
+          final syncedPayment = PaymentEntity(
+            id: serverId,
+            invoiceId: payment.invoiceId,
+            customerId: payment.customerId,
+            customerName: payment.customerName,
+            amount: payment.amount,
+            paymentMode: payment.paymentMode,
+            paymentDate: payment.paymentDate,
+            notes: payment.notes,
+          );
+
+          if (serverId != payId) {
+            await box.delete(payId);
+          }
+          await box.put(serverId, _paymentToMap(syncedPayment, syncStatus: 'synced'));
+          return syncedPayment;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Enqueue sync
+    await syncRepository.enqueueSyncItem(
+      SyncItemEntity(
+        id: const Uuid().v4(),
+        entityType: 'PAYMENT',
+        action: SyncAction.create,
+        payload: {
+          'localId': payId,
           'invoiceId': payment.invoiceId,
           'customerId': payment.customerId,
           'amount': payment.amount,
           'paymentMethod': payment.paymentMode,
-          'paymentType': 'IN',
           'notes': payment.notes,
         },
-      );
+        createdAt: DateTime.now(),
+      ),
+    );
 
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final created = PaymentEntity(
-          id: item['id'],
-          invoiceId: payment.invoiceId,
-          customerId: payment.customerId,
-          customerName: payment.customerName,
-          amount: (item['amount'] as num?)?.toDouble() ?? payment.amount,
-          paymentMode: payment.paymentMode,
-          paymentDate: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-          notes: payment.notes,
-        );
-        _payments.insert(0, created);
-        return created;
-      }
-    } catch (_) {}
-
-    _payments.insert(0, payment);
-    return payment;
+    return localPayment;
   }
 
   @override
   Future<List<PaymentEntity>> getInvoicePayments(String invoiceId) async {
-    try {
-      final response = await dioClient.dio.get(
-        ApiEndpoints.payments,
-        queryParameters: invoiceId.isNotEmpty ? {'invoiceId': invoiceId} : null,
-      );
-      if (response.data != null && response.data['success'] == true) {
-        final List list = response.data['data'] ?? [];
-        return list.map((item) {
-          return PaymentEntity(
-            id: item['id'],
-            invoiceId: item['invoice_id'] ?? '',
-            customerId: item['customer_id'] ?? '',
-            customerName: item['customer_name'] ?? 'Customer',
-            amount: (item['amount'] as num?)?.toDouble() ?? 0.0,
-            paymentMode: item['payment_method'] ?? 'CASH',
-            paymentDate: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-            notes: item['notes'] ?? '',
-          );
-        }).toList();
+    final box = hiveService.getBox(HiveService.boxPayments);
+    final List<PaymentEntity> list = [];
+    for (var key in box.keys) {
+      final val = box.get(key);
+      if (val is Map) {
+        final p = _mapToPayment(val);
+        if (invoiceId.isEmpty || p.invoiceId == invoiceId) {
+          list.add(p);
+        }
       }
-    } catch (_) {}
-
-    return _payments.where((p) => p.invoiceId == invoiceId || invoiceId.isEmpty).toList();
+    }
+    list.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+    return list;
   }
 }
-

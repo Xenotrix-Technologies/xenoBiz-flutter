@@ -1,0 +1,398 @@
+import '../domain/entities/business_entity.dart';
+import '../domain/entities/customer_entity.dart';
+import '../domain/entities/expense_entity.dart';
+import '../domain/entities/invoice_entity.dart';
+import '../domain/entities/lead_entity.dart';
+import '../domain/entities/payment_entity.dart';
+import '../domain/entities/product_entity.dart';
+import '../domain/entities/purchase_entity.dart';
+import '../domain/entities/subscription_entity.dart';
+import '../domain/entities/user_entity.dart';
+
+class DummyData {
+  static final UserEntity user = UserEntity(
+    id: 'usr_novatech',
+    name: 'Rahul Sharma',
+    email: 'demo@xenobiz.local',
+    phone: '+91 98470 11223',
+    businessId: 'biz_novatech',
+    role: 'OWNER',
+    createdAt: DateTime.now().subtract(const Duration(days: 90)),
+  );
+
+  static final BusinessEntity business = BusinessEntity(
+    id: 'biz_novatech',
+    name: 'NovaTech Electronics',
+    email: 'contact@novatech.in',
+    phone: '+91 98470 11223',
+    address: 'Suite 402, Tech Park, MG Road, Kochi, Kerala',
+    category: 'Electronics & Gadgets',
+    currency: '₹',
+    gstin: '32AAACN1234F1Z5',
+    createdAt: DateTime.now().subtract(const Duration(days: 90)),
+  );
+
+  static final SubscriptionEntity subscription = SubscriptionEntity(
+    id: 'sub_novatech',
+    businessId: 'biz_novatech',
+    status: SubscriptionStatus.activeTrial,
+    planName: 'Pro Tier Business Trial',
+    trialStartDate: DateTime.now().subtract(const Duration(days: 2)),
+    trialEndDate: DateTime.now().add(const Duration(days: 5)),
+    configuredTrialDays: 7,
+  );
+
+  static final List<CustomerEntity> customers = [
+    CustomerEntity(
+      id: 'cust_biz_novatech_1',
+      name: 'Arun Kumar',
+      phone: '+91 97451 23456',
+      email: 'arun.kumar@example.com',
+      address: '1 Residential Avenue, Sector 1, Kochi',
+      outstandingBalance: 12500.0,
+      totalPurchases: 182400.0,
+      createdAt: DateTime.now().subtract(const Duration(days: 45)),
+    ),
+    CustomerEntity(
+      id: 'cust_biz_novatech_2',
+      name: 'Priya Nair',
+      phone: '+91 97452 34567',
+      email: 'priya.nair@example.com',
+      address: '2 Residential Avenue, Sector 2, Kochi',
+      outstandingBalance: 0.0,
+      totalPurchases: 134900.0,
+      createdAt: DateTime.now().subtract(const Duration(days: 40)),
+    ),
+    CustomerEntity(
+      id: 'cust_biz_novatech_3',
+      name: 'CyberTech Solutions',
+      phone: '+91 97453 45678',
+      email: 'cybertech.solutions@example.com',
+      address: '3 Tech Hub Complex, Sector 3, Kakkanad',
+      outstandingBalance: 45000.0,
+      totalPurchases: 540000.0,
+      createdAt: DateTime.now().subtract(const Duration(days: 35)),
+    ),
+    CustomerEntity(
+      id: 'cust_biz_novatech_4',
+      name: 'Kiran Varghese',
+      phone: '+91 97454 56789',
+      email: 'kiran.varghese@example.com',
+      address: '4 Garden Lane, Sector 4, Aluva',
+      outstandingBalance: 8995.0,
+      totalPurchases: 41990.0,
+      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+    ),
+    CustomerEntity(
+      id: 'cust_biz_novatech_5',
+      name: 'Infensys Systems',
+      phone: '+91 97455 67890',
+      email: 'infensys.systems@example.com',
+      address: '5 Enterprise Park, Sector 5, Ernakulam',
+      outstandingBalance: 0.0,
+      totalPurchases: 299900.0,
+      createdAt: DateTime.now().subtract(const Duration(days: 25)),
+    ),
+  ];
+
+  static final List<ProductEntity> products = [
+    ProductEntity(
+      id: 'prod_biz_novatech_1',
+      name: 'MacBook Pro 14"',
+      sku: 'NOV-SKU-100',
+      category: 'Laptops',
+      sellingPrice: 169900.0,
+      purchasePrice: 140000.0,
+      stockQuantity: 12,
+      reorderLevel: 3,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_2',
+      name: 'iPhone 15 Pro 256GB',
+      sku: 'NOV-SKU-101',
+      category: 'Smartphones',
+      sellingPrice: 134900.0,
+      purchasePrice: 110000.0,
+      stockQuantity: 18,
+      reorderLevel: 5,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_3',
+      name: 'Sony WH-1000XM5 Headphones',
+      sku: 'NOV-SKU-102',
+      category: 'Audio',
+      sellingPrice: 29990.0,
+      purchasePrice: 22000.0,
+      stockQuantity: 2,
+      reorderLevel: 5,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_4',
+      name: 'Samsung Galaxy S24 Ultra',
+      sku: 'NOV-SKU-103',
+      category: 'Smartphones',
+      sellingPrice: 129999.0,
+      purchasePrice: 105000.0,
+      stockQuantity: 8,
+      reorderLevel: 3,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_5',
+      name: 'Dell XPS 15 Laptop',
+      sku: 'NOV-SKU-104',
+      category: 'Laptops',
+      sellingPrice: 149990.0,
+      purchasePrice: 125000.0,
+      stockQuantity: 4,
+      reorderLevel: 2,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_6',
+      name: 'iPad Air M2',
+      sku: 'NOV-SKU-105',
+      category: 'Tablets',
+      sellingPrice: 59900.0,
+      purchasePrice: 48000.0,
+      stockQuantity: 15,
+      reorderLevel: 4,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_7',
+      name: 'Logitech MX Master 3S Mouse',
+      sku: 'NOV-SKU-106',
+      category: 'Accessories',
+      sellingPrice: 8995.0,
+      purchasePrice: 6500.0,
+      stockQuantity: 30,
+      reorderLevel: 8,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+    ProductEntity(
+      id: 'prod_biz_novatech_8',
+      name: 'Anker 65W GaN Charger',
+      sku: 'NOV-SKU-107',
+      category: 'Accessories',
+      sellingPrice: 2999.0,
+      purchasePrice: 1800.0,
+      stockQuantity: 3,
+      reorderLevel: 10,
+      unit: 'Pcs',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+    ),
+  ];
+
+  static final List<InvoiceEntity> invoices = [
+    InvoiceEntity(
+      id: 'inv_biz_novatech_day10',
+      invoiceNumber: 'NOV-1010',
+      customerId: 'cust_biz_novatech_1',
+      customerName: 'Arun Kumar',
+      customerPhone: '+91 97451 23456',
+      items: const [
+        InvoiceItemEntity(
+          productId: 'prod_biz_novatech_1',
+          productName: 'MacBook Pro 14"',
+          quantity: 1,
+          unitPrice: 169900.0,
+          taxPercentage: 18.0,
+        ),
+        InvoiceItemEntity(
+          productId: 'prod_biz_novatech_7',
+          productName: 'Logitech MX Master 3S Mouse',
+          quantity: 1,
+          unitPrice: 8995.0,
+          taxPercentage: 18.0,
+        ),
+      ],
+      subtotal: 178895.0,
+      taxTotal: 32201.1,
+      discountTotal: 0.0,
+      grandTotal: 178895.0,
+      paidAmount: 166395.0,
+      status: InvoiceStatus.partiallyPaid,
+      issueDate: DateTime.now().subtract(const Duration(days: 10)),
+      dueDate: DateTime.now().add(const Duration(days: 4)),
+      notes: 'Customer requested 2-part installment payment',
+    ),
+    InvoiceEntity(
+      id: 'inv_biz_novatech_day4',
+      invoiceNumber: 'NOV-1004',
+      customerId: 'cust_biz_novatech_2',
+      customerName: 'Priya Nair',
+      customerPhone: '+91 97452 34567',
+      items: const [
+        InvoiceItemEntity(
+          productId: 'prod_biz_novatech_2',
+          productName: 'iPhone 15 Pro 256GB',
+          quantity: 1,
+          unitPrice: 134900.0,
+          taxPercentage: 18.0,
+        ),
+      ],
+      subtotal: 134900.0,
+      taxTotal: 24282.0,
+      discountTotal: 0.0,
+      grandTotal: 134900.0,
+      paidAmount: 134900.0,
+      status: InvoiceStatus.paid,
+      issueDate: DateTime.now().subtract(const Duration(days: 4)),
+      dueDate: DateTime.now().subtract(const Duration(days: 1)),
+      notes: 'Paid in full via UPI',
+    ),
+    InvoiceEntity(
+      id: 'inv_biz_novatech_day2',
+      invoiceNumber: 'NOV-1002',
+      customerId: 'cust_biz_novatech_3',
+      customerName: 'CyberTech Solutions',
+      customerPhone: '+91 97453 45678',
+      items: const [
+        InvoiceItemEntity(
+          productId: 'prod_biz_novatech_5',
+          productName: 'Dell XPS 15 Laptop',
+          quantity: 3,
+          unitPrice: 149990.0,
+          taxPercentage: 18.0,
+        ),
+      ],
+      subtotal: 449970.0,
+      taxTotal: 80994.6,
+      discountTotal: 0.0,
+      grandTotal: 449970.0,
+      paidAmount: 404970.0,
+      status: InvoiceStatus.partiallyPaid,
+      issueDate: DateTime.now().subtract(const Duration(days: 2)),
+      dueDate: DateTime.now().add(const Duration(days: 12)),
+      notes: 'Corporate bulk sale - balance due net 15',
+    ),
+  ];
+
+  static final List<PaymentEntity> payments = [
+    PaymentEntity(
+      id: 'pay_inv_biz_novatech_day10',
+      invoiceId: 'inv_biz_novatech_day10',
+      customerId: 'cust_biz_novatech_1',
+      customerName: 'Arun Kumar',
+      amount: 166395.0,
+      paymentMode: 'UPI',
+      paymentDate: DateTime.now().subtract(const Duration(days: 10)),
+      notes: 'Initial advance payment',
+    ),
+    PaymentEntity(
+      id: 'pay_inv_biz_novatech_day4',
+      invoiceId: 'inv_biz_novatech_day4',
+      customerId: 'cust_biz_novatech_2',
+      customerName: 'Priya Nair',
+      amount: 134900.0,
+      paymentMode: 'UPI',
+      paymentDate: DateTime.now().subtract(const Duration(days: 4)),
+      notes: 'Full payment via GPay',
+    ),
+    PaymentEntity(
+      id: 'pay_inv_biz_novatech_day2',
+      invoiceId: 'inv_biz_novatech_day2',
+      customerId: 'cust_biz_novatech_3',
+      customerName: 'CyberTech Solutions',
+      amount: 404970.0,
+      paymentMode: 'Bank Transfer',
+      paymentDate: DateTime.now().subtract(const Duration(days: 2)),
+      notes: 'Bank NEFT transfer',
+    ),
+  ];
+
+  static final List<LeadEntity> leads = [
+    LeadEntity(
+      id: 'lead_biz_novatech_1',
+      title: 'Bulk MacBook Procurement for CyberTech',
+      contactName: 'CyberTech Solutions',
+      phone: '+91 97453 45678',
+      email: 'cybertech.solutions@example.com',
+      estimatedValue: 1500000.0,
+      stage: LeadStage.negotiating,
+      notes: 'Client interested in buying 10 MacBook Pro units for engineering team.',
+      createdAt: DateTime.now().subtract(const Duration(days: 15)),
+      nextFollowUpDate: DateTime.now().add(const Duration(days: 2)),
+    ),
+    LeadEntity(
+      id: 'lead_biz_novatech_2',
+      title: 'Smartphones setup for Infensys',
+      contactName: 'Infensys Systems',
+      phone: '+91 97455 67890',
+      email: 'infensys.systems@example.com',
+      estimatedValue: 650000.0,
+      stage: LeadStage.proposalSent,
+      notes: 'Sent quote for iPhone 15 Pro units.',
+      createdAt: DateTime.now().subtract(const Duration(days: 10)),
+      nextFollowUpDate: DateTime.now().add(const Duration(days: 1)),
+    ),
+  ];
+
+  static final List<SupplierEntity> suppliers = [
+    SupplierEntity(
+      id: 'supp_biz_novatech_1',
+      name: 'Apple India Distributors',
+      companyName: 'Redington India Pvt Ltd',
+      phone: '+91 98111 22233',
+      email: 'supplier1@redington.com',
+      address: '15 Logistics Hub, Industrial Zone, Kochi',
+      payableBalance: 140000.0,
+      createdAt: DateTime.now(),
+    ),
+    SupplierEntity(
+      id: 'supp_biz_novatech_2',
+      name: 'Samsung Mobile Hub',
+      companyName: 'Ingram Micro India',
+      phone: '+91 98222 33344',
+      email: 'supplier2@ingram.com',
+      address: '25 Logistics Hub, Industrial Zone, Kochi',
+      payableBalance: 105000.0,
+      createdAt: DateTime.now(),
+    ),
+  ];
+
+  static final List<PurchaseEntity> purchases = [
+    PurchaseEntity(
+      id: 'pur_biz_novatech_1',
+      poNumber: 'PO-NOV-200',
+      supplierId: 'supp_biz_novatech_1',
+      supplierName: 'Apple India Distributors',
+      totalAmount: 1400000.0,
+      status: 'RECEIVED',
+      orderDate: DateTime.now().subtract(const Duration(days: 20)),
+      notes: '10x MacBook Pro inventory restock',
+    ),
+  ];
+
+  static final List<ExpenseEntity> expenses = [
+    ExpenseEntity(
+      id: 'exp_biz_novatech_1',
+      title: 'Showroom Rent MG Road',
+      category: 'RENT',
+      amount: 45000.0,
+      paymentMode: 'Bank Transfer',
+      expenseDate: DateTime.now().subtract(const Duration(days: 12)),
+      notes: 'Monthly showroom lease payment',
+    ),
+    ExpenseEntity(
+      id: 'exp_biz_novatech_2',
+      title: 'Electricity & High-Speed Internet',
+      category: 'UTILITIES',
+      amount: 8500.0,
+      paymentMode: 'UPI',
+      expenseDate: DateTime.now().subtract(const Duration(days: 5)),
+      notes: 'KSEB Power + Fiber Broadband bill',
+    ),
+  ];
+}
