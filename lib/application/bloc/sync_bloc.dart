@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/sync_item_entity.dart';
@@ -14,6 +15,14 @@ abstract class SyncEvent extends Equatable {
 class FetchSyncQueueEvent extends SyncEvent {}
 
 class TriggerSyncNowEvent extends SyncEvent {}
+
+class ConnectivityChangedEvent extends SyncEvent {
+  final bool isConnected;
+  const ConnectivityChangedEvent(this.isConnected);
+
+  @override
+  List<Object?> get props => [isConnected];
+}
 
 // States
 abstract class SyncState extends Equatable {
@@ -56,11 +65,17 @@ class SyncErrorState extends SyncState {
 class SyncBloc extends Bloc<SyncEvent, SyncState> {
   final SyncRepository syncRepository;
   final NetworkChecker networkChecker;
+  StreamSubscription<bool>? _connectivitySubscription;
 
   SyncBloc({required this.syncRepository, required this.networkChecker})
       : super(SyncInitialState()) {
     on<FetchSyncQueueEvent>(_onFetchSyncQueue);
     on<TriggerSyncNowEvent>(_onTriggerSyncNow);
+    on<ConnectivityChangedEvent>(_onConnectivityChanged);
+
+    _connectivitySubscription = networkChecker.onConnectivityChanged.listen((isConnected) {
+      add(ConnectivityChangedEvent(isConnected));
+    });
   }
 
   Future<void> _onFetchSyncQueue(
@@ -81,9 +96,26 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
     try {
       await syncRepository.processSyncQueue();
       await syncRepository.clearCompletedSyncItems();
-      emit(const SyncSuccessState('All pending items successfully synchronized!'));
+      final connected = await networkChecker.isConnected;
+      final pending = await syncRepository.getPendingSyncItems();
+      emit(SyncLoadedState(isConnected: connected, pendingItems: pending));
     } catch (e) {
       emit(SyncErrorState(e.toString()));
     }
+  }
+
+  Future<void> _onConnectivityChanged(
+      ConnectivityChangedEvent event, Emitter<SyncState> emit) async {
+    if (event.isConnected) {
+      add(TriggerSyncNowEvent());
+    } else {
+      add(FetchSyncQueueEvent());
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _connectivitySubscription?.cancel();
+    return super.close();
   }
 }

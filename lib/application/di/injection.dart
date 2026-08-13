@@ -23,6 +23,7 @@ Future<void> configureDependencies() async {
   // 1. Core Services & Storage
   final hiveService = HiveService();
   await hiveService.init();
+  await hiveService.seedDummyDataIfEmpty();
   getIt.registerSingleton<HiveService>(hiveService);
 
   final secureStorage = SecureStorageService();
@@ -34,7 +35,16 @@ Future<void> configureDependencies() async {
   final networkChecker = NetworkChecker();
   getIt.registerSingleton<NetworkChecker>(networkChecker);
 
-  // 2. Repositories
+  // 2. Sync Repository
+  getIt.registerLazySingleton<SyncRepository>(
+    () => SyncRepositoryImpl(
+      hiveService: getIt(),
+      dioClient: getIt(),
+      networkChecker: getIt(),
+    ),
+  );
+
+  // 3. Domain Repositories
   getIt.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(
       dioClient: getIt(),
@@ -48,19 +58,39 @@ Future<void> configureDependencies() async {
   );
 
   getIt.registerLazySingleton<CustomerRepository>(
-    () => CustomerRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
+    () => CustomerRepositoryImpl(
+      dioClient: getIt(),
+      hiveService: getIt(),
+      networkChecker: getIt(),
+      syncRepository: getIt(),
+    ),
   );
 
   getIt.registerLazySingleton<ProductRepository>(
-    () => ProductRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
+    () => ProductRepositoryImpl(
+      dioClient: getIt(),
+      hiveService: getIt(),
+      networkChecker: getIt(),
+      syncRepository: getIt(),
+    ),
   );
 
   getIt.registerLazySingleton<InvoiceRepository>(
-    () => InvoiceRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
+    () => InvoiceRepositoryImpl(
+      dioClient: getIt(),
+      hiveService: getIt(),
+      networkChecker: getIt(),
+      syncRepository: getIt(),
+    ),
   );
 
   getIt.registerLazySingleton<LeadRepository>(
-    () => LeadRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
+    () => LeadRepositoryImpl(
+      dioClient: getIt(),
+      hiveService: getIt(),
+      networkChecker: getIt(),
+      syncRepository: getIt(),
+    ),
   );
 
   getIt.registerLazySingleton<ExpenseRepository>(
@@ -71,11 +101,7 @@ Future<void> configureDependencies() async {
     () => PurchaseRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
   );
 
-  getIt.registerLazySingleton<SyncRepository>(
-    () => SyncRepositoryImpl(hiveService: getIt()),
-  );
-
-  // 3. Use Cases
+  // 4. Use Cases
   getIt.registerLazySingleton<CreateInvoiceUseCase>(
     () => CreateInvoiceUseCase(
       invoiceRepository: getIt(),

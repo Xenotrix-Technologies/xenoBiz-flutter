@@ -1,252 +1,273 @@
+import 'package:uuid/uuid.dart';
 import '../../domain/entities/product_entity.dart';
+import '../../domain/entities/sync_item_entity.dart';
 import '../../domain/repositories/product_repository.dart';
+import '../../domain/repositories/sync_repository.dart';
 import '../network/api_endpoints.dart';
 import '../network/dio_client.dart';
+import '../network/network_checker.dart';
 import '../storage/hive_service.dart';
 
 class ProductRepositoryImpl implements ProductRepository {
   final DioClient dioClient;
   final HiveService hiveService;
-  final List<ProductEntity> _products = [];
-  final List<InventoryMovement> _movements = [];
+  final NetworkChecker networkChecker;
+  final SyncRepository syncRepository;
 
   ProductRepositoryImpl({
     required this.dioClient,
     required this.hiveService,
+    required this.networkChecker,
+    required this.syncRepository,
   });
+
+  Map<String, dynamic> _productToMap(ProductEntity p, {String syncStatus = 'synced'}) {
+    return {
+      'id': p.id,
+      'name': p.name,
+      'sku': p.sku,
+      'category': p.category,
+      'sellingPrice': p.sellingPrice,
+      'purchasePrice': p.purchasePrice,
+      'stockQuantity': p.stockQuantity,
+      'reorderLevel': p.reorderLevel,
+      'unit': p.unit,
+      'createdAt': p.createdAt.toIso8601String(),
+      'syncStatus': syncStatus,
+    };
+  }
+
+  ProductEntity _mapToProduct(Map<dynamic, dynamic> map) {
+    return ProductEntity(
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? 'Unnamed Product',
+      sku: map['sku']?.toString() ?? 'SKU-000',
+      category: map['category']?.toString() ?? 'General',
+      sellingPrice: (map['sellingPrice'] as num?)?.toDouble() ??
+          (map['selling_price'] as num?)?.toDouble() ?? 0.0,
+      purchasePrice: (map['purchasePrice'] as num?)?.toDouble() ??
+          (map['purchase_price'] as num?)?.toDouble() ?? 0.0,
+      stockQuantity: (map['stockQuantity'] as num?)?.toInt() ??
+          (map['current_stock'] as num?)?.toInt() ?? 0,
+      reorderLevel: (map['reorderLevel'] as num?)?.toInt() ??
+          (map['min_stock_level'] as num?)?.toInt() ?? 5,
+      unit: map['unit']?.toString() ?? 'Pcs',
+      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? map['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
 
   @override
   Future<List<ProductEntity>> getProducts({String? query, String? category}) async {
-    try {
-      final queryParams = <String, dynamic>{};
-      if (query != null && query.isNotEmpty) queryParams['search'] = query;
-      if (category != null && category.isNotEmpty && category != 'All') queryParams['category'] = category;
+    final box = hiveService.getBox(HiveService.boxProducts);
+    final List<ProductEntity> localProducts = [];
 
-      final response = await dioClient.dio.get(
-        ApiEndpoints.products,
-        queryParameters: queryParams.isNotEmpty ? queryParams : null,
-      );
-
-      if (response.data != null && response.data['success'] == true) {
-        final List list = response.data['data'] ?? [];
-        final fetched = list.map((item) {
-          return ProductEntity(
-            id: item['id'],
-            name: item['name'] ?? 'Unnamed',
-            sku: item['sku'] ?? 'SKU-000',
-            category: item['category'] ?? 'General',
-            sellingPrice: (item['selling_price'] as num?)?.toDouble() ?? 0.0,
-            purchasePrice: (item['purchase_price'] as num?)?.toDouble() ?? 0.0,
-            stockQuantity: (item['current_stock'] as num?)?.toInt() ?? 0,
-            reorderLevel: (item['min_stock_level'] as num?)?.toInt() ?? 5,
-            unit: item['unit'] ?? 'Pcs',
-            createdAt: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-          );
-        }).toList();
-
-        _products.clear();
-        _products.addAll(fetched);
-        return fetched;
+    for (var key in box.keys) {
+      final val = box.get(key);
+      if (val is Map) {
+        localProducts.add(_mapToProduct(val));
       }
-    } catch (_) {}
+    }
 
-    List<ProductEntity> result = List.from(_products);
+    localProducts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    List<ProductEntity> filtered = localProducts;
     if (category != null && category.isNotEmpty && category != 'All') {
-      result = result.where((p) => p.category == category).toList();
+      filtered = filtered.where((p) => p.category == category).toList();
     }
     if (query != null && query.isNotEmpty) {
       final q = query.toLowerCase();
-      result = result.where((p) {
+      filtered = filtered.where((p) {
         return p.name.toLowerCase().contains(q) ||
             p.sku.toLowerCase().contains(q) ||
             p.category.toLowerCase().contains(q);
       }).toList();
     }
-    return result;
+    return filtered;
   }
 
   @override
   Future<ProductEntity> getProduct(String id) async {
-    try {
-      final response = await dioClient.dio.get('${ApiEndpoints.products}/$id');
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        return ProductEntity(
-          id: item['id'],
-          name: item['name'] ?? 'Unknown Product',
-          sku: item['sku'] ?? 'SKU-000',
-          category: item['category'] ?? 'General',
-          sellingPrice: (item['selling_price'] as num?)?.toDouble() ?? 0.0,
-          purchasePrice: (item['purchase_price'] as num?)?.toDouble() ?? 0.0,
-          stockQuantity: (item['current_stock'] as num?)?.toInt() ?? 0,
-          reorderLevel: (item['min_stock_level'] as num?)?.toInt() ?? 5,
-          unit: item['unit'] ?? 'Pcs',
-          createdAt: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-        );
-      }
-    } catch (_) {}
+    final box = hiveService.getBox(HiveService.boxProducts);
+    final val = box.get(id);
+    if (val is Map) {
+      return _mapToProduct(val);
+    }
+    return ProductEntity(
+      id: id,
+      name: 'Unknown Product',
+      sku: 'SKU-000',
+      category: 'General',
+      sellingPrice: 0.0,
+      purchasePrice: 0.0,
+      stockQuantity: 0,
+      createdAt: DateTime.now(),
+    );
+  }
 
-    return _products.firstWhere(
-      (p) => p.id == id,
-      orElse: () => ProductEntity(
-        id: id,
-        name: 'Unknown Product',
-        sku: 'SKU-000',
-        category: 'General',
-        sellingPrice: 0.0,
-        purchasePrice: 0.0,
-        stockQuantity: 0,
+  @override
+  Future<ProductEntity> createProduct(ProductEntity product) async {
+    final box = hiveService.getBox(HiveService.boxProducts);
+    final String productId = product.id.isNotEmpty ? product.id : const Uuid().v4();
+    final localProduct = product.copyWith(id: productId);
+
+    // 1. Write to Hive immediately
+    await box.put(productId, _productToMap(localProduct, syncStatus: 'pendingCreate'));
+
+    // 2. Sync if online
+    if (await networkChecker.isConnected) {
+      try {
+        final response = await dioClient.dio.post(
+          ApiEndpoints.products,
+          data: {
+            'name': localProduct.name,
+            'sku': localProduct.sku,
+            'category': localProduct.category,
+            'sellingPrice': localProduct.sellingPrice,
+            'purchasePrice': localProduct.purchasePrice,
+            'currentStock': localProduct.stockQuantity,
+            'minStockLevel': localProduct.reorderLevel,
+            'unit': localProduct.unit,
+          },
+        );
+
+        if (response.data != null && response.data['success'] == true) {
+          final item = response.data['data'];
+          final serverId = item['id']?.toString() ?? productId;
+          final syncedProduct = localProduct.copyWith(id: serverId);
+
+          if (serverId != productId) {
+            await box.delete(productId);
+          }
+          await box.put(serverId, _productToMap(syncedProduct, syncStatus: 'synced'));
+          return syncedProduct;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Enqueue if offline or request failed
+    await syncRepository.enqueueSyncItem(
+      SyncItemEntity(
+        id: const Uuid().v4(),
+        entityType: 'PRODUCT',
+        action: SyncAction.create,
+        payload: {
+          'localId': productId,
+          'name': localProduct.name,
+          'sku': localProduct.sku,
+          'category': localProduct.category,
+          'sellingPrice': localProduct.sellingPrice,
+          'purchasePrice': localProduct.purchasePrice,
+          'currentStock': localProduct.stockQuantity,
+          'minStockLevel': localProduct.reorderLevel,
+          'unit': localProduct.unit,
+        },
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    return localProduct;
+  }
+
+  @override
+  Future<ProductEntity> updateProduct(ProductEntity product) async {
+    final box = hiveService.getBox(HiveService.boxProducts);
+
+    // 1. Update Hive
+    await box.put(product.id, _productToMap(product, syncStatus: 'pendingUpdate'));
+
+    // 2. Sync if online
+    if (await networkChecker.isConnected) {
+      try {
+        final response = await dioClient.dio.put(
+          '${ApiEndpoints.products}/${product.id}',
+          data: {
+            'name': product.name,
+            'sku': product.sku,
+            'category': product.category,
+            'sellingPrice': product.sellingPrice,
+            'purchasePrice': product.purchasePrice,
+            'currentStock': product.stockQuantity,
+            'minStockLevel': product.reorderLevel,
+            'unit': product.unit,
+          },
+        );
+
+        if (response.data != null && response.data['success'] == true) {
+          await box.put(product.id, _productToMap(product, syncStatus: 'synced'));
+          return product;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Enqueue sync item
+    await syncRepository.enqueueSyncItem(
+      SyncItemEntity(
+        id: const Uuid().v4(),
+        entityType: 'PRODUCT',
+        action: SyncAction.update,
+        payload: {
+          'id': product.id,
+          'name': product.name,
+          'sku': product.sku,
+          'category': product.category,
+          'sellingPrice': product.sellingPrice,
+          'purchasePrice': product.purchasePrice,
+          'currentStock': product.stockQuantity,
+          'minStockLevel': product.reorderLevel,
+          'unit': product.unit,
+        },
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    return product;
+  }
+
+  @override
+  Future<void> adjustStock(String productId, int change, String reason) async {
+    final box = hiveService.getBox(HiveService.boxProducts);
+    final val = box.get(productId);
+
+    if (val is Map) {
+      final prod = _mapToProduct(val);
+      final newQty = (prod.stockQuantity + change).clamp(0, 999999);
+      final updated = prod.copyWith(stockQuantity: newQty);
+      await box.put(productId, _productToMap(updated, syncStatus: 'pendingUpdate'));
+    }
+
+    if (await networkChecker.isConnected) {
+      try {
+        await dioClient.dio.post(
+          '/inventory/adjust',
+          data: {
+            'productId': productId,
+            'quantityDelta': change,
+            'movementType': change >= 0 ? 'Manual Adjustment' : 'Damaged',
+            'reason': reason,
+          },
+        );
+        return;
+      } catch (_) {}
+    }
+
+    await syncRepository.enqueueSyncItem(
+      SyncItemEntity(
+        id: const Uuid().v4(),
+        entityType: 'INVENTORY_ADJUST',
+        action: SyncAction.update,
+        payload: {
+          'productId': productId,
+          'quantityDelta': change,
+          'reason': reason,
+        },
         createdAt: DateTime.now(),
       ),
     );
   }
 
   @override
-  Future<ProductEntity> createProduct(ProductEntity product) async {
-    try {
-      final response = await dioClient.dio.post(
-        ApiEndpoints.products,
-        data: {
-          'name': product.name,
-          'sku': product.sku,
-          'category': product.category,
-          'sellingPrice': product.sellingPrice,
-          'purchasePrice': product.purchasePrice,
-          'currentStock': product.stockQuantity,
-          'minStockLevel': product.reorderLevel,
-          'unit': product.unit,
-        },
-      );
-
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final created = ProductEntity(
-          id: item['id'],
-          name: item['name'],
-          sku: item['sku'] ?? product.sku,
-          category: item['category'] ?? product.category,
-          sellingPrice: (item['selling_price'] as num?)?.toDouble() ?? product.sellingPrice,
-          purchasePrice: (item['purchase_price'] as num?)?.toDouble() ?? product.purchasePrice,
-          stockQuantity: (item['current_stock'] as num?)?.toInt() ?? product.stockQuantity,
-          reorderLevel: (item['min_stock_level'] as num?)?.toInt() ?? product.reorderLevel,
-          unit: item['unit'] ?? product.unit,
-          createdAt: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-        );
-        _products.insert(0, created);
-        return created;
-      }
-    } catch (_) {}
-
-    _products.insert(0, product);
-    return product;
-  }
-
-  @override
-  Future<ProductEntity> updateProduct(ProductEntity product) async {
-    try {
-      final response = await dioClient.dio.put(
-        '${ApiEndpoints.products}/${product.id}',
-        data: {
-          'name': product.name,
-          'sku': product.sku,
-          'category': product.category,
-          'sellingPrice': product.sellingPrice,
-          'purchasePrice': product.purchasePrice,
-          'currentStock': product.stockQuantity,
-          'minStockLevel': product.reorderLevel,
-          'unit': product.unit,
-        },
-      );
-
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final updated = ProductEntity(
-          id: item['id'],
-          name: item['name'],
-          sku: item['sku'] ?? product.sku,
-          category: item['category'] ?? product.category,
-          sellingPrice: (item['selling_price'] as num?)?.toDouble() ?? product.sellingPrice,
-          purchasePrice: (item['purchase_price'] as num?)?.toDouble() ?? product.purchasePrice,
-          stockQuantity: (item['current_stock'] as num?)?.toInt() ?? product.stockQuantity,
-          reorderLevel: (item['min_stock_level'] as num?)?.toInt() ?? product.reorderLevel,
-          unit: item['unit'] ?? product.unit,
-          createdAt: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-        );
-        final idx = _products.indexWhere((p) => p.id == product.id);
-        if (idx != -1) _products[idx] = updated;
-        return updated;
-      }
-    } catch (_) {}
-
-    final index = _products.indexWhere((p) => p.id == product.id);
-    if (index != -1) {
-      _products[index] = product;
-    } else {
-      _products.add(product);
-    }
-    return product;
-  }
-
-  @override
-  Future<void> adjustStock(String productId, int change, String reason) async {
-    try {
-      await dioClient.dio.post(
-        '/inventory/adjust',
-        data: {
-          'productId': productId,
-          'quantityDelta': change,
-          'movementType': change >= 0 ? 'Manual Adjustment' : 'Damaged',
-          'reason': reason,
-        },
-      );
-    } catch (_) {}
-
-    final index = _products.indexWhere((p) => p.id == productId);
-    if (index != -1) {
-      final oldProd = _products[index];
-      final newQty = (oldProd.stockQuantity + change).clamp(0, 999999);
-      _products[index] = oldProd.copyWith(stockQuantity: newQty);
-
-      _movements.insert(
-        0,
-        InventoryMovement(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          productId: productId,
-          productName: oldProd.name,
-          type: change >= 0 ? 'IN' : 'OUT',
-          quantityChange: change,
-          reason: reason,
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
-  }
-
-  @override
   Future<List<InventoryMovement>> getStockMovements(String productId) async {
-    try {
-      final response = await dioClient.dio.get(
-        '/inventory/movements',
-        queryParameters: productId.isNotEmpty ? {'productId': productId} : null,
-      );
-      if (response.data != null && response.data['success'] == true) {
-        final List list = response.data['data'] ?? [];
-        return list.map((item) {
-          final qty = (item['quantity'] as num?)?.toInt() ?? 0;
-          return InventoryMovement(
-            id: item['id'],
-            productId: item['product_id'],
-            productName: item['product_name'] ?? 'Product',
-            type: qty >= 0 ? 'IN' : 'OUT',
-            quantityChange: qty,
-            reason: item['reason'] ?? item['movement_type'] ?? 'Stock movement',
-            timestamp: DateTime.tryParse(item['created_at'] ?? '') ?? DateTime.now(),
-          );
-        }).toList();
-      }
-    } catch (_) {}
-
-    return _movements.where((m) => m.productId == productId || productId.isEmpty).toList();
+    return [];
   }
 }
-
