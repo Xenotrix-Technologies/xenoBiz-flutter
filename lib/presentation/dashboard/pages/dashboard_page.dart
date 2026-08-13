@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../application/bloc/auth_bloc.dart';
 import '../../../application/bloc/dashboard_bloc.dart';
+import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../const/strings.dart';
 import '../../../domain/entities/invoice_entity.dart';
+import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/quick_actions_bottom_sheet.dart';
 import '../../widgets/status_chip.dart';
@@ -24,6 +27,39 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(FetchDashboardDataEvent());
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Good morning';
+    } else if (hour >= 12 && hour < 17) {
+      return 'Good afternoon';
+    } else {
+      return 'Good evening';
+    }
+  }
+
+  String _getBusinessName(BuildContext context) {
+    try {
+      final authState = context.watch<AuthBloc>().state;
+      if (authState is AuthenticatedState &&
+          authState.business != null &&
+          authState.business!.name.trim().isNotEmpty) {
+        return authState.business!.name.trim();
+      }
+    } catch (_) {}
+
+    try {
+      final hive = getIt<HiveService>();
+      final bizBox = hive.getBox(HiveService.boxBusiness);
+      final cached = bizBox.get('name')?.toString();
+      if (cached != null && cached.trim().isNotEmpty) {
+        return cached.trim();
+      }
+    } catch (_) {}
+
+    return '';
   }
 
   String _formatAmount(double amount) {
@@ -51,23 +87,77 @@ class _DashboardPageState extends State<DashboardPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(AppStrings.appName),
-        backgroundColor: AppColors.deepNavy,
+        backgroundColor: AppColors.background,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        toolbarHeight: 70,
+        titleSpacing: 20,
+        automaticallyImplyLeading: false,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _getGreeting(),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.secondaryText,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _getBusinessName(context),
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.darkBlueText,
+                letterSpacing: -0.4,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'Offline Sync Center',
-            onPressed: () {
-              context.push(RouteNames.offlineSync);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.workspace_premium),
-            tooltip: 'Subscription Entitlements',
-            onPressed: () {
-              context.push(RouteNames.subscription);
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 20.0),
+            child: InkWell(
+              onTap: () {
+                context.push(RouteNames.automatedReminders);
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(
+                      Icons.notifications_none_rounded,
+                      color: Color(0xFF1E293B),
+                      size: 22,
+                    ),
+                    Positioned(
+                      top: 11,
+                      right: 11,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -81,19 +171,25 @@ class _DashboardPageState extends State<DashboardPage> {
       body: BlocBuilder<DashboardBloc, DashboardState>(
         builder: (context, state) {
           if (state is DashboardLoadingState) {
-            return const LoadingState(message: 'Loading financial dashboard...');
+            return const LoadingState(
+                message: 'Loading financial dashboard...');
           }
           if (state is DashboardErrorState) {
             return ErrorState(
               message: state.message,
-              onRetry: () => context.read<DashboardBloc>().add(FetchDashboardDataEvent()),
+              onRetry: () =>
+                  context.read<DashboardBloc>().add(FetchDashboardDataEvent()),
             );
           }
           if (state is DashboardLoadedState) {
-            final todaySales = state.todaySales > 0 ? state.todaySales : 18420.0;
-            final weeklySales = state.weeklySales > 0 ? state.weeklySales : 96120.0;
-            final monthlySales = state.monthlySales > 0 ? state.monthlySales : 410000.0;
-            final receivables = state.totalReceivables > 0 ? state.totalReceivables : 22050.0;
+            final todaySales =
+                state.todaySales > 0 ? state.todaySales : 18420.0;
+            final weeklySales =
+                state.weeklySales > 0 ? state.weeklySales : 96120.0;
+            final monthlySales =
+                state.monthlySales > 0 ? state.monthlySales : 410000.0;
+            final receivables =
+                state.totalReceivables > 0 ? state.totalReceivables : 22050.0;
             final profit = state.netProfit > 0 ? state.netProfit : 6340.0;
 
             return RefreshIndicator(
@@ -113,7 +209,8 @@ class _DashboardPageState extends State<DashboardPage> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.secondaryContainer,
-                          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppSizes.radiusMedium),
                         ),
                         child: Row(
                           children: const [
@@ -122,7 +219,8 @@ class _DashboardPageState extends State<DashboardPage> {
                             Expanded(
                               child: Text(
                                 '7-Day Free Trial Active • Tap to upgrade to Pro',
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 13),
                               ),
                             ),
                             Icon(Icons.arrow_forward_ios, size: 14),
@@ -214,8 +312,10 @@ class _DashboardPageState extends State<DashboardPage> {
                             label: 'This week',
                             value: '₹${_formatAmount(weeklySales)}',
                             valueColor: AppColors.darkBlueText,
-                            backgroundColor: AppColors.blueTint.withValues(alpha: 0.6),
-                            borderColor: AppColors.border.withValues(alpha: 0.7),
+                            backgroundColor:
+                                AppColors.blueTint.withValues(alpha: 0.6),
+                            borderColor:
+                                AppColors.border.withValues(alpha: 0.7),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -224,8 +324,10 @@ class _DashboardPageState extends State<DashboardPage> {
                             label: 'This month',
                             value: '₹${_formatLakhsOrAmount(monthlySales)}',
                             valueColor: AppColors.darkBlueText,
-                            backgroundColor: AppColors.blueTint.withValues(alpha: 0.6),
-                            borderColor: AppColors.border.withValues(alpha: 0.7),
+                            backgroundColor:
+                                AppColors.blueTint.withValues(alpha: 0.6),
+                            borderColor:
+                                AppColors.border.withValues(alpha: 0.7),
                           ),
                         ),
                       ],
@@ -274,7 +376,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AppColors.errorContainer.withValues(alpha: 0.7),
+                          color:
+                              AppColors.errorContainer.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: AppColors.danger.withValues(alpha: 0.15),
@@ -345,7 +448,8 @@ class _DashboardPageState extends State<DashboardPage> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: AppColors.warning.withValues(alpha: 0.15),
+                                color:
+                                    AppColors.warning.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -394,7 +498,10 @@ class _DashboardPageState extends State<DashboardPage> {
                         children: [
                           const Text(
                             'Business Modules',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.primary),
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary),
                           ),
                           const SizedBox(height: 12),
                           Wrap(
@@ -402,24 +509,29 @@ class _DashboardPageState extends State<DashboardPage> {
                             runSpacing: 8,
                             children: [
                               ActionChip(
-                                avatar: const Icon(Icons.local_shipping, size: 18),
+                                avatar:
+                                    const Icon(Icons.local_shipping, size: 18),
                                 label: const Text('Purchases'),
-                                onPressed: () => context.push(RouteNames.purchaseManagement),
+                                onPressed: () =>
+                                    context.push(RouteNames.purchaseManagement),
                               ),
                               ActionChip(
                                 avatar: const Icon(Icons.contacts, size: 18),
                                 label: const Text('Suppliers'),
-                                onPressed: () => context.push(RouteNames.supplierDirectory),
+                                onPressed: () =>
+                                    context.push(RouteNames.supplierDirectory),
                               ),
                               ActionChip(
                                 avatar: const Icon(Icons.leaderboard, size: 18),
                                 label: const Text('CRM Pipeline'),
-                                onPressed: () => context.push(RouteNames.leadPipeline),
+                                onPressed: () =>
+                                    context.push(RouteNames.leadPipeline),
                               ),
                               ActionChip(
                                 avatar: const Icon(Icons.alarm, size: 18),
                                 label: const Text('Reminders'),
-                                onPressed: () => context.push(RouteNames.automatedReminders),
+                                onPressed: () =>
+                                    context.push(RouteNames.automatedReminders),
                               ),
                             ],
                           ),
@@ -434,7 +546,10 @@ class _DashboardPageState extends State<DashboardPage> {
                       children: [
                         Text(
                           AppStrings.recentTransactions,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary),
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary),
                         ),
                         TextButton(
                           onPressed: () => context.push(RouteNames.invoices),
@@ -458,9 +573,11 @@ class _DashboardPageState extends State<DashboardPage> {
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: AppColors.surfaceContainerLow,
-                                  borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                                  borderRadius: BorderRadius.circular(
+                                      AppSizes.radiusMedium),
                                 ),
-                                child: const Icon(Icons.description, color: AppColors.primary),
+                                child: const Icon(Icons.description,
+                                    color: AppColors.primary),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -469,11 +586,15 @@ class _DashboardPageState extends State<DashboardPage> {
                                   children: [
                                     Text(
                                       inv.invoiceNumber,
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14),
                                     ),
                                     Text(
                                       inv.customerName,
-                                      style: const TextStyle(color: AppColors.outline, fontSize: 12),
+                                      style: const TextStyle(
+                                          color: AppColors.outline,
+                                          fontSize: 12),
                                     ),
                                   ],
                                 ),
@@ -483,12 +604,16 @@ class _DashboardPageState extends State<DashboardPage> {
                                 children: [
                                   Text(
                                     '₹${inv.grandTotal.toStringAsFixed(0)}',
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                        color: AppColors.primary),
                                   ),
                                   const SizedBox(height: 4),
                                   inv.status == InvoiceStatus.paid
                                       ? StatusChip.paid()
-                                      : inv.status == InvoiceStatus.partiallyPaid
+                                      : inv.status ==
+                                              InvoiceStatus.partiallyPaid
                                           ? StatusChip.partiallyPaid()
                                           : StatusChip.unpaid(),
                                 ],
@@ -612,5 +737,3 @@ class _DashboardWavePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-
