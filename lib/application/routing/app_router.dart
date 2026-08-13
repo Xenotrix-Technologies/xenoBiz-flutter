@@ -27,6 +27,7 @@ import '../../presentation/reports/pages/financial_analytics_page.dart';
 import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
+import '../../presentation/settings/pages/business_profile_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
@@ -218,6 +219,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.settings,
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.businessProfile,
+        builder: (context, state) => const BusinessProfilePage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

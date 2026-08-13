@@ -13,10 +13,14 @@ class SettingsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Settings & Configuration'),
-        backgroundColor: AppColors.deepNavy,
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Settings & Configuration',
+          style: TextStyle(color: AppColors.darkBlueText),
+        ),
+        foregroundColor: AppColors.darkBlueText,
+        forceMaterialTransparency: true,
         elevation: 0,
+        scrolledUnderElevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -28,12 +32,7 @@ class SettingsPage extends StatelessWidget {
               tiles: [
                 _SettingsTile(
                   title: 'Business profile',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Business profile settings')),
-                    );
-                  },
+                  onTap: () => context.push(RouteNames.businessProfile),
                 ),
                 _SettingsTile(
                   title: 'Tax / GST settings',
