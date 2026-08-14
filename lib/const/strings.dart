@@ -61,6 +61,9 @@ abstract class AppStrings {
   // Invoices & Billing
   static const String invoiceTitle = 'Invoices';
   static const String createInvoice = 'Create Invoice';
+  static const String newInvoice = 'New Invoice';
+  static const String cashSale = 'Cash Sale';
+  static const String customer = 'Customer';
   static const String invoiceDetails = 'Invoice Details';
   static const String shareWhatsApp = 'Share via WhatsApp';
   static const String downloadPDF = 'Download PDF';
