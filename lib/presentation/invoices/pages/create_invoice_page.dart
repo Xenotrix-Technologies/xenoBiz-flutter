@@ -19,10 +19,8 @@ class CreateInvoicePage extends StatefulWidget {
   State<CreateInvoicePage> createState() => _CreateInvoicePageState();
 }
 
-class _CreateInvoicePageState extends State<CreateInvoicePage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  bool _isCashSale = true;
+class _CreateInvoicePageState extends State<CreateInvoicePage> {
+  bool get _isCashSale => _selectedCustomer == null;
   final String _invoiceId = 'XNOB-1001';
   final DateTime _createdDateTime = DateTime.now();
 
@@ -39,18 +37,6 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging ||
-          _tabController.index != (_isCashSale ? 0 : 1)) {
-        setState(() {
-          _isCashSale = _tabController.index == 0;
-          if (_isCashSale) {
-            _showSearchOverlay = false;
-          }
-        });
-      }
-    });
 
     _allCustomers = [
       ...DummyData.customers,
@@ -87,7 +73,6 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _customerSearchCtrl.dispose();
     _searchFocusNode.dispose();
     _notesCtrl.dispose();
@@ -132,7 +117,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
           side: const BorderSide(color: AppColors.border, width: 1),
         ),
         titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         actionsPadding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
         title: Row(
           children: [
@@ -204,7 +190,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
                     side: const BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                      borderRadius:
+                          BorderRadius.circular(AppSizes.radiusMedium),
                     ),
                   ),
                   onPressed: () => Navigator.pop(ctx),
@@ -226,7 +213,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                      borderRadius:
+                          BorderRadius.circular(AppSizes.radiusMedium),
                     ),
                   ),
                   onPressed: () {
@@ -288,16 +276,6 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
   double get grandTotal => subtotal + taxTotal;
 
   void _onCreateInvoice() {
-    if (!_isCashSale && _selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Please select or create a customer before proceeding.'),
-            backgroundColor: AppColors.error),
-      );
-      return;
-    }
-
     final invoice = InvoiceEntity(
       id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
       invoiceNumber: _invoiceId,
@@ -417,571 +395,444 @@ class _CreateInvoicePageState extends State<CreateInvoicePage>
                 ),
                 const SizedBox(height: 20),
 
-                // TabBar (Cash Sale vs Customer)
-                Container(
-                  height: 52,
-                  padding: const EdgeInsets.all(4.0),
-                  decoration: BoxDecoration(
-                    color: AppColors.blueTint,
-                    borderRadius: BorderRadius.circular(AppSizes.radiusLarge),
-                    border: Border.all(
-                        color: AppColors.border.withValues(alpha: 0.5)),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    indicator: BoxDecoration(
-                      color: AppColors.surfaceCard,
-                      borderRadius:
-                          BorderRadius.circular(AppSizes.radiusMedium),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    dividerColor: Colors.transparent,
-                    labelColor: AppColors.onSurface,
-                    unselectedLabelColor: AppColors.outline,
-                    labelStyle: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                    unselectedLabelStyle: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w500),
-                    tabs: [
-                      Tab(
+                // Customer Selection Section (Default: Cash Sale if unselected)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_selectedCustomer != null)
+                      // Selected Customer Card (Reference Image 3 Style)
+                      AppCard(
+                        backgroundColor: AppColors.deepNavy,
+                        border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3)),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.payments_outlined,
-                              size: 20,
-                              color: _isCashSale
-                                  ? AppColors.success
-                                  : AppColors.outline,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(AppStrings.cashSale),
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.person_outline,
-                              size: 20,
-                              color: !_isCashSale
-                                  ? AppColors.primary
-                                  : AppColors.outline,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(AppStrings.customer),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Animated Switcher between Cash Sale Info and Customer Search/Selected Card
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  transitionBuilder:
-                      (Widget child, Animation<double> animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0.0, 0.04),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: _isCashSale
-                      ? KeyedSubtree(
-                          key: const ValueKey('cash_sale_card'),
-                          child: AppCard(
-                            backgroundColor:
-                                AppColors.successTint.withValues(alpha: 0.5),
-                            border: Border.all(
-                                color:
-                                    AppColors.success.withValues(alpha: 0.3)),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.successTint,
-                                    borderRadius: BorderRadius.circular(
-                                        AppSizes.radiusSmall),
-                                  ),
-                                  child: const Icon(Icons.point_of_sale,
-                                      color: AppColors.success, size: 22),
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryContainer
+                                    .withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(
+                                    AppSizes.radiusMedium),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                _getInitials(_selectedCustomer!.name),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
                                 ),
-                                const SizedBox(width: 12),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Cash Sale Mode',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                            color: AppColors.onSurface),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        'Direct counter sale without individual customer details',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.secondaryText),
-                                      ),
-                                    ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _selectedCustomer!.name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _selectedCustomer!.phone,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _selectedCustomer!.outstandingBalance > 0
+                                      ? 'PREVIOUS BALANCE'
+                                      : 'STATUS',
+                                  style: const TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _selectedCustomer!.outstandingBalance > 0
+                                      ? '₹${_selectedCustomer!.outstandingBalance.toStringAsFixed(0)}'
+                                      : 'No Due',
+                                  style: TextStyle(
+                                    color:
+                                        _selectedCustomer!.outstandingBalance >
+                                                0
+                                            ? AppColors.warning
+                                            : AppColors.success,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
                                   ),
                                 ),
                               ],
                             ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedCustomer = null;
+                                  _customerSearchCtrl.clear();
+                                  _showSearchOverlay = true;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close,
+                                    color: Colors.white70, size: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      // Search Input Field & Dropdown Overlay (Reference Image 2 Style)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.person_search_outlined,
+                                  size: 18, color: AppColors.primary),
+                              SizedBox(width: 6),
+                              Text('Customer',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      color: AppColors.onSurface)),
+                              SizedBox(width: 8),
+                              Text('(Optional)',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.outline)),
+                            ],
                           ),
-                        )
-                      : KeyedSubtree(
-                          key: const ValueKey('customer_selection_section'),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_selectedCustomer != null)
-                                // Selected Customer Card (Reference Image 3 Style)
-                                AppCard(
-                                  backgroundColor: AppColors.deepNavy,
-                                  border: Border.all(
-                                      color: AppColors.primary
-                                          .withValues(alpha: 0.3)),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 44,
-                                        height: 44,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primaryContainer
-                                              .withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(
-                                              AppSizes.radiusMedium),
-                                          border:
-                                              Border.all(color: Colors.white12),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          _getInitials(_selectedCustomer!.name),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _selectedCustomer!.name,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 15,
+                          const SizedBox(height: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceCard,
+                              borderRadius:
+                                  BorderRadius.circular(AppSizes.radiusMedium),
+                              border: Border.all(
+                                color: _showSearchOverlay
+                                    ? AppColors.primary
+                                    : AppColors.surfaceContainerHigh,
+                                width: _showSearchOverlay ? 1.5 : 1.0,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: TextField(
+                              controller: _customerSearchCtrl,
+                              focusNode: _searchFocusNode,
+                              onChanged: (val) {
+                                setState(() {
+                                  _showSearchOverlay = true;
+                                });
+                              },
+                              onTap: () {
+                                setState(() {
+                                  _showSearchOverlay = true;
+                                });
+                              },
+                              decoration: InputDecoration(
+                                hintText: 'Search customer name or phone',
+                                hintStyle: const TextStyle(
+                                    color: AppColors.outline, fontSize: 14),
+                                prefixIcon: const Icon(Icons.search,
+                                    color: AppColors.outline, size: 20),
+                                suffixIcon: _customerSearchCtrl.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.close,
+                                            size: 18, color: AppColors.outline),
+                                        onPressed: () {
+                                          _customerSearchCtrl.clear();
+                                          setState(() {});
+                                        },
+                                      )
+                                    : null,
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                          ),
+                          if (_showSearchOverlay) ...[
+                            const SizedBox(height: 6),
+                            AppCard(
+                              padding: const EdgeInsets.all(0),
+                              border: Border.all(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.2)),
+                              child: Container(
+                                constraints:
+                                    const BoxConstraints(maxHeight: 280),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: _filteredCustomers.isEmpty
+                                          ? Padding(
+                                              padding:
+                                                  const EdgeInsets.all(20.0),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: const [
+                                                  Icon(Icons.search_off,
+                                                      size: 20,
+                                                      color: AppColors.outline),
+                                                  SizedBox(width: 8),
+                                                  Text('Customer not found',
+                                                      style: TextStyle(
+                                                          color:
+                                                              AppColors.outline,
+                                                          fontSize: 14)),
+                                                ],
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                            )
+                                          : ListView.separated(
+                                              shrinkWrap: true,
+                                              itemCount:
+                                                  _filteredCustomers.length,
+                                              separatorBuilder: (_, __) =>
+                                                  const Divider(
+                                                      height: 1,
+                                                      indent: 16,
+                                                      endIndent: 16),
+                                              itemBuilder: (ctx, idx) {
+                                                final cust =
+                                                    _filteredCustomers[idx];
+                                                return InkWell(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      _selectedCustomer = cust;
+                                                      _showSearchOverlay =
+                                                          false;
+                                                    });
+                                                  },
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 16.0,
+                                                        vertical: 12.0),
+                                                    child: Row(
+                                                      children: [
+                                                        Container(
+                                                          width: 38,
+                                                          height: 38,
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: AppColors
+                                                                .surfaceContainerLow,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        10),
+                                                            border: Border.all(
+                                                                color: AppColors
+                                                                    .border),
+                                                          ),
+                                                          alignment:
+                                                              Alignment.center,
+                                                          child: Text(
+                                                            _getInitials(
+                                                                cust.name),
+                                                            style:
+                                                                const TextStyle(
+                                                              color: AppColors
+                                                                  .primary,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                              fontSize: 14,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 12),
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              Text(
+                                                                cust.name,
+                                                                style:
+                                                                    const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                  fontSize: 14,
+                                                                  color: AppColors
+                                                                      .onSurface,
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                  height: 2),
+                                                              Text(
+                                                                cust.phone,
+                                                                style: const TextStyle(
+                                                                    fontSize:
+                                                                        12,
+                                                                    color: AppColors
+                                                                        .outline),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        cust.outstandingBalance >
+                                                                0
+                                                            ? Container(
+                                                                padding: const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical:
+                                                                        4),
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color: AppColors
+                                                                      .warningTint,
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              6),
+                                                                  border: Border.all(
+                                                                      color: AppColors
+                                                                          .warning
+                                                                          .withValues(
+                                                                              alpha: 0.3)),
+                                                                ),
+                                                                child: Text(
+                                                                  'Pending Due · ₹${cust.outstandingBalance.toStringAsFixed(0)}',
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    fontSize:
+                                                                        11,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                    color: AppColors
+                                                                        .warning,
+                                                                  ),
+                                                                ),
+                                                              )
+                                                            : Container(
+                                                                padding: const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical:
+                                                                        4),
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color: AppColors
+                                                                      .successTint,
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              6),
+                                                                  border: Border.all(
+                                                                      color: AppColors
+                                                                          .success
+                                                                          .withValues(
+                                                                              alpha: 0.3)),
+                                                                ),
+                                                                child:
+                                                                    const Text(
+                                                                  'No Due',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontSize:
+                                                                        11,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                    color: AppColors
+                                                                        .success,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                             ),
-                                            const SizedBox(height: 2),
+                                    ),
+                                    const Divider(height: 1),
+                                    InkWell(
+                                      onTap: () => _showCreateCustomerDialog(
+                                          _customerSearchCtrl.text),
+                                      borderRadius: const BorderRadius.only(
+                                        bottomLeft: Radius.circular(
+                                            AppSizes.radiusLarge),
+                                        bottomRight: Radius.circular(
+                                            AppSizes.radiusLarge),
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        color: AppColors.surfaceContainerLow,
+                                        alignment: Alignment.center,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: const [
+                                            Icon(Icons.add_circle_outline,
+                                                size: 18,
+                                                color: AppColors.primary),
+                                            SizedBox(width: 8),
                                             Text(
-                                              _selectedCustomer!.phone,
-                                              style: const TextStyle(
-                                                color: Colors.white70,
-                                                fontSize: 13,
+                                              'Create New Customer',
+                                              style: TextStyle(
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            _selectedCustomer!
-                                                        .outstandingBalance >
-                                                    0
-                                                ? 'PREVIOUS BALANCE'
-                                                : 'STATUS',
-                                            style: const TextStyle(
-                                              color: Colors.white60,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            _selectedCustomer!
-                                                        .outstandingBalance >
-                                                    0
-                                                ? '₹${_selectedCustomer!.outstandingBalance.toStringAsFixed(0)}'
-                                                : 'No Due',
-                                            style: TextStyle(
-                                              color: _selectedCustomer!
-                                                          .outstandingBalance >
-                                                      0
-                                                  ? AppColors.warning
-                                                  : AppColors.success,
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 15,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(width: 8),
-                                      GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _selectedCustomer = null;
-                                            _customerSearchCtrl.clear();
-                                            _showSearchOverlay = true;
-                                          });
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.1),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(Icons.close,
-                                              color: Colors.white70, size: 16),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                // Search Input Field & Dropdown Overlay (Reference Image 2 Style)
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: const [
-                                        Icon(Icons.person_search_outlined,
-                                            size: 18, color: AppColors.primary),
-                                        SizedBox(width: 6),
-                                        Text('Customer',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 15,
-                                                color: AppColors.onSurface)),
-                                      ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surfaceCard,
-                                        borderRadius: BorderRadius.circular(
-                                            AppSizes.radiusMedium),
-                                        border: Border.all(
-                                          color: _showSearchOverlay
-                                              ? AppColors.primary
-                                              : AppColors.surfaceContainerHigh,
-                                          width: _showSearchOverlay ? 1.5 : 1.0,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.primary
-                                                .withValues(alpha: 0.05),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: TextField(
-                                        controller: _customerSearchCtrl,
-                                        focusNode: _searchFocusNode,
-                                        onChanged: (val) {
-                                          setState(() {
-                                            _showSearchOverlay = true;
-                                          });
-                                        },
-                                        onTap: () {
-                                          setState(() {
-                                            _showSearchOverlay = true;
-                                          });
-                                        },
-                                        decoration: InputDecoration(
-                                          hintText:
-                                              'Search customer name or phone',
-                                          hintStyle: const TextStyle(
-                                              color: AppColors.outline,
-                                              fontSize: 14),
-                                          prefixIcon: const Icon(Icons.search,
-                                              color: AppColors.outline,
-                                              size: 20),
-                                          suffixIcon: _customerSearchCtrl
-                                                  .text.isNotEmpty
-                                              ? IconButton(
-                                                  icon: const Icon(Icons.close,
-                                                      size: 18,
-                                                      color: AppColors.outline),
-                                                  onPressed: () {
-                                                    _customerSearchCtrl.clear();
-                                                    setState(() {});
-                                                  },
-                                                )
-                                              : null,
-                                          border: InputBorder.none,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 16, vertical: 14),
-                                        ),
-                                      ),
-                                    ),
-                                    if (_showSearchOverlay) ...[
-                                      const SizedBox(height: 6),
-                                      AppCard(
-                                        padding: const EdgeInsets.all(0),
-                                        border: Border.all(
-                                            color: AppColors.primary
-                                                .withValues(alpha: 0.2)),
-                                        child: Container(
-                                          constraints: const BoxConstraints(
-                                              maxHeight: 280),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Flexible(
-                                                child:
-                                                    _filteredCustomers.isEmpty
-                                                        ? Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(20.0),
-                                                            child: Row(
-                                                              mainAxisAlignment:
-                                                                  MainAxisAlignment
-                                                                      .center,
-                                                              children: const [
-                                                                Icon(
-                                                                    Icons
-                                                                        .search_off,
-                                                                    size: 20,
-                                                                    color: AppColors
-                                                                        .outline),
-                                                                SizedBox(
-                                                                    width: 8),
-                                                                Text(
-                                                                    'Customer not found',
-                                                                    style: TextStyle(
-                                                                        color: AppColors
-                                                                            .outline,
-                                                                        fontSize:
-                                                                            14)),
-                                                              ],
-                                                            ),
-                                                          )
-                                                        : ListView.separated(
-                                                            shrinkWrap: true,
-                                                            itemCount:
-                                                                _filteredCustomers
-                                                                    .length,
-                                                            separatorBuilder: (_,
-                                                                    __) =>
-                                                                const Divider(
-                                                                    height: 1,
-                                                                    indent: 16,
-                                                                    endIndent:
-                                                                        16),
-                                                            itemBuilder:
-                                                                (ctx, idx) {
-                                                              final cust =
-                                                                  _filteredCustomers[
-                                                                      idx];
-                                                              return InkWell(
-                                                                onTap: () {
-                                                                  setState(() {
-                                                                    _selectedCustomer =
-                                                                        cust;
-                                                                    _showSearchOverlay =
-                                                                        false;
-                                                                  });
-                                                                },
-                                                                child: Padding(
-                                                                  padding: const EdgeInsets
-                                                                      .symmetric(
-                                                                      horizontal:
-                                                                          16.0,
-                                                                      vertical:
-                                                                          12.0),
-                                                                  child: Row(
-                                                                    children: [
-                                                                      Container(
-                                                                        width:
-                                                                            38,
-                                                                        height:
-                                                                            38,
-                                                                        decoration:
-                                                                            BoxDecoration(
-                                                                          color:
-                                                                              AppColors.surfaceContainerLow,
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(10),
-                                                                          border:
-                                                                              Border.all(color: AppColors.border),
-                                                                        ),
-                                                                        alignment:
-                                                                            Alignment.center,
-                                                                        child:
-                                                                            Text(
-                                                                          _getInitials(
-                                                                              cust.name),
-                                                                          style:
-                                                                              const TextStyle(
-                                                                            color:
-                                                                                AppColors.primary,
-                                                                            fontWeight:
-                                                                                FontWeight.w800,
-                                                                            fontSize:
-                                                                                14,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                      const SizedBox(
-                                                                          width:
-                                                                              12),
-                                                                      Expanded(
-                                                                        child:
-                                                                            Column(
-                                                                          crossAxisAlignment:
-                                                                              CrossAxisAlignment.start,
-                                                                          children: [
-                                                                            Text(
-                                                                              cust.name,
-                                                                              style: const TextStyle(
-                                                                                fontWeight: FontWeight.w700,
-                                                                                fontSize: 14,
-                                                                                color: AppColors.onSurface,
-                                                                              ),
-                                                                            ),
-                                                                            const SizedBox(height: 2),
-                                                                            Text(
-                                                                              cust.phone,
-                                                                              style: const TextStyle(fontSize: 12, color: AppColors.outline),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                      ),
-                                                                      cust.outstandingBalance >
-                                                                              0
-                                                                          ? Container(
-                                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                                              decoration: BoxDecoration(
-                                                                                color: AppColors.warningTint,
-                                                                                borderRadius: BorderRadius.circular(6),
-                                                                                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                                                                              ),
-                                                                              child: Text(
-                                                                                'Pending Due · ₹${cust.outstandingBalance.toStringAsFixed(0)}',
-                                                                                style: const TextStyle(
-                                                                                  fontSize: 11,
-                                                                                  fontWeight: FontWeight.w700,
-                                                                                  color: AppColors.warning,
-                                                                                ),
-                                                                              ),
-                                                                            )
-                                                                          : Container(
-                                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                                              decoration: BoxDecoration(
-                                                                                color: AppColors.successTint,
-                                                                                borderRadius: BorderRadius.circular(6),
-                                                                                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                                                                              ),
-                                                                              child: const Text(
-                                                                                'No Due',
-                                                                                style: TextStyle(
-                                                                                  fontSize: 11,
-                                                                                  fontWeight: FontWeight.w700,
-                                                                                  color: AppColors.success,
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          ),
-                                              ),
-                                              const Divider(height: 1),
-                                              InkWell(
-                                                onTap: () =>
-                                                    _showCreateCustomerDialog(
-                                                        _customerSearchCtrl
-                                                            .text),
-                                                borderRadius:
-                                                    const BorderRadius.only(
-                                                  bottomLeft: Radius.circular(
-                                                      AppSizes.radiusLarge),
-                                                  bottomRight: Radius.circular(
-                                                      AppSizes.radiusLarge),
-                                                ),
-                                                child: Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(vertical: 12),
-                                                  color: AppColors
-                                                      .surfaceContainerLow,
-                                                  alignment: Alignment.center,
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: const [
-                                                      Icon(
-                                                          Icons
-                                                              .add_circle_outline,
-                                                          size: 18,
-                                                          color: AppColors
-                                                              .primary),
-                                                      SizedBox(width: 8),
-                                                      Text(
-                                                        'Create New Customer',
-                                                        style: TextStyle(
-                                                          color:
-                                                              AppColors.primary,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          fontSize: 14,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ),
-                            ],
-                          ),
-                        ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Row(
