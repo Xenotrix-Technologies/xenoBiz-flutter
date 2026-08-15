@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../application/di/injection.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
@@ -19,16 +20,31 @@ class AddProductsPage extends StatefulWidget {
   State<AddProductsPage> createState() => _AddProductsPageState();
 }
 
-class _AddProductsPageState extends State<AddProductsPage> {
+class _AddProductsPageState extends State<AddProductsPage>
+    with WidgetsBindingObserver {
   late List<InvoiceItemEntity> _cartItems;
   final TextEditingController _searchCtrl = TextEditingController();
   List<ProductEntity> _allProducts = [];
 
+  // Barcode Scanner controls & state
+  late final MobileScannerController _scannerController;
+  bool _isCameraOn = true;
+  bool _isFlashOn = false;
+  DateTime? _lastScanTime;
+  String? _lastScannedCode;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cartItems = List.from(widget.initialItems);
     _loadProducts();
+
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      torchEnabled: false,
+      autoStart: true,
+    );
   }
 
   void _loadProducts() async {
@@ -43,9 +59,79 @@ class _AddProductsPageState extends State<AddProductsPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_scannerController.value.isInitialized) return;
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _scannerController.stop();
+    } else if (state == AppLifecycleState.resumed && _isCameraOn) {
+      _scannerController.start();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _scannerController.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _toggleCamera() {
+    setState(() {
+      _isCameraOn = !_isCameraOn;
+      if (_isCameraOn) {
+        _scannerController.start();
+      } else {
+        _scannerController.stop();
+      }
+    });
+  }
+
+  void _toggleFlash() async {
+    await _scannerController.toggleTorch();
+    setState(() {
+      _isFlashOn = !_isFlashOn;
+    });
+  }
+
+  void _onBarcodeDetected(BarcodeCapture capture) {
+    final now = DateTime.now();
+    for (final barcode in capture.barcodes) {
+      final code = barcode.rawValue ?? barcode.displayValue;
+      if (code == null || code.trim().isEmpty) continue;
+
+      if (_lastScannedCode == code &&
+          _lastScanTime != null &&
+          now.difference(_lastScanTime!) < const Duration(milliseconds: 1500)) {
+        continue;
+      }
+
+      _lastScanTime = now;
+      _lastScannedCode = code;
+
+      final cleanCode = code.trim().toLowerCase();
+      final matchedProduct = _allProducts.cast<ProductEntity?>().firstWhere(
+        (p) =>
+            p != null &&
+            (p.sku.trim().toLowerCase() == cleanCode ||
+                p.id.trim().toLowerCase() == cleanCode ||
+                p.name.trim().toLowerCase() == cleanCode),
+        orElse: () => null,
+      );
+
+      if (matchedProduct != null) {
+        _addProductToCart(matchedProduct);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No product found matching barcode: $code'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      break;
+    }
   }
 
   List<ProductEntity> get _searchResults {
@@ -184,180 +270,6 @@ class _AddProductsPageState extends State<AddProductsPage> {
     );
   }
 
-  void _openBarcodeScannerModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(
-          color: AppColors.deepNavy,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(AppSizes.radiusLarge),
-            topRight: Radius.circular(AppSizes.radiusLarge),
-          ),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white30,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.qr_code_scanner,
-                      color: Colors.white, size: 24),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Barcode Scanner',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(color: Colors.white12, height: 1),
-
-            // Animated Scanner Viewfinder Box
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Container(
-                      height: 180,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius:
-                            BorderRadius.circular(AppSizes.radiusMedium),
-                        border: Border.all(color: AppColors.primary, width: 2),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.camera_alt_outlined,
-                                  color: Colors.white54, size: 48),
-                              SizedBox(height: 8),
-                              Text(
-                                'Align Barcode / SKU inside frame',
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                          Positioned(
-                            top: 40,
-                            left: 20,
-                            right: 20,
-                            child: Container(
-                              height: 2,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Tap a product to simulate scanning:',
-                      style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 12),
-                    ..._allProducts.map((p) {
-                      final isInCart =
-                          _cartItems.any((item) => item.productId == p.id);
-                      return Card(
-                        color: Colors.white.withValues(alpha: 0.08),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppSizes.radiusMedium),
-                          side: BorderSide(
-                              color: isInCart
-                                  ? AppColors.warning.withValues(alpha: 0.5)
-                                  : Colors.white12),
-                        ),
-                        child: ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.qr_code,
-                                color: Colors.white, size: 20),
-                          ),
-                          title: Text(
-                            p.name,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14),
-                          ),
-                          subtitle: Text(
-                            'SKU: ${p.sku} · ₹${p.sellingPrice.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
-                          ),
-                          trailing: isInCart
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.warningTint,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Text(
-                                    'In Cart',
-                                    style: TextStyle(
-                                        color: AppColors.warning,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700),
-                                  ),
-                                )
-                              : const Icon(Icons.add_circle,
-                                  color: AppColors.primary),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            _addProductToCart(p);
-                          },
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _onSaveCart() {
     if (_cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -381,10 +293,10 @@ class _AddProductsPageState extends State<AddProductsPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top App Bar
+            // Top App Bar Header
             Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
               child: Row(
                 children: [
                   InkWell(
@@ -428,7 +340,14 @@ class _AddProductsPageState extends State<AddProductsPage> {
               ),
             ),
 
-            // Search Bar & Scanner Button Row
+            // 1. BARCODE SCANNER CAMERA PREVIEW (AT TOP OF SCREEN)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: _buildScannerHeader(),
+            ),
+            const SizedBox(height: 12),
+
+            // 2. PRODUCT SEARCH FIELD (DIRECTLY UNDER SCANNER)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Row(
@@ -439,7 +358,8 @@ class _AddProductsPageState extends State<AddProductsPage> {
                         color: AppColors.surfaceCard,
                         borderRadius:
                             BorderRadius.circular(AppSizes.radiusMedium),
-                        border: Border.all(color: AppColors.surfaceContainerHigh),
+                        border:
+                            Border.all(color: AppColors.surfaceContainerHigh),
                         boxShadow: [
                           BoxShadow(
                             color: AppColors.primary.withValues(alpha: 0.05),
@@ -476,16 +396,18 @@ class _AddProductsPageState extends State<AddProductsPage> {
                   ),
                   const SizedBox(width: 10),
 
-                  // Barcode Scanner Icon Button
+                  // Camera Toggle Quick Button
                   InkWell(
-                    onTap: _openBarcodeScannerModal,
+                    onTap: _toggleCamera,
                     borderRadius:
                         BorderRadius.circular(AppSizes.radiusMedium),
                     child: Container(
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        color: _isCameraOn
+                            ? AppColors.primary
+                            : AppColors.surfaceContainerHigh,
                         borderRadius:
                             BorderRadius.circular(AppSizes.radiusMedium),
                         boxShadow: [
@@ -496,9 +418,11 @@ class _AddProductsPageState extends State<AddProductsPage> {
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.qr_code_scanner,
-                        color: Colors.white,
+                      child: Icon(
+                        _isCameraOn
+                            ? Icons.qr_code_scanner
+                            : Icons.videocam_off_outlined,
+                        color: _isCameraOn ? Colors.white : AppColors.outline,
                         size: 22,
                       ),
                     ),
@@ -506,17 +430,254 @@ class _AddProductsPageState extends State<AddProductsPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // Main Content Area (Search Results or Cart List)
+            // 3. MAIN CONTENT AREA (SEARCH RESULTS OR CART LIST)
             Expanded(
               child: isSearching
                   ? _buildSearchResultsList(searchResults)
                   : _buildCartList(),
             ),
 
-            // Sticky Bottom Summary Bar & Save Button
+            // 4. STICKY BOTTOM SUMMARY BAR & SAVE BUTTON
             _buildStickySummaryBar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScannerHeader() {
+    if (!_isCameraOn) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+          border: Border.all(color: AppColors.surfaceContainerHigh),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.videocam_off_outlined,
+                  color: AppColors.outline, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Camera Scanner OFF',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onSurface,
+                    ),
+                  ),
+                  Text(
+                    'Tap to enable camera barcode scanning',
+                    style: TextStyle(fontSize: 11, color: AppColors.outline),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: _toggleCamera,
+              icon: const Icon(Icons.videocam_rounded, size: 16),
+              label: const Text('Turn ON',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      height: 180,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+        border: Border.all(color: AppColors.primary, width: 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSizes.radiusMedium - 2),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Live Scanner View
+            MobileScanner(
+              controller: _scannerController,
+              onDetect: _onBarcodeDetected,
+              errorBuilder: (context, error) {
+                return Container(
+                  color: AppColors.surfaceCard,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.camera_alt_outlined,
+                          color: AppColors.error, size: 36),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Camera unavailable or permission denied',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.onSurface),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () => _scannerController.start(),
+                        child: const Text('Retry Camera',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
+            // Barcode Scan Box Area
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.8),
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              width: 220,
+              height: 90,
+              child: Center(
+                child: Container(
+                  height: 2,
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+
+            // Indicator Text
+            Positioned(
+              bottom: 8,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Align Barcode / SKU in box',
+                  style: TextStyle(color: Colors.white, fontSize: 11),
+                ),
+              ),
+            ),
+
+            // Controls (Flash & Camera Toggle)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Row(
+                children: [
+                  // Flash Toggle
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _toggleFlash,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _isFlashOn
+                              ? AppColors.warning
+                              : Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: _isFlashOn
+                                  ? AppColors.warning
+                                  : Colors.white30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isFlashOn
+                                  ? Icons.flash_on
+                                  : Icons.flash_off,
+                              color: _isFlashOn ? Colors.black : Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isFlashOn ? 'Flash ON' : 'Flash OFF',
+                              style: TextStyle(
+                                color: _isFlashOn ? Colors.black : Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Camera OFF Toggle
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _toggleCamera,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white30),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.videocam_off,
+                                color: Colors.white, size: 16),
+                            SizedBox(width: 4),
+                            Text(
+                              'Cam OFF',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -672,7 +833,7 @@ class _AddProductsPageState extends State<AddProductsPage> {
             children: [
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.blueTint,
                   shape: BoxShape.circle,
                 ),
@@ -693,7 +854,7 @@ class _AddProductsPageState extends State<AddProductsPage> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Search product name/SKU above or tap the scanner button to add products to the invoice.',
+                'Scan product barcode above or search product name/SKU to add to the invoice.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -740,7 +901,7 @@ class _AddProductsPageState extends State<AddProductsPage> {
         ),
         const SizedBox(height: 6),
 
-        // Cart Items Styled after Reference Image 2
+        // Cart Items
         ...List.generate(_cartItems.length, (idx) {
           final item = _cartItems[idx];
           return Padding(
@@ -792,7 +953,6 @@ class _AddProductsPageState extends State<AddProductsPage> {
                   // Bottom Controls Row: [- Qty +] and Subtotal / Delete
                   Row(
                     children: [
-                      // Quantity Controller Box (Image 2 style)
                       Container(
                         decoration: BoxDecoration(
                           color: AppColors.surfaceContainerLow,
@@ -948,7 +1108,7 @@ class _AddProductsPageState extends State<AddProductsPage> {
           ),
           const SizedBox(height: 14),
 
-          // Prominent Save Button
+          // Save Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
