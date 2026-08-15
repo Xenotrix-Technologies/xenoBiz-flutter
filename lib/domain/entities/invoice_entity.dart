@@ -5,6 +5,7 @@ enum InvoiceStatus { draft, unpaid, partiallyPaid, paid, cancelled }
 class InvoiceItemEntity extends Equatable {
   final String productId;
   final String productName;
+  final String sku;
   final int quantity;
   final double unitPrice;
   final double taxPercentage;
@@ -12,6 +13,7 @@ class InvoiceItemEntity extends Equatable {
   const InvoiceItemEntity({
     required this.productId,
     required this.productName,
+    this.sku = '',
     required this.quantity,
     required this.unitPrice,
     this.taxPercentage = 0.0,
@@ -21,8 +23,26 @@ class InvoiceItemEntity extends Equatable {
   double get taxAmount => subtotal * (taxPercentage / 100);
   double get total => subtotal + taxAmount;
 
+  InvoiceItemEntity copyWith({
+    String? productId,
+    String? productName,
+    String? sku,
+    int? quantity,
+    double? unitPrice,
+    double? taxPercentage,
+  }) {
+    return InvoiceItemEntity(
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      sku: sku ?? this.sku,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      taxPercentage: taxPercentage ?? this.taxPercentage,
+    );
+  }
+
   @override
-  List<Object?> get props => [productId, productName, quantity, unitPrice, taxPercentage];
+  List<Object?> get props => [productId, productName, sku, quantity, unitPrice, taxPercentage];
 }
 
 class InvoiceEntity extends Equatable {
