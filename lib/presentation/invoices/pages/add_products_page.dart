@@ -687,26 +687,29 @@ class _AddProductsPageState extends State<AddProductsPage>
   Widget _buildSearchResultsList(List<ProductEntity> searchResults) {
     if (searchResults.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.search_off_outlined,
-                size: 48, color: AppColors.outline),
-            SizedBox(height: 12),
-            Text(
-              'No products found',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.onSurface,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.search_off_outlined,
+                  size: 48, color: AppColors.outline),
+              SizedBox(height: 12),
+              Text(
+                'No products found',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.onSurface,
+                ),
               ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Try searching with a different keyword or SKU',
-              style: TextStyle(fontSize: 13, color: AppColors.outline),
-            ),
-          ],
+              SizedBox(height: 4),
+              Text(
+                'Try searching with a different keyword or SKU',
+                style: TextStyle(fontSize: 13, color: AppColors.outline),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -826,28 +829,28 @@ class _AddProductsPageState extends State<AddProductsPage>
   Widget _buildCartList() {
     if (_cartItems.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
                   color: AppColors.blueTint,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.shopping_bag_outlined,
-                  size: 48,
+                  size: 40,
                   color: AppColors.primary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               const Text(
                 'Your Cart is Empty',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.onSurface,
                 ),
