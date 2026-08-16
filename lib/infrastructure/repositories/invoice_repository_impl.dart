@@ -1,10 +1,8 @@
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/entities/payment_entity.dart';
-import '../../domain/entities/sync_item_entity.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/repositories/sync_repository.dart';
-import '../network/api_endpoints.dart';
 import '../network/dio_client.dart';
 import '../network/network_checker.dart';
 import '../storage/hive_service.dart';
@@ -184,86 +182,8 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
     final localInvoice = invoice.copyWith(id: invId, invoiceNumber: invNum);
 
-    // 1. Write to Hive immediately
-    await box.put(invId, _invoiceToMap(localInvoice, syncStatus: 'pendingCreate'));
-
-    // 2. Try online sync
-    if (await networkChecker.isConnected) {
-      try {
-        final itemsPayload = localInvoice.items.map((itm) {
-          return {
-            'productId': itm.productId,
-            'productName': itm.productName,
-            'quantity': itm.quantity,
-            'unitPrice': itm.unitPrice,
-            'taxPercentage': itm.taxPercentage,
-          };
-        }).toList();
-
-        final response = await dioClient.dio.post(
-          ApiEndpoints.invoices,
-          data: {
-            'customerId': localInvoice.customerId,
-            'customerName': localInvoice.customerName,
-            'customerPhone': localInvoice.customerPhone,
-            'items': itemsPayload,
-            'subtotal': localInvoice.subtotal,
-            'taxTotal': localInvoice.taxTotal,
-            'discountTotal': localInvoice.discountTotal,
-            'grandTotal': localInvoice.grandTotal,
-            'paidAmount': localInvoice.paidAmount,
-            'paymentMethod': localInvoice.paidAmount > 0 ? 'Cash' : null,
-            'dueDate': localInvoice.dueDate.toIso8601String(),
-            'notes': localInvoice.notes,
-          },
-        );
-
-        if (response.data != null && response.data['success'] == true) {
-          final item = response.data['data'];
-          final serverId = item['id']?.toString() ?? invId;
-          final serverNum = item['invoice_number']?.toString() ?? invNum;
-          final syncedInvoice = localInvoice.copyWith(id: serverId, invoiceNumber: serverNum);
-
-          if (serverId != invId) {
-            await box.delete(invId);
-          }
-          await box.put(serverId, _invoiceToMap(syncedInvoice, syncStatus: 'synced'));
-          return syncedInvoice;
-        }
-      } catch (_) {}
-    }
-
-    // 3. Enqueue if offline or failed
-    await syncRepository.enqueueSyncItem(
-      SyncItemEntity(
-        id: const Uuid().v4(),
-        entityType: 'INVOICE',
-        action: SyncAction.create,
-        payload: {
-          'localId': invId,
-          'invoiceNumber': invNum,
-          'customerId': localInvoice.customerId,
-          'customerName': localInvoice.customerName,
-          'customerPhone': localInvoice.customerPhone,
-          'items': localInvoice.items.map((i) => {
-            'productId': i.productId,
-            'productName': i.productName,
-            'quantity': i.quantity,
-            'unitPrice': i.unitPrice,
-            'taxPercentage': i.taxPercentage,
-          }).toList(),
-          'subtotal': localInvoice.subtotal,
-          'taxTotal': localInvoice.taxTotal,
-          'discountTotal': localInvoice.discountTotal,
-          'grandTotal': localInvoice.grandTotal,
-          'paidAmount': localInvoice.paidAmount,
-          'dueDate': localInvoice.dueDate.toIso8601String(),
-          'notes': localInvoice.notes,
-        },
-        createdAt: DateTime.now(),
-      ),
-    );
-
+    // Save directly to Hive local storage (single source of truth)
+    await box.put(invId, _invoiceToMap(localInvoice, syncStatus: 'synced'));
     return localInvoice;
   }
 
@@ -289,65 +209,8 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       notes: payment.notes,
     );
 
-    // 1. Write payment to Hive
-    await box.put(payId, _paymentToMap(localPayment, syncStatus: 'pendingCreate'));
-
-    // 2. Try online sync
-    if (await networkChecker.isConnected) {
-      try {
-        final response = await dioClient.dio.post(
-          ApiEndpoints.payments,
-          data: {
-            'invoiceId': payment.invoiceId,
-            'customerId': payment.customerId,
-            'amount': payment.amount,
-            'paymentMethod': payment.paymentMode,
-            'paymentType': 'IN',
-            'notes': payment.notes,
-          },
-        );
-
-        if (response.data != null && response.data['success'] == true) {
-          final item = response.data['data'];
-          final serverId = item['id']?.toString() ?? payId;
-          final syncedPayment = PaymentEntity(
-            id: serverId,
-            invoiceId: payment.invoiceId,
-            customerId: payment.customerId,
-            customerName: payment.customerName,
-            amount: payment.amount,
-            paymentMode: payment.paymentMode,
-            paymentDate: payment.paymentDate,
-            notes: payment.notes,
-          );
-
-          if (serverId != payId) {
-            await box.delete(payId);
-          }
-          await box.put(serverId, _paymentToMap(syncedPayment, syncStatus: 'synced'));
-          return syncedPayment;
-        }
-      } catch (_) {}
-    }
-
-    // 3. Enqueue sync
-    await syncRepository.enqueueSyncItem(
-      SyncItemEntity(
-        id: const Uuid().v4(),
-        entityType: 'PAYMENT',
-        action: SyncAction.create,
-        payload: {
-          'localId': payId,
-          'invoiceId': payment.invoiceId,
-          'customerId': payment.customerId,
-          'amount': payment.amount,
-          'paymentMethod': payment.paymentMode,
-          'notes': payment.notes,
-        },
-        createdAt: DateTime.now(),
-      ),
-    );
-
+    // Save directly to Hive local storage (single source of truth)
+    await box.put(payId, _paymentToMap(localPayment, syncStatus: 'synced'));
     return localPayment;
   }
 

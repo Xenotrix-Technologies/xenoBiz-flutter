@@ -10,6 +10,7 @@ class ProductEntity extends Equatable {
   final int stockQuantity;
   final int reorderLevel;
   final String unit; // Pcs, Kg, Box, etc.
+  final double? taxPercentage; // Configured GST rate for product if set
   final DateTime createdAt;
 
   const ProductEntity({
@@ -22,6 +23,7 @@ class ProductEntity extends Equatable {
     required this.stockQuantity,
     this.reorderLevel = 5,
     this.unit = 'Pcs',
+    this.taxPercentage,
     required this.createdAt,
   });
 
@@ -37,6 +39,7 @@ class ProductEntity extends Equatable {
     int? stockQuantity,
     int? reorderLevel,
     String? unit,
+    double? taxPercentage,
     DateTime? createdAt,
   }) {
     return ProductEntity(
@@ -49,6 +52,7 @@ class ProductEntity extends Equatable {
       stockQuantity: stockQuantity ?? this.stockQuantity,
       reorderLevel: reorderLevel ?? this.reorderLevel,
       unit: unit ?? this.unit,
+      taxPercentage: taxPercentage ?? this.taxPercentage,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -64,6 +68,7 @@ class ProductEntity extends Equatable {
         stockQuantity,
         reorderLevel,
         unit,
+        taxPercentage,
         createdAt,
       ];
 }

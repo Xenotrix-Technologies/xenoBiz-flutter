@@ -49,6 +49,9 @@ class XenoBizApp extends StatelessWidget {
             networkChecker: getIt(),
           ),
         ),
+        BlocProvider<TaxSettingsBloc>(
+          create: (_) => TaxSettingsBloc(repository: getIt())..add(const FetchTaxSettingsEvent()),
+        ),
       ],
       child: MaterialApp.router(
         title: 'XenoBiz Manager',

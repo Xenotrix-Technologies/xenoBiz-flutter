@@ -1,6 +1,5 @@
 import '../entities/customer_entity.dart';
 import '../entities/invoice_entity.dart';
-import '../entities/sync_item_entity.dart';
 import '../repositories/customer_repository.dart';
 import '../repositories/invoice_repository.dart';
 import '../repositories/product_repository.dart';
@@ -55,21 +54,6 @@ class CreateInvoiceUseCase {
     } catch (_) {
       // Graceful fallback if customer fetch fails locally
     }
-
-    // 4. Enqueue Sync Item
-    await syncRepository.enqueueSyncItem(
-      SyncItemEntity(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        entityType: 'INVOICE',
-        action: SyncAction.create,
-        payload: {
-          'invoiceId': createdInvoice.id,
-          'invoiceNumber': createdInvoice.invoiceNumber,
-          'grandTotal': createdInvoice.grandTotal,
-        },
-        createdAt: DateTime.now(),
-      ),
-    );
 
     return createdInvoice;
   }

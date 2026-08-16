@@ -1,7 +1,6 @@
 import '../entities/customer_entity.dart';
 import '../entities/invoice_entity.dart';
 import '../entities/payment_entity.dart';
-import '../entities/sync_item_entity.dart';
 import '../repositories/customer_repository.dart';
 import '../repositories/invoice_repository.dart';
 import '../repositories/sync_repository.dart';
@@ -58,20 +57,6 @@ class RecordPaymentUseCase {
         ),
       );
     } catch (_) {}
-
-    // 4. Enqueue Sync
-    await syncRepository.enqueueSyncItem(
-      SyncItemEntity(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        entityType: 'PAYMENT',
-        action: SyncAction.create,
-        payload: {
-          'paymentId': recordedPayment.id,
-          'amount': recordedPayment.amount,
-        },
-        createdAt: DateTime.now(),
-      ),
-    );
 
     return recordedPayment;
   }

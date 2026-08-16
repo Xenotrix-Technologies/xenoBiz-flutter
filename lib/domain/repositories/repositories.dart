@@ -7,3 +7,5 @@ export 'product_repository.dart';
 export 'purchase_repository.dart';
 export 'subscription_repository.dart';
 export 'sync_repository.dart';
+export 'tax_settings_repository.dart';
+

@@ -10,9 +10,12 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/di/injection.dart';
+import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
 import 'add_products_page.dart';
+
 
 class CreateInvoicePage extends StatefulWidget {
   const CreateInvoicePage({super.key});
@@ -300,9 +303,80 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     );
   }
 
-  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get taxTotal => _items.fold(0.0, (sum, item) => sum + item.taxAmount);
-  double get grandTotal => subtotal + taxTotal;
+  TaxSettingsEntity get _taxSettings {
+    final taxState = context.watch<TaxSettingsBloc>().state;
+    if (taxState is TaxSettingsLoadedState) {
+      return taxState.settings;
+    }
+    return const TaxSettingsEntity();
+  }
+
+  bool get _isGstEnabled => _taxSettings.isGstEnabled;
+
+  bool get _isIgst {
+    if (_selectedCustomer != null &&
+        _selectedCustomer!.state != null &&
+        _selectedCustomer!.state!.isNotEmpty) {
+      return _selectedCustomer!.state!.toLowerCase() !=
+          _taxSettings.businessState.toLowerCase();
+    }
+    return _taxSettings.taxCalculationType == 'IGST';
+  }
+
+  double get subtotal {
+    if (!_isGstEnabled) {
+      return _items.fold(
+          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+    }
+    if (_taxSettings.isTaxIncludedInPrice) {
+      return _items.fold(0.0, (sum, item) {
+        final rate = item.taxPercentage > 0
+            ? item.taxPercentage
+            : _taxSettings.defaultGstRate;
+        final total = item.quantity * item.unitPrice;
+        final taxable = total / (1 + (rate / 100));
+        return sum + taxable;
+      });
+    } else {
+      return _items.fold(
+          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+    }
+  }
+
+  double get taxTotal {
+    if (!_isGstEnabled) return 0.0;
+    if (_taxSettings.isTaxIncludedInPrice) {
+      return _items.fold(0.0, (sum, item) {
+        final rate = item.taxPercentage > 0
+            ? item.taxPercentage
+            : _taxSettings.defaultGstRate;
+        final total = item.quantity * item.unitPrice;
+        final taxable = total / (1 + (rate / 100));
+        return sum + (total - taxable);
+      });
+    } else {
+      return _items.fold(0.0, (sum, item) {
+        final rate = item.taxPercentage > 0
+            ? item.taxPercentage
+            : _taxSettings.defaultGstRate;
+        final base = item.quantity * item.unitPrice;
+        return sum + (base * (rate / 100));
+      });
+    }
+  }
+
+  double get grandTotal {
+    if (!_isGstEnabled) {
+      return _items.fold(
+          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+    }
+    if (_taxSettings.isTaxIncludedInPrice) {
+      return _items.fold(
+          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+    } else {
+      return subtotal + taxTotal;
+    }
+  }
 
   void _onCreateInvoice() {
     final invoice = InvoiceEntity(
@@ -1178,7 +1252,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${item.taxPercentage.toStringAsFixed(0)}% GST)',
+                                            _isGstEnabled
+                                                ? '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${(item.taxPercentage > 0 ? item.taxPercentage : _taxSettings.defaultGstRate).toStringAsFixed(0)}% GST)'
+                                                : '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)}',
                                             style: const TextStyle(
                                               color: AppColors.outline,
                                               fontSize: 12,
@@ -1189,7 +1265,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                       ),
                                     ),
                                     Text(
-                                      '₹${item.subtotal.toStringAsFixed(0)}',
+                                      '₹${(item.quantity * item.unitPrice).toStringAsFixed(0)}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16,
@@ -1209,12 +1285,36 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                 AppCard(
                   child: Column(
                     children: [
-                      _SummaryRow(
-                          'Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
-                      const SizedBox(height: 6),
-                      _SummaryRow(
-                          'GST Total (18%)', '₹${taxTotal.toStringAsFixed(2)}'),
-                      const Divider(height: 20),
+                      if (_isGstEnabled) ...[
+                        _SummaryRow(
+                            _taxSettings.isTaxIncludedInPrice
+                                ? 'Taxable Base Amount'
+                                : 'Subtotal',
+                            '₹${subtotal.toStringAsFixed(2)}'),
+                        const SizedBox(height: 6),
+                        if (_taxSettings.showTaxDetailsOnInvoice) ...[
+                          if (_isIgst) ...[
+                            _SummaryRow('IGST',
+                                '₹${taxTotal.toStringAsFixed(2)}'),
+                          ] else ...[
+                            _SummaryRow(
+                                'CGST',
+                                '₹${(taxTotal / 2).toStringAsFixed(2)}'),
+                            const SizedBox(height: 6),
+                            _SummaryRow(
+                                'SGST',
+                                '₹${(taxTotal / 2).toStringAsFixed(2)}'),
+                          ],
+                          const SizedBox(height: 6),
+                          _SummaryRow('Total Tax',
+                              '₹${taxTotal.toStringAsFixed(2)}'),
+                        ],
+                        const Divider(height: 20),
+                      ] else ...[
+                        _SummaryRow(
+                            'Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
+                        const Divider(height: 20),
+                      ],
                       _SummaryRow(
                           'Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
                           isBold: true),

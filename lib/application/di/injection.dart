@@ -14,6 +14,7 @@ import '../../infrastructure/repositories/product_repository_impl.dart';
 import '../../infrastructure/repositories/purchase_repository_impl.dart';
 import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
+import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
 import '../../infrastructure/storage/hive_service.dart';
 import '../../infrastructure/storage/secure_storage_service.dart';
 
@@ -99,6 +100,10 @@ Future<void> configureDependencies() async {
 
   getIt.registerLazySingleton<PurchaseRepository>(
     () => PurchaseRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
+  );
+
+  getIt.registerLazySingleton<TaxSettingsRepository>(
+    () => TaxSettingsRepositoryImpl(hiveService: getIt()),
   );
 
   // 4. Use Cases
