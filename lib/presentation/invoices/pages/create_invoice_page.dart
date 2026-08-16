@@ -905,7 +905,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                           if (_items.isNotEmpty)
                             TextButton.icon(
                               onPressed: _navigateToAddProducts,
-                              icon: const Icon(Icons.add_shopping_cart, size: 18),
+                              icon:
+                                  const Icon(Icons.add_shopping_cart, size: 18),
                               label: const Text(
                                 'Add Item',
                                 style: TextStyle(
@@ -1029,7 +1030,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                           ),
                                         ),
                                         Text(
-                                          '₹${item.total.toStringAsFixed(0)}',
+                                          '₹${item.subtotal.toStringAsFixed(0)}',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w900,
                                             fontSize: 18,
@@ -1046,7 +1047,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                         // Quantity Box [- Qty +]
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: AppColors.surfaceContainerLow,
+                                            color:
+                                                AppColors.surfaceContainerLow,
                                             borderRadius:
                                                 BorderRadius.circular(10),
                                             border: Border.all(
@@ -1062,14 +1064,17 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                                   width: 36,
                                                   height: 36,
                                                   alignment: Alignment.center,
-                                                  child: const Icon(Icons.remove,
+                                                  child: const Icon(
+                                                      Icons.remove,
                                                       size: 16,
-                                                      color: AppColors.onSurface),
+                                                      color:
+                                                          AppColors.onSurface),
                                                 ),
                                               ),
                                               Container(
-                                                constraints: const BoxConstraints(
-                                                    minWidth: 38),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        minWidth: 38),
                                                 height: 36,
                                                 padding:
                                                     const EdgeInsets.symmetric(
@@ -1094,7 +1099,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                                   alignment: Alignment.center,
                                                   child: const Icon(Icons.add,
                                                       size: 16,
-                                                      color: AppColors.onSurface),
+                                                      color:
+                                                          AppColors.onSurface),
                                                 ),
                                               ),
                                             ],
@@ -1183,7 +1189,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                       ),
                                     ),
                                     Text(
-                                      '₹${item.total.toStringAsFixed(0)}',
+                                      '₹${item.subtotal.toStringAsFixed(0)}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16,
