@@ -1,38 +1,39 @@
-const { db } = require('../db/database');
+const { pool } = require('../db/database');
 
 class BillingPaymentRepository {
-  findById(id) {
-    const stmt = db.prepare('SELECT * FROM payments WHERE id = ?');
-    return stmt.get(id) || null;
+  async findById(id) {
+    const res = await pool.query('SELECT * FROM payments WHERE id = $1', [id]);
+    return res.rows[0] || null;
   }
 
-  findByShopId(shopId) {
-    const stmt = db.prepare('SELECT * FROM payments WHERE shop_id = ? ORDER BY paid_at DESC');
-    return stmt.all(shopId);
+  async findByShopId(shopId) {
+    const res = await pool.query('SELECT * FROM payments WHERE shop_id = $1 ORDER BY paid_at DESC', [shopId]);
+    return res.rows;
   }
 
-  findLatestByShopId(shopId) {
-    const stmt = db.prepare("SELECT * FROM payments WHERE shop_id = ? AND status = 'successful' ORDER BY paid_at DESC LIMIT 1");
-    return stmt.get(shopId) || null;
+  async findLatestByShopId(shopId) {
+    const res = await pool.query("SELECT * FROM payments WHERE shop_id = $1 AND status = 'successful' ORDER BY paid_at DESC LIMIT 1", [shopId]);
+    return res.rows[0] || null;
   }
 
-  findAll({ limit = 50, offset = 0 } = {}) {
-    const stmt = db.prepare('SELECT * FROM payments ORDER BY paid_at DESC LIMIT ? OFFSET ?');
-    return stmt.all(limit, offset);
+  async findAll({ limit = 50, offset = 0 } = {}) {
+    const res = await pool.query('SELECT * FROM payments ORDER BY paid_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
+    return res.rows;
   }
 
-  create(data) {
-    const stmt = db.prepare(`
+  async create(data) {
+    const query = `
       INSERT INTO payments (
         id, shop_id, subscription_id, plan_id, amount, currency, payment_method,
         provider, transaction_id, provider_payment_id, status, paid_at,
         failure_reason, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *
+    `;
 
     const paidAt = data.paidAt || new Date().toISOString();
 
-    stmt.run(
+    const values = [
       data.id,
       data.shopId,
       data.subscriptionId || null,
@@ -45,19 +46,24 @@ class BillingPaymentRepository {
       data.providerPaymentId || null,
       data.status || 'successful',
       paidAt,
-      data.failureReason || null
-    );
+      data.failureReason || null,
+    ];
 
-    return this.findById(data.id);
+    const res = await pool.query(query, values);
+    return res.rows[0];
   }
 
-  getRevenueSummary() {
-    const totalStmt = db.prepare("SELECT SUM(amount) as totalRevenue, COUNT(*) as totalPayments FROM payments WHERE status = 'successful'");
-    const statusBreakdownStmt = db.prepare('SELECT status, COUNT(*) as count, SUM(amount) as sumAmount FROM payments GROUP BY status');
+  async getRevenueSummary() {
+    const totalRes = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0)::FLOAT as \"totalRevenue\", COUNT(*)::INTEGER as \"totalPayments\" FROM payments WHERE status = 'successful'"
+    );
+    const statusBreakdownRes = await pool.query(
+      "SELECT status, COUNT(*)::INTEGER as count, COALESCE(SUM(amount), 0)::FLOAT as \"sumAmount\" FROM payments GROUP BY status"
+    );
 
     return {
-      revenue: totalStmt.get() || { totalRevenue: 0, totalPayments: 0 },
-      breakdown: statusBreakdownStmt.all(),
+      revenue: totalRes.rows[0] || { totalRevenue: 0, totalPayments: 0 },
+      breakdown: statusBreakdownRes.rows,
     };
   }
 }

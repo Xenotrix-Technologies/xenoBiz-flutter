@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const shopRepository = require('../repositories/shop_repository');
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -13,16 +13,10 @@ function authenticateToken(req, res, next) {
     });
   }
 
-  jwt.verify(token, env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({
-        success: false,
-        message: 'Invalid or expired authentication token.',
-      });
-    }
-
+  try {
+    const decoded = jwt.verify(token, env.JWT_SECRET);
     const targetId = decoded.shopId || decoded.userId;
-    const shop = shopRepository.findById(targetId);
+    const shop = await shopRepository.findById(targetId);
 
     if (!shop) {
       return res.status(401).json({
@@ -49,7 +43,12 @@ function authenticateToken(req, res, next) {
 
     req.shop = shop;
     next();
-  });
+  } catch (err) {
+    return res.status(403).json({
+      success: false,
+      message: 'Invalid or expired authentication token.',
+    });
+  }
 }
 
 module.exports = {

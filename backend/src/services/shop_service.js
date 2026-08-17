@@ -3,12 +3,12 @@ const subscriptionRepository = require('../repositories/subscription_repository'
 
 class ShopService {
   async getShopProfile(shopId) {
-    const shop = shopRepository.findById(shopId);
+    const shop = await shopRepository.findById(shopId);
     if (!shop) {
       throw { statusCode: 404, message: 'Shop account not found.' };
     }
 
-    const subscription = subscriptionRepository.findByShopId(shopId);
+    const subscription = await subscriptionRepository.findByShopId(shopId);
     const { password_hash, ...shopData } = shop;
 
     return {
@@ -18,12 +18,12 @@ class ShopService {
   }
 
   async updateShopProfile(shopId, updateData) {
-    const existing = shopRepository.findById(shopId);
+    const existing = await shopRepository.findById(shopId);
     if (!existing) {
       throw { statusCode: 404, message: 'Shop account not found.' };
     }
 
-    const updated = shopRepository.update(shopId, updateData);
+    const updated = await shopRepository.update(shopId, updateData);
     const { password_hash, ...shopData } = updated;
 
     return shopData;

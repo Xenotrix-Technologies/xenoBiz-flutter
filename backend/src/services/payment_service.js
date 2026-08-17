@@ -1,14 +1,13 @@
 const { v4: uuidv4 } = require('uuid');
 const billingPaymentRepository = require('../repositories/billing_payment_repository');
-const subscriptionRepository = require('../repositories/subscription_repository');
 
 class PaymentService {
   async getShopPaymentHistory(shopId) {
-    return billingPaymentRepository.findByShopId(shopId);
+    return await billingPaymentRepository.findByShopId(shopId);
   }
 
   async getPaymentById(paymentId) {
-    const payment = billingPaymentRepository.findById(paymentId);
+    const payment = await billingPaymentRepository.findById(paymentId);
     if (!payment) {
       throw { statusCode: 404, message: 'Payment record not found.' };
     }
@@ -17,7 +16,7 @@ class PaymentService {
 
   async recordSubscriptionPayment(shopId, { planId, subscriptionId, amount, currency = 'INR', paymentMethod = 'UPI', transactionId, providerPaymentId, status = 'successful', failureReason }) {
     const paymentId = `pay_${uuidv4().substring(0, 8)}`;
-    const payment = billingPaymentRepository.create({
+    const payment = await billingPaymentRepository.create({
       id: paymentId,
       shopId,
       subscriptionId: subscriptionId || null,

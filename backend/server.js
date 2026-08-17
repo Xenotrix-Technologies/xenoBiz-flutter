@@ -33,7 +33,7 @@ app.get('/api/v1/health', (req, res) => {
   res.json({
     status: 'online',
     service: 'XenoBiz Shop/Admin & Subscription Backend API',
-    database: 'SQLite',
+    database: 'PostgreSQL',
     timestamp: new Date().toISOString(),
   });
 });

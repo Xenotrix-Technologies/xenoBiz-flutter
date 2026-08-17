@@ -5,11 +5,11 @@ const billingPaymentRepository = require('../repositories/billing_payment_reposi
 
 class SubscriptionService {
   async getPlans() {
-    return planRepository.findAll({ isActiveOnly: true });
+    return await planRepository.findAll({ isActiveOnly: true });
   }
 
   async getShopSubscription(shopId) {
-    const sub = subscriptionRepository.findByShopId(shopId);
+    const sub = await subscriptionRepository.findByShopId(shopId);
     if (!sub) {
       return null;
     }
@@ -17,7 +17,7 @@ class SubscriptionService {
   }
 
   async subscribe(shopId, { planId, paymentMethod = 'UPI', transactionId = '' }) {
-    const plan = planRepository.findById(planId);
+    const plan = await planRepository.findById(planId);
     if (!plan) {
       throw { statusCode: 404, message: 'Subscription plan not found.' };
     }
@@ -31,7 +31,7 @@ class SubscriptionService {
     }
 
     const subId = `sub_${uuidv4().substring(0, 8)}`;
-    const subscription = subscriptionRepository.create({
+    const subscription = await subscriptionRepository.create({
       id: subId,
       shopId,
       planId: plan.id,
@@ -43,13 +43,13 @@ class SubscriptionService {
       billingCycle: plan.billing_cycle || 'monthly',
       amount: plan.price,
       currency: plan.currency || 'INR',
-      autoRenew: 1,
+      autoRenew: true,
       provider: 'razorpay',
     });
 
     // Record Billing Payment
     const paymentId = `pay_${uuidv4().substring(0, 8)}`;
-    const payment = billingPaymentRepository.create({
+    const payment = await billingPaymentRepository.create({
       id: paymentId,
       shopId,
       subscriptionId: subscription.id,
@@ -70,14 +70,14 @@ class SubscriptionService {
   }
 
   async cancelSubscription(shopId) {
-    const sub = subscriptionRepository.findByShopId(shopId);
+    const sub = await subscriptionRepository.findByShopId(shopId);
     if (!sub) {
       throw { statusCode: 404, message: 'No active subscription found.' };
     }
 
-    const updated = subscriptionRepository.update(sub.id, {
+    const updated = await subscriptionRepository.update(sub.id, {
       status: 'cancelled',
-      autoRenew: 0,
+      autoRenew: false,
     });
 
     return updated;

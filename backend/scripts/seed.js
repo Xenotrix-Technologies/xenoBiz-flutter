@@ -1,74 +1,72 @@
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
-const { db, initDb } = require('../src/db/database');
+const { pool, initDb } = require('../src/db/database');
 const shopRepository = require('../src/repositories/shop_repository');
 const planRepository = require('../src/repositories/plan_repository');
 const subscriptionRepository = require('../src/repositories/subscription_repository');
 const billingPaymentRepository = require('../src/repositories/billing_payment_repository');
 
-console.log('🌱 Seeding XenoBiz Shop/Admin & Subscription database...');
+console.log('🌱 Seeding XenoBiz PostgreSQL database...');
 
 async function seed() {
-  initDb();
+  await initDb();
 
   // Clear existing records safely
-  db.exec(`
-    DELETE FROM payments;
-    DELETE FROM subscriptions;
-    DELETE FROM plans;
-    DELETE FROM shops;
+  await pool.query(`
+    TRUNCATE TABLE payments, subscriptions, plans, shops CASCADE;
   `);
 
   const passwordHash = await bcrypt.hash('Demo@12345', 10);
   const adminHash = await bcrypt.hash('admin', 10);
 
   // 1. Seed Subscription Plans
-  const plans = [
-    planRepository.create({
-      id: 'plan_free',
-      name: 'Free',
-      description: 'Essential starter plan with basic invoicing and inventory tracking.',
-      price: 0.0,
-      currency: 'INR',
-      billingCycle: 'monthly',
-      features: ['Basic Invoicing', 'Up to 50 Products', 'Single User Access', '14-Day Free Access'],
-      isActive: 1,
-    }),
-    planRepository.create({
-      id: 'plan_basic',
-      name: 'Basic',
-      description: 'Standard plan for growing retail shops and small businesses.',
-      price: 499.0,
-      currency: 'INR',
-      billingCycle: 'monthly',
-      features: ['Unlimited Invoices', 'Unlimited Products', 'Customer Due Tracking', 'WhatsApp Sharing'],
-      isActive: 1,
-    }),
-    planRepository.create({
-      id: 'plan_pro',
-      name: 'Pro',
-      description: 'Professional suite with advanced analytics, multi-user, and CRM.',
-      price: 999.0,
-      currency: 'INR',
-      billingCycle: 'monthly',
-      features: ['All Basic Features', 'Advanced POS Reports', 'Tax/GST Export', 'Priority Support'],
-      isActive: 1,
-    }),
-    planRepository.create({
-      id: 'plan_premium',
-      name: 'Premium',
-      description: 'Enterprise solution for multi-outlet businesses and franchises.',
-      price: 2499.0,
-      currency: 'INR',
-      billingCycle: 'yearly',
-      features: ['All Pro Features', 'Multi-Store Sync', 'Custom Domain', 'Dedicated Account Manager'],
-      isActive: 1,
-    }),
-  ];
-  console.log(`✅ Created ${plans.length} Subscription Plans`);
+  const planFree = await planRepository.create({
+    id: 'plan_free',
+    name: 'Free',
+    description: 'Essential starter plan with basic invoicing and inventory tracking.',
+    price: 0.0,
+    currency: 'INR',
+    billingCycle: 'monthly',
+    features: ['Basic Invoicing', 'Up to 50 Products', 'Single User Access', '14-Day Free Access'],
+    isActive: true,
+  });
+
+  const planBasic = await planRepository.create({
+    id: 'plan_basic',
+    name: 'Basic',
+    description: 'Standard plan for growing retail shops and small businesses.',
+    price: 499.0,
+    currency: 'INR',
+    billingCycle: 'monthly',
+    features: ['Unlimited Invoices', 'Unlimited Products', 'Customer Due Tracking', 'WhatsApp Sharing'],
+    isActive: true,
+  });
+
+  const planPro = await planRepository.create({
+    id: 'plan_pro',
+    name: 'Pro',
+    description: 'Professional suite with advanced analytics, multi-user, and CRM.',
+    price: 999.0,
+    currency: 'INR',
+    billingCycle: 'monthly',
+    features: ['All Basic Features', 'Advanced POS Reports', 'Tax/GST Export', 'Priority Support'],
+    isActive: true,
+  });
+
+  const planPremium = await planRepository.create({
+    id: 'plan_premium',
+    name: 'Premium',
+    description: 'Enterprise solution for multi-outlet businesses and franchises.',
+    price: 2499.0,
+    currency: 'INR',
+    billingCycle: 'yearly',
+    features: ['All Pro Features', 'Multi-Store Sync', 'Custom Domain', 'Dedicated Account Manager'],
+    isActive: true,
+  });
+
+  console.log('✅ Created 4 Subscription Plans');
 
   // 2. Create System Admin Account
-  const adminShop = shopRepository.create({
+  const adminShop = await shopRepository.create({
     id: 'shop_admin',
     shopName: 'XenoBiz Admin System',
     ownerName: 'System Administrator',
@@ -82,7 +80,7 @@ async function seed() {
   console.log('✅ Created System Administrator Account (admin / admin@xenobiz.local)');
 
   // 3. Shop 1: NovaTech Electronics
-  const shop1 = shopRepository.create({
+  const shop1 = await shopRepository.create({
     id: 'shop_novatech',
     shopName: 'NovaTech Electronics',
     ownerName: 'Rahul Sharma',
@@ -102,7 +100,7 @@ async function seed() {
   });
 
   // Shop 2: GreenLeaf Supermarket
-  const shop2 = shopRepository.create({
+  const shop2 = await shopRepository.create({
     id: 'shop_greenleaf',
     shopName: 'GreenLeaf Supermarket',
     ownerName: 'Anita Roy',
@@ -122,7 +120,7 @@ async function seed() {
   });
 
   // Shop 3: UrbanCraft Furniture
-  const shop3 = shopRepository.create({
+  const shop3 = await shopRepository.create({
     id: 'shop_urbancraft',
     shopName: 'UrbanCraft Furniture',
     ownerName: 'Vikram Mehta',
@@ -147,7 +145,7 @@ async function seed() {
   const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   // NovaTech Electronics -> Pro Plan (Paid)
-  const sub1 = subscriptionRepository.create({
+  const sub1 = await subscriptionRepository.create({
     id: 'sub_novatech_pro',
     shopId: shop1.id,
     planId: 'plan_pro',
@@ -159,12 +157,12 @@ async function seed() {
     billingCycle: 'monthly',
     amount: 999.0,
     currency: 'INR',
-    autoRenew: 1,
+    autoRenew: true,
     provider: 'razorpay',
   });
 
   // Payments for NovaTech
-  billingPaymentRepository.create({
+  await billingPaymentRepository.create({
     id: 'pay_nova_1',
     shopId: shop1.id,
     subscriptionId: sub1.id,
@@ -178,7 +176,7 @@ async function seed() {
     paidAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(),
   });
 
-  billingPaymentRepository.create({
+  await billingPaymentRepository.create({
     id: 'pay_nova_2',
     shopId: shop1.id,
     subscriptionId: sub1.id,
@@ -193,7 +191,7 @@ async function seed() {
   });
 
   // GreenLeaf Supermarket -> Basic Plan (Paid)
-  const sub2 = subscriptionRepository.create({
+  const sub2 = await subscriptionRepository.create({
     id: 'sub_greenleaf_basic',
     shopId: shop2.id,
     planId: 'plan_basic',
@@ -205,11 +203,11 @@ async function seed() {
     billingCycle: 'monthly',
     amount: 499.0,
     currency: 'INR',
-    autoRenew: 1,
+    autoRenew: true,
     provider: 'razorpay',
   });
 
-  billingPaymentRepository.create({
+  await billingPaymentRepository.create({
     id: 'pay_green_1',
     shopId: shop2.id,
     subscriptionId: sub2.id,
@@ -224,7 +222,7 @@ async function seed() {
   });
 
   // UrbanCraft Furniture -> Free Trial
-  subscriptionRepository.create({
+  await subscriptionRepository.create({
     id: 'sub_urbancraft_free',
     shopId: shop3.id,
     planId: 'plan_free',
@@ -236,7 +234,7 @@ async function seed() {
     billingCycle: 'monthly',
     amount: 0.0,
     currency: 'INR',
-    autoRenew: 1,
+    autoRenew: true,
     provider: 'system',
   });
 
@@ -252,7 +250,9 @@ async function seed() {
   console.log('--------------------------------------------------');
 }
 
-seed().catch((err) => {
-  console.error('❌ Seeding failed:', err);
-  process.exit(1);
-});
+seed()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('❌ Seeding failed:', err);
+    process.exit(1);
+  });

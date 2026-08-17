@@ -1,31 +1,32 @@
-const { db } = require('../db/database');
+const { pool } = require('../db/database');
 
 class SubscriptionRepository {
-  findById(id) {
-    const stmt = db.prepare('SELECT * FROM subscriptions WHERE id = ?');
-    return stmt.get(id) || null;
+  async findById(id) {
+    const res = await pool.query('SELECT * FROM subscriptions WHERE id = $1', [id]);
+    return res.rows[0] || null;
   }
 
-  findByShopId(shopId) {
-    const stmt = db.prepare('SELECT * FROM subscriptions WHERE shop_id = ? ORDER BY created_at DESC LIMIT 1');
-    return stmt.get(shopId) || null;
+  async findByShopId(shopId) {
+    const res = await pool.query('SELECT * FROM subscriptions WHERE shop_id = $1 ORDER BY created_at DESC LIMIT 1', [shopId]);
+    return res.rows[0] || null;
   }
 
-  findAllByShopId(shopId) {
-    const stmt = db.prepare('SELECT * FROM subscriptions WHERE shop_id = ? ORDER BY created_at DESC');
-    return stmt.all(shopId);
+  async findAllByShopId(shopId) {
+    const res = await pool.query('SELECT * FROM subscriptions WHERE shop_id = $1 ORDER BY created_at DESC', [shopId]);
+    return res.rows;
   }
 
-  create(data) {
-    const stmt = db.prepare(`
+  async create(data) {
+    const query = `
       INSERT INTO subscriptions (
         id, shop_id, plan_id, plan_name, status, start_date, end_date, renewal_date,
         billing_cycle, amount, currency, auto_renew, provider, provider_subscription_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *
+    `;
 
-    stmt.run(
+    const values = [
       data.id,
       data.shopId,
       data.planId,
@@ -37,45 +38,46 @@ class SubscriptionRepository {
       data.billingCycle || 'monthly',
       data.amount || 0.0,
       data.currency || 'INR',
-      data.autoRenew !== undefined ? (data.autoRenew ? 1 : 0) : 1,
+      data.autoRenew !== undefined ? (data.autoRenew ? true : false) : true,
       data.provider || 'razorpay',
-      data.providerSubscriptionId || null
-    );
+      data.providerSubscriptionId || null,
+    ];
 
-    return this.findById(data.id);
+    const res = await pool.query(query, values);
+    return res.rows[0];
   }
 
-  update(id, data) {
+  async update(id, data) {
     const fields = [];
     const values = [];
+    let idx = 1;
 
-    if (data.planId !== undefined) { fields.push('plan_id = ?'); values.push(data.planId); }
-    if (data.planName !== undefined) { fields.push('plan_name = ?'); values.push(data.planName); }
-    if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
-    if (data.startDate !== undefined) { fields.push('start_date = ?'); values.push(data.startDate); }
-    if (data.endDate !== undefined) { fields.push('end_date = ?'); values.push(data.endDate); }
-    if (data.renewalDate !== undefined) { fields.push('renewal_date = ?'); values.push(data.renewalDate); }
-    if (data.billingCycle !== undefined) { fields.push('billing_cycle = ?'); values.push(data.billingCycle); }
-    if (data.amount !== undefined) { fields.push('amount = ?'); values.push(data.amount); }
-    if (data.currency !== undefined) { fields.push('currency = ?'); values.push(data.currency); }
-    if (data.autoRenew !== undefined) { fields.push('auto_renew = ?'); values.push(data.autoRenew ? 1 : 0); }
-    if (data.provider !== undefined) { fields.push('provider = ?'); values.push(data.provider); }
-    if (data.providerSubscriptionId !== undefined) { fields.push('provider_subscription_id = ?'); values.push(data.providerSubscriptionId); }
+    if (data.planId !== undefined) { fields.push(`plan_id = $${idx++}`); values.push(data.planId); }
+    if (data.planName !== undefined) { fields.push(`plan_name = $${idx++}`); values.push(data.planName); }
+    if (data.status !== undefined) { fields.push(`status = $${idx++}`); values.push(data.status); }
+    if (data.startDate !== undefined) { fields.push(`start_date = $${idx++}`); values.push(data.startDate); }
+    if (data.endDate !== undefined) { fields.push(`end_date = $${idx++}`); values.push(data.endDate); }
+    if (data.renewalDate !== undefined) { fields.push(`renewal_date = $${idx++}`); values.push(data.renewalDate); }
+    if (data.billingCycle !== undefined) { fields.push(`billing_cycle = $${idx++}`); values.push(data.billingCycle); }
+    if (data.amount !== undefined) { fields.push(`amount = $${idx++}`); values.push(data.amount); }
+    if (data.currency !== undefined) { fields.push(`currency = $${idx++}`); values.push(data.currency); }
+    if (data.autoRenew !== undefined) { fields.push(`auto_renew = $${idx++}`); values.push(data.autoRenew ? true : false); }
+    if (data.provider !== undefined) { fields.push(`provider = $${idx++}`); values.push(data.provider); }
+    if (data.providerSubscriptionId !== undefined) { fields.push(`provider_subscription_id = $${idx++}`); values.push(data.providerSubscriptionId); }
 
     if (fields.length === 0) return this.findById(id);
 
     fields.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
 
-    const query = `UPDATE subscriptions SET ${fields.join(', ')} WHERE id = ?`;
-    db.prepare(query).run(...values);
-
-    return this.findById(id);
+    const query = `UPDATE subscriptions SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`;
+    const res = await pool.query(query, values);
+    return res.rows[0] || null;
   }
 
-  countByStatus() {
-    const stmt = db.prepare('SELECT status, COUNT(*) as count FROM subscriptions GROUP BY status');
-    return stmt.all();
+  async countByStatus() {
+    const res = await pool.query('SELECT status, COUNT(*)::INTEGER as count FROM subscriptions GROUP BY status');
+    return res.rows;
   }
 }
 

@@ -5,22 +5,24 @@ const planRepository = require('../repositories/plan_repository');
 
 class AdminService {
   async getDashboardData() {
-    const shops = shopRepository.findAll();
-    const plans = planRepository.findAll();
-    const subBreakdown = subscriptionRepository.countByStatus();
-    const revenueSummary = billingPaymentRepository.getRevenueSummary();
-    const recentPayments = billingPaymentRepository.findAll({ limit: 10 });
+    const shops = await shopRepository.findAll();
+    const plans = await planRepository.findAll();
+    const subBreakdown = await subscriptionRepository.countByStatus();
+    const revenueSummary = await billingPaymentRepository.getRevenueSummary();
+    const recentPayments = await billingPaymentRepository.findAll({ limit: 10 });
 
-    const shopsWithDetails = shops.map((shop) => {
-      const { password_hash, ...shopInfo } = shop;
-      const sub = subscriptionRepository.findByShopId(shop.id);
-      const latestPay = billingPaymentRepository.findLatestByShopId(shop.id);
-      return {
-        ...shopInfo,
-        subscription: sub || null,
-        latestPayment: latestPay || null,
-      };
-    });
+    const shopsWithDetails = await Promise.all(
+      shops.map(async (shop) => {
+        const { password_hash, ...shopInfo } = shop;
+        const sub = await subscriptionRepository.findByShopId(shop.id);
+        const latestPay = await billingPaymentRepository.findLatestByShopId(shop.id);
+        return {
+          ...shopInfo,
+          subscription: sub || null,
+          latestPayment: latestPay || null,
+        };
+      })
+    );
 
     return {
       metrics: {
@@ -37,26 +39,28 @@ class AdminService {
   }
 
   async getAllShops({ status, query } = {}) {
-    const shops = shopRepository.findAll({ status, query });
-    return shops.map((shop) => {
-      const { password_hash, ...shopInfo } = shop;
-      const sub = subscriptionRepository.findByShopId(shop.id);
-      return {
-        ...shopInfo,
-        subscription: sub || null,
-      };
-    });
+    const shops = await shopRepository.findAll({ status, query });
+    return await Promise.all(
+      shops.map(async (shop) => {
+        const { password_hash, ...shopInfo } = shop;
+        const sub = await subscriptionRepository.findByShopId(shop.id);
+        return {
+          ...shopInfo,
+          subscription: sub || null,
+        };
+      })
+    );
   }
 
   async getShopDetails(shopId) {
-    const shop = shopRepository.findById(shopId);
+    const shop = await shopRepository.findById(shopId);
     if (!shop) {
       throw { statusCode: 404, message: 'Shop account not found.' };
     }
 
     const { password_hash, ...shopInfo } = shop;
-    const subscription = subscriptionRepository.findByShopId(shopId);
-    const paymentHistory = billingPaymentRepository.findByShopId(shopId);
+    const subscription = await subscriptionRepository.findByShopId(shopId);
+    const paymentHistory = await billingPaymentRepository.findByShopId(shopId);
 
     return {
       shop: shopInfo,
@@ -71,7 +75,7 @@ class AdminService {
       throw { statusCode: 400, message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` };
     }
 
-    const updated = shopRepository.update(shopId, { status });
+    const updated = await shopRepository.update(shopId, { status });
     const { password_hash, ...shopInfo } = updated;
 
     return shopInfo;

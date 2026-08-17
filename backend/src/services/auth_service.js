@@ -35,12 +35,12 @@ class AuthService {
       throw { statusCode: 400, message: 'Email and password are required.' };
     }
 
-    const existingEmail = shopRepository.findByEmail(cleanEmail);
+    const existingEmail = await shopRepository.findByEmail(cleanEmail);
     if (existingEmail) {
       throw { statusCode: 409, message: 'Shop with this email already exists.' };
     }
 
-    const existingLoginId = shopRepository.findByLoginId(cleanLoginId);
+    const existingLoginId = await shopRepository.findByLoginId(cleanLoginId);
     if (existingLoginId) {
       throw { statusCode: 409, message: 'Login ID / Username is already taken.' };
     }
@@ -49,7 +49,7 @@ class AuthService {
     const passwordHash = await bcrypt.hash(cleanPassword, salt);
 
     const shopId = `shop_${uuidv4().substring(0, 8)}`;
-    const newShop = shopRepository.create({
+    const newShop = await shopRepository.create({
       id: shopId,
       shopName: cleanShopName,
       ownerName: cleanOwnerName,
@@ -65,18 +65,19 @@ class AuthService {
       loginId: cleanLoginId,
       passwordHash,
       status: 'active',
-      isVerified: 1,
+      isVerified: true,
       role,
     });
 
     // Automatically assign default Free Plan subscription
-    const freePlan = planRepository.findByName('Free') || planRepository.findAll()[0];
+    const allPlans = await planRepository.findAll();
+    const freePlan = (await planRepository.findByName('Free')) || allPlans[0];
     if (freePlan) {
       const now = new Date();
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + 14); // 14-day trial/free access
 
-      subscriptionRepository.create({
+      await subscriptionRepository.create({
         id: `sub_${uuidv4().substring(0, 8)}`,
         shopId: newShop.id,
         planId: freePlan.id,
@@ -88,7 +89,7 @@ class AuthService {
         billingCycle: freePlan.billing_cycle || 'monthly',
         amount: freePlan.price || 0.0,
         currency: freePlan.currency || 'INR',
-        autoRenew: 1,
+        autoRenew: true,
         provider: 'system',
       });
     }
@@ -101,7 +102,6 @@ class AuthService {
 
     const { password_hash, ...shopPayload } = newShop;
 
-    // Structure compatible with frontend auth payloads
     return {
       token,
       shop: shopPayload,
@@ -134,7 +134,7 @@ class AuthService {
       throw { statusCode: 400, message: 'Email/Login ID and password are required.' };
     }
 
-    const shop = shopRepository.findByEmailOrLoginId(cleanIdentifier);
+    const shop = await shopRepository.findByEmailOrLoginId(cleanIdentifier);
     if (!shop) {
       throw { statusCode: 404, message: 'Invalid credentials. Shop account not found.' };
     }
@@ -148,9 +148,9 @@ class AuthService {
       throw { statusCode: 403, message: `Account is ${shop.status}. Please contact support.` };
     }
 
-    shopRepository.update(shop.id, { lastLoginAt: new Date().toISOString() });
+    await shopRepository.update(shop.id, { lastLoginAt: new Date().toISOString() });
 
-    const subscription = subscriptionRepository.findByShopId(shop.id);
+    const subscription = await subscriptionRepository.findByShopId(shop.id);
 
     const token = jwt.sign(
       { shopId: shop.id, userId: shop.id, email: shop.email, role: shop.role },
@@ -186,12 +186,12 @@ class AuthService {
   }
 
   async getCurrentShop(shopId) {
-    const shop = shopRepository.findById(shopId);
+    const shop = await shopRepository.findById(shopId);
     if (!shop) {
       throw { statusCode: 404, message: 'Shop profile not found.' };
     }
 
-    const subscription = subscriptionRepository.findByShopId(shop.id);
+    const subscription = await subscriptionRepository.findByShopId(shop.id);
     const { password_hash, ...shopPayload } = shop;
 
     return {
