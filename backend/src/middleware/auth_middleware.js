@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
-const userRepository = require('../repositories/user_repository');
-const businessRepository = require('../repositories/business_repository');
+const shopRepository = require('../repositories/shop_repository');
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -22,27 +21,33 @@ function authenticateToken(req, res, next) {
       });
     }
 
-    const user = userRepository.findById(decoded.userId);
-    if (!user || user.account_status !== 'active') {
+    const targetId = decoded.shopId || decoded.userId;
+    const shop = shopRepository.findById(targetId);
+
+    if (!shop) {
       return res.status(401).json({
         success: false,
-        message: 'User account disabled or not found.',
+        message: 'Shop account not found.',
+      });
+    }
+
+    if (shop.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        message: `Shop account is currently ${shop.status}.`,
       });
     }
 
     req.user = {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      fullName: user.full_name,
+      shopId: shop.id,
+      userId: shop.id,
+      email: shop.email,
+      role: shop.role,
+      fullName: shop.owner_name,
+      shopName: shop.shop_name,
     };
 
-    // Attach primary businessId if available
-    const primaryBiz = businessRepository.findPrimaryByUserId(user.id);
-    if (primaryBiz) {
-      req.user.businessId = primaryBiz.id;
-    }
-
+    req.shop = shop;
     next();
   });
 }

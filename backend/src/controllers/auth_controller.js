@@ -3,21 +3,47 @@ const authService = require('../services/auth_service');
 class AuthController {
   async register(req, res, next) {
     try {
-      const { name, email, username, emailOrPhone, password, phone } = req.body;
+      const {
+        shopName,
+        ownerName,
+        name,
+        email,
+        username,
+        loginId,
+        emailOrPhone,
+        password,
+        phone,
+        address,
+        city,
+        state,
+        country,
+        postalCode,
+        gstNumber,
+        businessType,
+      } = req.body;
+
       const targetEmail = email || (emailOrPhone && emailOrPhone.includes('@') ? emailOrPhone : null);
       const targetPhone = phone || (emailOrPhone && !emailOrPhone.includes('@') ? emailOrPhone : null);
 
       const result = await authService.register({
+        shopName: shopName || name,
+        ownerName: ownerName || name,
         email: targetEmail,
-        username: username || (emailOrPhone && !emailOrPhone.includes('@') ? emailOrPhone : null),
-        fullName: name,
+        loginId: loginId || username,
         phone: targetPhone,
         password,
+        address,
+        city,
+        state,
+        country,
+        postalCode,
+        gstNumber,
+        businessType,
       });
 
       res.status(201).json({
         success: true,
-        message: 'User registered successfully!',
+        message: 'Shop account registered successfully!',
         data: result,
       });
     } catch (err) {
@@ -27,11 +53,11 @@ class AuthController {
 
   async login(req, res, next) {
     try {
-      const { email, username, emailOrPhone, emailOrUsername, password } = req.body;
-      const identifier = email || username || emailOrPhone || emailOrUsername;
+      const { email, username, loginId, emailOrPhone, emailOrUsername, identifier, password } = req.body;
+      const cleanIdentifier = identifier || email || username || loginId || emailOrPhone || emailOrUsername;
 
       const result = await authService.login({
-        emailOrUsername: identifier,
+        identifier: cleanIdentifier,
         password,
       });
 
@@ -47,7 +73,8 @@ class AuthController {
 
   async getCurrentUser(req, res, next) {
     try {
-      const result = await authService.getCurrentUser(req.user.userId);
+      const shopId = req.user.shopId || req.user.userId;
+      const result = await authService.getCurrentShop(shopId);
       res.json({
         success: true,
         data: result,

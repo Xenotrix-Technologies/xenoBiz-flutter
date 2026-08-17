@@ -1,34 +1,39 @@
 const paymentService = require('../services/payment_service');
 
 class PaymentController {
-  async getAll(req, res, next) {
+  async getMyPaymentHistory(req, res, next) {
     try {
-      const { invoiceId, purchaseId, customerId, supplierId, paymentType, limit, offset } = req.query;
-      const payments = await paymentService.getPayments(req.businessId, {
-        invoiceId,
-        purchaseId,
-        customerId,
-        supplierId,
-        paymentType,
-        limit: limit ? parseInt(limit) : 100,
-        offset: offset ? parseInt(offset) : 0,
-      });
-
+      const shopId = req.user.shopId;
+      const history = await paymentService.getShopPaymentHistory(shopId);
       res.json({
         success: true,
-        data: payments,
+        data: history,
       });
     } catch (err) {
       next(err);
     }
   }
 
-  async create(req, res, next) {
+  async getPaymentDetails(req, res, next) {
     try {
-      const payment = await paymentService.recordPayment(req.businessId, req.body, req.user.userId);
+      const { id } = req.params;
+      const payment = await paymentService.getPaymentById(id);
+      res.json({
+        success: true,
+        data: payment,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async recordPayment(req, res, next) {
+    try {
+      const shopId = req.user.shopId;
+      const payment = await paymentService.recordSubscriptionPayment(shopId, req.body);
       res.status(201).json({
         success: true,
-        message: 'Payment recorded successfully!',
+        message: 'Payment recorded successfully.',
         data: payment,
       });
     } catch (err) {
