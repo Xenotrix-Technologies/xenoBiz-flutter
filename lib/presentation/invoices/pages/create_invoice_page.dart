@@ -297,7 +297,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   }
 
   TaxSettingsEntity get _taxSettings {
-    final taxState = context.watch<TaxSettingsBloc>().state;
+    final taxState = context.read<TaxSettingsBloc>().state;
     if (taxState is TaxSettingsLoadedState) {
       return taxState.settings;
     }
@@ -1285,7 +1285,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
               BlocBuilder<InvoiceBloc, InvoiceState>(
                 builder: (context, state) {
                   return AppButton(
-                    text: 'Generate & Save Invoice',
+                    text: 'Get Payment',
                     onPressed: _onCreateInvoice,
                     isLoading: state is InvoiceLoadingState,
                   );
