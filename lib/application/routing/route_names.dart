@@ -21,6 +21,8 @@ abstract class RouteNames {
   static const String createInvoice = '/create-invoice';
   static const String invoiceDetails = '/invoice-details';
   static const String salesOverview = '/sales-overview';
+  static const String payment = '/payment';
+  static const String addProducts = '/add-products';
 
   // CRM
   static const String leadPipeline = '/lead-pipeline';

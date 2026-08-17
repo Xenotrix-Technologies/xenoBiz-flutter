@@ -25,14 +25,14 @@ class AuthService {
     businessType,
     role = 'OWNER',
   }) {
-    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanLoginId = (loginId || username || (email && email.includes('@') ? email.split('@')[0] : phone) || `merchant_${uuidv4().substring(0, 6)}`).trim().toLowerCase();
+    const cleanEmail = (email || (phone ? `${phone}@xenobiz.local` : `${cleanLoginId}@xenobiz.local`)).trim().toLowerCase();
     const cleanPassword = (password || '').trim();
     const cleanShopName = (shopName || 'New Shop').trim();
     const cleanOwnerName = (ownerName || fullName || username || 'Shop Owner').trim();
-    const cleanLoginId = (loginId || username || (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail)).trim().toLowerCase();
 
     if (!cleanEmail || !cleanPassword) {
-      throw { statusCode: 400, message: 'Email and password are required.' };
+      throw { statusCode: 400, message: 'Email/Username and password are required.' };
     }
 
     const existingEmail = await shopRepository.findByEmail(cleanEmail);

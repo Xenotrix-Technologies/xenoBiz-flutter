@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../domain/entities/customer_entity.dart';
+import '../../domain/entities/invoice_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
 import '../../presentation/customers/pages/customer_list_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/dashboard/pages/dashboard_page.dart';
+import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
+import '../../presentation/invoices/pages/payment_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
 import '../../presentation/leads/pages/add_lead_page.dart';
 import '../../presentation/leads/pages/followups_page.dart';
@@ -149,6 +153,25 @@ class AppRouter {
       GoRoute(
         path: RouteNames.invoiceDetails,
         builder: (context, state) => const InvoiceDetailsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.payment,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          final invoice = args?['invoice'] as InvoiceEntity;
+          final customer = args?['customer'] as CustomerEntity?;
+          return PaymentPage(
+            invoice: invoice,
+            customer: customer,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.addProducts,
+        builder: (context, state) {
+          final initialItems = (state.extra as List<InvoiceItemEntity>?) ?? [];
+          return AddProductsPage(initialItems: initialItems);
+        },
       ),
       GoRoute(
         path: RouteNames.leadPipeline,

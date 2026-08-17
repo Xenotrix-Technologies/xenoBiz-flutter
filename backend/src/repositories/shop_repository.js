@@ -15,7 +15,7 @@ class ShopRepository {
   async findByLoginId(loginId) {
     if (!loginId) return null;
     const res = await pool.query(
-      'SELECT * FROM shops WHERE LOWER(login_id) = LOWER($1) OR LOWER(username) = LOWER($1)',
+      'SELECT * FROM shops WHERE LOWER(login_id) = LOWER($1)',
       [loginId]
     );
     return res.rows[0] || null;
@@ -60,7 +60,7 @@ class ShopRepository {
       data.postalCode || data.zipCode || null,
       data.gstNumber || data.taxNumber || null,
       data.businessType || null,
-      data.loginId || data.username || data.email.split('@')[0],
+      data.loginId || data.username || (data.email ? data.email.split('@')[0] : (data.phone || data.id)),
       data.passwordHash,
       data.status || 'active',
       data.isVerified !== undefined ? (data.isVerified ? true : false) : true,

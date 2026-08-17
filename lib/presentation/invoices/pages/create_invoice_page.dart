@@ -14,8 +14,8 @@ import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
-import 'add_products_page.dart';
-import 'payment_page.dart';
+import 'package:go_router/go_router.dart';
+import '../../../application/routing/route_names.dart';
 
 
 class CreateInvoicePage extends StatefulWidget {
@@ -254,11 +254,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   int? _focusedItemIndex;
 
   Future<void> _navigateToAddProducts() async {
-    final updatedItems = await Navigator.push<List<InvoiceItemEntity>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddProductsPage(initialItems: _items),
-      ),
+    final updatedItems = await context.push<List<InvoiceItemEntity>>(
+      RouteNames.addProducts,
+      extra: _items,
     );
     if (updatedItems != null) {
       setState(() {
@@ -410,14 +408,12 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       notes: _notesCtrl.text,
     );
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PaymentPage(
-          invoice: invoice,
-          customer: _selectedCustomer,
-        ),
-      ),
+    context.push(
+      RouteNames.payment,
+      extra: {
+        'invoice': invoice,
+        'customer': _selectedCustomer,
+      },
     );
   }
 

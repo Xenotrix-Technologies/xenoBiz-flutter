@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../domain/entities/customer_entity.dart';
@@ -131,7 +133,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 children: [
                   // Back Button Card
                   InkWell(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () => context.pop(),
                     borderRadius:
                         BorderRadius.circular(AppSizes.radiusMedium),
                     child: Container(
@@ -543,7 +545,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   backgroundColor: AppColors.success,
                 ),
               );
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              context.go(RouteNames.invoices);
             } else if (state is InvoiceErrorState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
