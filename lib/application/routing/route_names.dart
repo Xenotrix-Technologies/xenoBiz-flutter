@@ -20,6 +20,8 @@ abstract class RouteNames {
   static const String invoices = '/invoices';
   static const String createInvoice = '/create-invoice';
   static const String invoiceDetails = '/invoice-details';
+  static const String invoiceResult = '/invoice-result';
+  static const String invoiceSettings = '/invoice-settings';
   static const String salesOverview = '/sales-overview';
   static const String payment = '/payment';
   static const String addProducts = '/add-products';

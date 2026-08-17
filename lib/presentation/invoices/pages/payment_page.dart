@@ -30,6 +30,7 @@ class _PaymentPageState extends State<PaymentPage> {
   String _selectedPaymentMethod = 'GPay/UPI';
   late TextEditingController _amountCtrl;
   final NumberFormat _formatter = NumberFormat('#,##,##0.##', 'en_IN');
+  InvoiceEntity? _finalInvoiceCreated;
 
   @override
   void initState() {
@@ -71,6 +72,8 @@ class _PaymentPageState extends State<PaymentPage> {
       paidAmount: paidForInvoice,
       status: status,
     );
+
+    _finalInvoiceCreated = finalInvoice;
 
     // 1. Submit Invoice
     context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(finalInvoice));
@@ -170,6 +173,12 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                   const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.home_outlined, color: AppColors.primary),
+                    tooltip: 'Go Home',
+                    onPressed: () => context.go(RouteNames.dashboard),
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     isCashSale ? 'Cash Sale' : widget.customer!.name,
                     style: const TextStyle(
@@ -545,7 +554,17 @@ class _PaymentPageState extends State<PaymentPage> {
                   backgroundColor: AppColors.success,
                 ),
               );
-              context.go(RouteNames.invoices);
+              final enteredAmt = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
+              context.go(
+                RouteNames.invoiceResult,
+                extra: {
+                  'invoice': _finalInvoiceCreated ?? widget.invoice,
+                  'customer': widget.customer,
+                  'paymentMethod': _selectedPaymentMethod,
+                  'amountPaid': enteredAmt,
+                  'previousBalance': widget.customer?.outstandingBalance ?? 0.0,
+                },
+              );
             } else if (state is InvoiceErrorState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

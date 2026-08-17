@@ -13,6 +13,7 @@ import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
+import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
 import '../../presentation/leads/pages/add_lead_page.dart';
@@ -32,6 +33,7 @@ import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
+import '../../presentation/settings/pages/invoice_settings_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
 import '../../presentation/settings/pages/tax_gst_settings_page.dart';
@@ -153,6 +155,28 @@ class AppRouter {
       GoRoute(
         path: RouteNames.invoiceDetails,
         builder: (context, state) => const InvoiceDetailsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.invoiceResult,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          final invoice = args?['invoice'] as InvoiceEntity;
+          final customer = args?['customer'] as CustomerEntity?;
+          final paymentMethod = (args?['paymentMethod'] as String?) ?? 'Cash';
+          final amountPaid = (args?['amountPaid'] as double?) ?? 0.0;
+          final previousBalance = (args?['previousBalance'] as double?) ?? 0.0;
+          return InvoiceResultPage(
+            invoice: invoice,
+            customer: customer,
+            paymentMethod: paymentMethod,
+            amountPaid: amountPaid,
+            previousBalance: previousBalance,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.invoiceSettings,
+        builder: (context, state) => const InvoiceSettingsPage(),
       ),
       GoRoute(
         path: RouteNames.payment,
