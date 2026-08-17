@@ -1,9 +1,8 @@
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+require('dotenv').config();
 
 module.exports = {
   PORT: process.env.PORT || 3000,
+  DATABASE_URL: process.env.DATABASE_URL,
   NODE_ENV: process.env.NODE_ENV || 'development',
-  JWT_SECRET: process.env.JWT_SECRET || 'xenobiz_dev_jwt_secret_key_2026_super_secure',
-  DB_PATH: process.env.DB_PATH || path.join(__dirname, '../../data/xenobiz.db'),
+  JWT_SECRET: process.env.JWT_SECRET,
 };
