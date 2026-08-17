@@ -6,6 +6,7 @@ class CustomerEntity extends Equatable {
   final String phone;
   final String email;
   final String address;
+  final String? state;
   final double outstandingBalance;
   final double totalPurchases;
   final DateTime createdAt;
@@ -16,6 +17,7 @@ class CustomerEntity extends Equatable {
     required this.phone,
     required this.email,
     required this.address,
+    this.state,
     this.outstandingBalance = 0.0,
     this.totalPurchases = 0.0,
     required this.createdAt,
@@ -27,6 +29,7 @@ class CustomerEntity extends Equatable {
     String? phone,
     String? email,
     String? address,
+    String? state,
     double? outstandingBalance,
     double? totalPurchases,
     DateTime? createdAt,
@@ -37,6 +40,7 @@ class CustomerEntity extends Equatable {
       phone: phone ?? this.phone,
       email: email ?? this.email,
       address: address ?? this.address,
+      state: state ?? this.state,
       outstandingBalance: outstandingBalance ?? this.outstandingBalance,
       totalPurchases: totalPurchases ?? this.totalPurchases,
       createdAt: createdAt ?? this.createdAt,
@@ -44,7 +48,7 @@ class CustomerEntity extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, phone, email, address, outstandingBalance, totalPurchases, createdAt];
+  List<Object?> get props => [id, name, phone, email, address, state, outstandingBalance, totalPurchases, createdAt];
 }
 
 class CustomerTimelineEvent extends Equatable {

@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../application/providers/app_providers.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../widgets/app_card.dart';
 
-class AutomatedRemindersPage extends StatefulWidget {
+class AutomatedRemindersPage extends ConsumerWidget {
   const AutomatedRemindersPage({super.key});
 
   @override
-  State<AutomatedRemindersPage> createState() => _AutomatedRemindersPageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rule1 = ref.watch(reminderRule3DaysBeforeProvider);
+    final rule2 = ref.watch(reminderRuleOverdue1DayProvider);
+    final rule3 = ref.watch(reminderRuleOverdue7DaysProvider);
 
-class _AutomatedRemindersPageState extends State<AutomatedRemindersPage> {
-  bool _rule1 = true;
-  bool _rule2 = true;
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -43,8 +41,9 @@ class _AutomatedRemindersPageState extends State<AutomatedRemindersPage> {
                     ),
                   ),
                   Switch(
-                    value: _rule1,
-                    onChanged: (val) => setState(() => _rule1 = val),
+                    value: rule1,
+                    activeThumbColor: AppColors.primary,
+                    onChanged: (val) => ref.read(reminderRule3DaysBeforeProvider.notifier).state = val,
                   ),
                 ],
               ),
@@ -65,8 +64,32 @@ class _AutomatedRemindersPageState extends State<AutomatedRemindersPage> {
                     ),
                   ),
                   Switch(
-                    value: _rule2,
-                    onChanged: (val) => setState(() => _rule2 = val),
+                    value: rule2,
+                    activeThumbColor: AppColors.primary,
+                    onChanged: (val) => ref.read(reminderRuleOverdue1DayProvider.notifier).state = val,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            AppCard(
+              onTap: () => context.push(RouteNames.editRule),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Overdue Day 7 Escalate', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        SizedBox(height: 4),
+                        Text('Final settlement notice with legal advisory note', style: TextStyle(color: AppColors.outline, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: rule3,
+                    activeThumbColor: AppColors.primary,
+                    onChanged: (val) => ref.read(reminderRuleOverdue7DaysProvider.notifier).state = val,
                   ),
                 ],
               ),

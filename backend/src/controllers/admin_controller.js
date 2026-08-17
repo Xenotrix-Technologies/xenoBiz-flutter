@@ -1,36 +1,53 @@
 const adminService = require('../services/admin_service');
 
 class AdminController {
-  async getStats(req, res, next) {
+  async getDashboard(req, res, next) {
     try {
-      const stats = await adminService.getSystemStats();
+      const data = await adminService.getDashboardData();
       res.json({
         success: true,
-        data: stats,
+        data,
       });
     } catch (err) {
       next(err);
     }
   }
 
-  async getBusinesses(req, res, next) {
+  async getShops(req, res, next) {
     try {
-      const businesses = await adminService.getAllBusinesses();
+      const { status, query } = req.query;
+      const data = await adminService.getAllShops({ status, query });
       res.json({
         success: true,
-        data: businesses,
+        data,
       });
     } catch (err) {
       next(err);
     }
   }
 
-  async getUsers(req, res, next) {
+  async getShopDetails(req, res, next) {
     try {
-      const users = await adminService.getAllUsers();
+      const { id } = req.params;
+      const data = await adminService.getShopDetails(id);
       res.json({
         success: true,
-        data: users,
+        data,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateShopStatus(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const data = await adminService.updateShopStatus(id, { status });
+      res.json({
+        success: true,
+        message: 'Shop account status updated successfully.',
+        data,
       });
     } catch (err) {
       next(err);

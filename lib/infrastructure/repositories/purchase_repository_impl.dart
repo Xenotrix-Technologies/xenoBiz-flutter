@@ -1,7 +1,6 @@
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../domain/repositories/purchase_repository.dart';
-import '../network/api_endpoints.dart';
 import '../network/dio_client.dart';
 import '../storage/hive_service.dart';
 
@@ -69,6 +68,7 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       createdAt: supplier.createdAt,
     );
 
+    // Save directly to Hive local storage (single source of truth)
     await box.put(id, {
       'id': local.id,
       'name': local.name,
@@ -79,45 +79,6 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       'payableBalance': local.payableBalance,
       'createdAt': local.createdAt.toIso8601String(),
     });
-
-    try {
-      final response = await dioClient.dio.post(
-        ApiEndpoints.suppliers,
-        data: {
-          'name': supplier.name,
-          'company': supplier.companyName,
-          'phone': supplier.phone,
-          'email': supplier.email,
-          'address': supplier.address,
-        },
-      );
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final serverId = item['id']?.toString() ?? id;
-        final synced = SupplierEntity(
-          id: serverId,
-          name: local.name,
-          companyName: local.companyName,
-          phone: local.phone,
-          email: local.email,
-          address: local.address,
-          payableBalance: local.payableBalance,
-          createdAt: local.createdAt,
-        );
-        if (serverId != id) await box.delete(id);
-        await box.put(serverId, {
-          'id': synced.id,
-          'name': synced.name,
-          'companyName': synced.companyName,
-          'phone': synced.phone,
-          'email': synced.email,
-          'address': synced.address,
-          'payableBalance': synced.payableBalance,
-          'createdAt': synced.createdAt.toIso8601String(),
-        });
-        return synced;
-      }
-    } catch (_) {}
 
     return local;
   }
@@ -151,6 +112,7 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       notes: purchase.notes,
     );
 
+    // Save directly to Hive local storage (single source of truth)
     await box.put(id, {
       'id': local.id,
       'poNumber': local.poNumber,
@@ -161,47 +123,6 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       'orderDate': local.orderDate.toIso8601String(),
       'notes': local.notes,
     });
-
-    try {
-      final response = await dioClient.dio.post(
-        ApiEndpoints.purchases,
-        data: {
-          'supplierId': purchase.supplierId,
-          'invoiceNumber': purchase.poNumber,
-          'subtotal': purchase.totalAmount,
-          'grandTotal': purchase.totalAmount,
-          'paidAmount': purchase.totalAmount,
-          'paymentMethod': 'Bank Transfer',
-          'notes': purchase.notes,
-        },
-      );
-      if (response.data != null && response.data['success'] == true) {
-        final item = response.data['data'];
-        final serverId = item['id']?.toString() ?? id;
-        final synced = PurchaseEntity(
-          id: serverId,
-          poNumber: item['invoice_number']?.toString() ?? local.poNumber,
-          supplierId: local.supplierId,
-          supplierName: local.supplierName,
-          totalAmount: local.totalAmount,
-          status: local.status,
-          orderDate: local.orderDate,
-          notes: local.notes,
-        );
-        if (serverId != id) await box.delete(id);
-        await box.put(serverId, {
-          'id': synced.id,
-          'poNumber': synced.poNumber,
-          'supplierId': synced.supplierId,
-          'supplierName': synced.supplierName,
-          'totalAmount': synced.totalAmount,
-          'status': synced.status,
-          'orderDate': synced.orderDate.toIso8601String(),
-          'notes': synced.notes,
-        });
-        return synced;
-      }
-    } catch (_) {}
 
     return local;
   }

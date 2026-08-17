@@ -10,23 +10,26 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/di/injection.dart';
+import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
-import 'add_products_page.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../application/providers/create_invoice_provider.dart';
+import '../../../application/routing/route_names.dart';
 
-class CreateInvoicePage extends StatefulWidget {
+
+class CreateInvoicePage extends ConsumerStatefulWidget {
   const CreateInvoicePage({super.key});
 
   @override
-  State<CreateInvoicePage> createState() => _CreateInvoicePageState();
+  ConsumerState<CreateInvoicePage> createState() => _CreateInvoicePageState();
 }
 
-class _CreateInvoicePageState extends State<CreateInvoicePage> {
+class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   bool get _isCashSale => _selectedCustomer == null;
   final String _invoiceId = 'XNOB-1001';
-  final DateTime _createdDateTime = DateTime.now();
-
-  CustomerEntity? _selectedCustomer;
   final TextEditingController _customerSearchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   bool _showSearchOverlay = false;
@@ -224,7 +227,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     );
                     setState(() {
                       _allCustomers.insert(0, newCust);
-                      _selectedCustomer = newCust;
+                      ref.read(createInvoiceFormProvider.notifier).selectCustomer(newCust);
                       _showSearchOverlay = false;
                       _customerSearchCtrl.clear();
                     });
@@ -245,33 +248,28 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     );
   }
 
-  List<InvoiceItemEntity> _items = [];
-
   int? _focusedItemIndex;
 
+  List<InvoiceItemEntity> get _items => ref.watch(createInvoiceFormProvider).items;
+  CustomerEntity? get _selectedCustomer => ref.watch(createInvoiceFormProvider).selectedCustomer;
+  DateTime get _createdDateTime => ref.watch(createInvoiceFormProvider).createdDateTime;
+
   Future<void> _navigateToAddProducts() async {
-    final updatedItems = await Navigator.push<List<InvoiceItemEntity>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddProductsPage(initialItems: _items),
-      ),
+    final currentItems = ref.read(createInvoiceFormProvider).items;
+    final updatedItems = await context.push<List<InvoiceItemEntity>>(
+      RouteNames.addProducts,
+      extra: currentItems,
     );
     if (updatedItems != null) {
-      setState(() {
-        _items = List.from(updatedItems);
-        _focusedItemIndex = null;
-      });
+      ref.read(createInvoiceFormProvider.notifier).setItems(updatedItems);
     }
   }
 
   void _updateItemQuantity(int index, int delta) {
-    setState(() {
-      final currentQty = _items[index].quantity;
-      final newQty = currentQty + delta;
-      if (newQty <= 0) {
-        final removedName = _items[index].productName;
-        _items.removeAt(index);
-        _focusedItemIndex = null;
+    ref.read(createInvoiceFormProvider.notifier).updateQuantity(
+      index,
+      delta,
+      (removedName) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$removedName removed'),
@@ -279,37 +277,56 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
             duration: const Duration(seconds: 2),
           ),
         );
-      } else {
-        _items[index] = _items[index].copyWith(quantity: newQty);
-      }
-    });
-  }
-
-  void _removeItem(int index) {
-    final removedName = _items[index].productName;
-    setState(() {
-      _items.removeAt(index);
-      _focusedItemIndex = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$removedName removed'),
-        backgroundColor: AppColors.darkBlueText,
-        duration: const Duration(seconds: 2),
-      ),
+      },
     );
   }
 
-  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get taxTotal => _items.fold(0.0, (sum, item) => sum + item.taxAmount);
-  double get grandTotal => subtotal + taxTotal;
+  void _removeItem(int index) {
+    ref.read(createInvoiceFormProvider.notifier).removeItem(
+      index,
+      (removedName) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$removedName removed'),
+            backgroundColor: AppColors.darkBlueText,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+    );
+  }
+
+  TaxSettingsEntity get _taxSettings {
+    final taxState = context.read<TaxSettingsBloc>().state;
+    if (taxState is TaxSettingsLoadedState) {
+      return taxState.settings;
+    }
+    return const TaxSettingsEntity();
+  }
+
+  bool get _isGstEnabled => _taxSettings.isGstEnabled;
+  bool get _isIgst => ref.watch(createInvoiceFormProvider).isIgst(_taxSettings);
+
+  double get subtotal => ref.watch(createInvoiceFormProvider).subtotal(_taxSettings);
+  double get taxTotal => ref.watch(createInvoiceFormProvider).taxTotal(_taxSettings);
+  double get grandTotal => ref.watch(createInvoiceFormProvider).grandTotal(_taxSettings);
 
   void _onCreateInvoice() {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one item to the invoice'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     final invoice = InvoiceEntity(
       id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
       invoiceNumber: _invoiceId,
       customerId:
-          _isCashSale ? 'cust_cash' : (_selectedCustomer?.id ?? 'cust_101'),
+          _isCashSale ? '' : (_selectedCustomer?.id ?? 'cust_101'),
       customerName: _isCashSale
           ? 'Cash Customer'
           : (_selectedCustomer?.name ?? 'Customer'),
@@ -319,13 +336,19 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       taxTotal: taxTotal,
       grandTotal: grandTotal,
       paidAmount: 0.0,
-      status: _isCashSale ? InvoiceStatus.paid : InvoiceStatus.unpaid,
+      status: InvoiceStatus.unpaid,
       issueDate: _createdDateTime,
       dueDate: _createdDateTime.add(const Duration(days: 10)),
       notes: _notesCtrl.text,
     );
 
-    context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(invoice));
+    context.push(
+      RouteNames.payment,
+      extra: {
+        'invoice': invoice,
+        'customer': _selectedCustomer,
+      },
+    );
   }
 
   @override
@@ -516,10 +539,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                             const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () {
-                                setState(() {
-                                  _selectedCustomer = null;
-                                  _customerSearchCtrl.clear();
-                                });
+                                ref.read(createInvoiceFormProvider.notifier).selectCustomer(null);
+                                _customerSearchCtrl.clear();
                                 _searchFocusNode.requestFocus();
                               },
                               child: Container(
@@ -675,8 +696,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                                   return InkWell(
                                                     onTap: () {
                                                       setState(() {
-                                                        _selectedCustomer =
-                                                            cust;
+                                                        ref.read(createInvoiceFormProvider.notifier).selectCustomer(cust);
                                                         _showSearchOverlay =
                                                             false;
                                                       });
@@ -905,7 +925,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                           if (_items.isNotEmpty)
                             TextButton.icon(
                               onPressed: _navigateToAddProducts,
-                              icon: const Icon(Icons.add_shopping_cart, size: 18),
+                              icon:
+                                  const Icon(Icons.add_shopping_cart, size: 18),
                               label: const Text(
                                 'Add Item',
                                 style: TextStyle(
@@ -1029,7 +1050,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                           ),
                                         ),
                                         Text(
-                                          '₹${item.total.toStringAsFixed(0)}',
+                                          '₹${item.subtotal.toStringAsFixed(0)}',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w900,
                                             fontSize: 18,
@@ -1046,7 +1067,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                         // Quantity Box [- Qty +]
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: AppColors.surfaceContainerLow,
+                                            color:
+                                                AppColors.surfaceContainerLow,
                                             borderRadius:
                                                 BorderRadius.circular(10),
                                             border: Border.all(
@@ -1062,14 +1084,17 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                                   width: 36,
                                                   height: 36,
                                                   alignment: Alignment.center,
-                                                  child: const Icon(Icons.remove,
+                                                  child: const Icon(
+                                                      Icons.remove,
                                                       size: 16,
-                                                      color: AppColors.onSurface),
+                                                      color:
+                                                          AppColors.onSurface),
                                                 ),
                                               ),
                                               Container(
-                                                constraints: const BoxConstraints(
-                                                    minWidth: 38),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        minWidth: 38),
                                                 height: 36,
                                                 padding:
                                                     const EdgeInsets.symmetric(
@@ -1094,7 +1119,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                                   alignment: Alignment.center,
                                                   child: const Icon(Icons.add,
                                                       size: 16,
-                                                      color: AppColors.onSurface),
+                                                      color:
+                                                          AppColors.onSurface),
                                                 ),
                                               ),
                                             ],
@@ -1172,7 +1198,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${item.taxPercentage.toStringAsFixed(0)}% GST)',
+                                            _isGstEnabled
+                                                ? '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${(item.taxPercentage > 0 ? item.taxPercentage : _taxSettings.defaultGstRate).toStringAsFixed(0)}% GST)'
+                                                : '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)}',
                                             style: const TextStyle(
                                               color: AppColors.outline,
                                               fontSize: 12,
@@ -1183,7 +1211,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                       ),
                                     ),
                                     Text(
-                                      '₹${item.total.toStringAsFixed(0)}',
+                                      '₹${(item.quantity * item.unitPrice).toStringAsFixed(0)}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16,
@@ -1199,34 +1227,71 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                AppCard(
-                  child: Column(
-                    children: [
-                      _SummaryRow(
-                          'Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
-                      const SizedBox(height: 6),
-                      _SummaryRow(
-                          'GST Total (18%)', '₹${taxTotal.toStringAsFixed(2)}'),
-                      const Divider(height: 20),
-                      _SummaryRow(
-                          'Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
-                          isBold: true),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                BlocBuilder<InvoiceBloc, InvoiceState>(
-                  builder: (context, state) {
-                    return AppButton(
-                      text: 'Generate & Save Invoice',
-                      onPressed: _onCreateInvoice,
-                      isLoading: state is InvoiceLoadingState,
-                    );
-                  },
-                ),
               ],
             ),
+          ),
+        ),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceCard,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 14,
+            bottom: 14 + MediaQuery.of(context).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isGstEnabled) ...[
+                _SummaryRow(
+                    _taxSettings.isTaxIncludedInPrice
+                        ? 'Taxable Base Amount'
+                        : 'Subtotal',
+                    '₹${subtotal.toStringAsFixed(2)}'),
+                const SizedBox(height: 6),
+                if (_taxSettings.showTaxDetailsOnInvoice) ...[
+                  if (_isIgst) ...[
+                    _SummaryRow('IGST', '₹${taxTotal.toStringAsFixed(2)}'),
+                  ] else ...[
+                    _SummaryRow(
+                        'CGST', '₹${(taxTotal / 2).toStringAsFixed(2)}'),
+                    const SizedBox(height: 6),
+                    _SummaryRow(
+                        'SGST', '₹${(taxTotal / 2).toStringAsFixed(2)}'),
+                  ],
+                  const SizedBox(height: 6),
+                  _SummaryRow(
+                      'Total Tax', '₹${taxTotal.toStringAsFixed(2)}'),
+                ],
+                const Divider(height: 16),
+                _SummaryRow(
+                    'Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
+                    isBold: true),
+              ] else ...[
+                _SummaryRow(
+                    'Total', '₹${grandTotal.toStringAsFixed(2)}',
+                    isBold: true),
+              ],
+              const SizedBox(height: 12),
+              BlocBuilder<InvoiceBloc, InvoiceState>(
+                builder: (context, state) {
+                  return AppButton(
+                    text: 'Get Payment',
+                    onPressed: _onCreateInvoice,
+                    isLoading: state is InvoiceLoadingState,
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),

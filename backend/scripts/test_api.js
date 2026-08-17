@@ -1,79 +1,84 @@
 const http = require('http');
 
-function makeRequest(options, postData) {
+console.log('🧪 Running XenoBiz Shop & Subscription Backend API Sanity Tests...');
+
+function makeRequest(path, method = 'GET', body = null, token = null) {
   return new Promise((resolve, reject) => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const options = {
+      hostname: '127.0.0.1',
+      port: process.env.PORT || 3000,
+      path: `/api/v1${path}`,
+      method,
+      headers,
+    };
+
     const req = http.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
+      let data = '';
+      res.on('data', (chunk) => (data += chunk));
       res.on('end', () => {
         try {
-          const parsed = JSON.parse(body);
+          const parsed = JSON.parse(data);
           resolve({ status: res.statusCode, body: parsed });
-        } catch (e) {
-          resolve({ status: res.statusCode, body });
+        } catch (_) {
+          resolve({ status: res.statusCode, body: data });
         }
       });
     });
-    req.on('error', reject);
-    if (postData) {
-      req.write(JSON.stringify(postData));
+
+    req.on('error', (err) => reject(err));
+
+    if (body) {
+      req.write(JSON.stringify(body));
     }
     req.end();
   });
 }
 
 async function runTests() {
-  console.log('🧪 Testing XenoBiz Backend APIs...');
+  try {
+    // 1. Health check
+    const health = await makeRequest('/health');
+    console.log('1. Health Check:', health.status === 200 ? '✅ PASSED' : '❌ FAILED', health.body);
 
-  // 1. Health check
-  const health = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/health', method: 'GET' });
-  console.log('1. Health Check:', health.status === 200 ? '✅ PASS' : '❌ FAIL', health.body.service);
+    // 2. Login as NovaTech Owner
+    const loginRes = await makeRequest('/auth/login', 'POST', {
+      identifier: 'demo@xenobiz.local',
+      password: 'Demo@12345',
+    });
 
-  // 2. Demo User Login
-  const login = await makeRequest(
-    { host: 'localhost', port: 3000, path: '/api/v1/auth/login', method: 'POST', headers: { 'Content-Type': 'application/json' } },
-    { emailOrUsername: 'demo@xenobiz.local', password: 'Demo@12345' }
-  );
-  console.log('2. Demo Login:', login.status === 200 ? '✅ PASS' : '❌ FAIL', login.body.message);
+    console.log('2. Shop Account Login:', loginRes.status === 200 && loginRes.body.success ? '✅ PASSED' : '❌ FAILED');
+    const token = loginRes.body?.data?.token;
 
-  const token = login.body.data.token;
-  const authHeaders = { 'Authorization': `Bearer ${token}` };
+    if (token) {
+      // 3. Get Shop Profile
+      const profileRes = await makeRequest('/shops/me', 'GET', null, token);
+      console.log('3. Get Shop Profile (/shops/me):', profileRes.status === 200 && profileRes.body.success ? '✅ PASSED' : '❌ FAILED');
 
-  // 3. Get Auth Me
-  const me = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/auth/me', method: 'GET', headers: authHeaders });
-  console.log('3. Auth /me:', me.status === 200 ? '✅ PASS' : '❌ FAIL', me.body.data.user.email);
+      // 4. Get Subscription Plans
+      const plansRes = await makeRequest('/plans', 'GET');
+      console.log('4. Get Subscription Plans (/plans):', plansRes.status === 200 && plansRes.body.success ? '✅ PASSED' : '❌ FAILED');
 
-  // 4. Dashboard Summary
-  const dash = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/dashboard/summary', method: 'GET', headers: authHeaders });
-  console.log('4. Dashboard Summary:', dash.status === 200 ? '✅ PASS' : '❌ FAIL', dash.body.data ? `Today Sales: ₹${dash.body.data.today.sales}` : dash.body);
+      // 5. Get Current Subscription
+      const subRes = await makeRequest('/subscriptions/me', 'GET', null, token);
+      console.log('5. Get Current Subscription (/subscriptions/me):', subRes.status === 200 && subRes.body.success ? '✅ PASSED' : '❌ FAILED');
 
-  // 5. Customers List
-  const customers = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/customers', method: 'GET', headers: authHeaders });
-  console.log('5. Customers List:', customers.status === 200 ? '✅ PASS' : '❌ FAIL', `Count: ${customers.body.data.length}`);
+      // 6. Get Payment History
+      const payRes = await makeRequest('/payments/my-history', 'GET', null, token);
+      console.log('6. Get Billing Payment History (/payments/my-history):', payRes.status === 200 && payRes.body.success ? '✅ PASSED' : '❌ FAILED');
 
-  // 6. Products List
-  const products = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/products', method: 'GET', headers: authHeaders });
-  console.log('6. Products List:', products.status === 200 ? '✅ PASS' : '❌ FAIL', `Count: ${products.body.data.length}`);
+      // 7. Get Admin Dashboard
+      const adminRes = await makeRequest('/admin/dashboard', 'GET');
+      console.log('7. Get Admin Dashboard (/admin/dashboard):', adminRes.status === 200 && adminRes.body.success ? '✅ PASSED' : '❌ FAILED');
+    }
 
-  // 7. Invoices List
-  const invoices = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/invoices', method: 'GET', headers: authHeaders });
-  console.log('7. Invoices List:', invoices.status === 200 ? '✅ PASS' : '❌ FAIL', `Count: ${invoices.body.data.length}`);
-
-  // 8. CRM Leads List
-  const crm = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/crm/leads', method: 'GET', headers: authHeaders });
-  console.log('8. CRM Leads:', crm.status === 200 ? '✅ PASS' : '❌ FAIL', `Count: ${crm.body.data.length}`);
-
-  // 9. Admin Login & Stats
-  const adminLogin = await makeRequest(
-    { host: 'localhost', port: 3000, path: '/api/v1/auth/login', method: 'POST', headers: { 'Content-Type': 'application/json' } },
-    { emailOrUsername: 'admin@xenobiz.local', password: 'Admin@12345' }
-  );
-  const adminToken = adminLogin.body.data.token;
-  const adminStats = await makeRequest({ host: 'localhost', port: 3000, path: '/api/v1/admin/stats', method: 'GET', headers: { 'Authorization': `Bearer ${adminToken}` } });
-  console.log('9. Admin Stats:', adminStats.status === 200 ? '✅ PASS' : '❌ FAIL', `Total Businesses: ${adminStats.body.data.totalBusinesses}`);
-
-  console.log('--------------------------------------------------');
-  console.log('🎉 ALL BACKEND API TESTS COMPLETED SUCCESSFULLY!');
+    console.log('--------------------------------------------------');
+    console.log('🎉 All Backend API Sanity Tests Completed!');
+  } catch (err) {
+    console.error('❌ Tests failed to run:', err.message);
+  }
 }
 
-runTests().catch(console.error);
+runTests();

@@ -36,19 +36,11 @@ class SettingsPage extends StatelessWidget {
                 ),
                 _SettingsTile(
                   title: 'Tax / GST settings',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Tax & GST settings')),
-                    );
-                  },
+                  onTap: () => context.push(RouteNames.taxGstSettings),
                 ),
                 _SettingsTile(
                   title: 'Invoice settings',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Invoice settings')),
-                    );
-                  },
+                  onTap: () => context.push(RouteNames.invoiceSettings),
                 ),
                 _SettingsTile(
                   title: 'User roles & permissions',
@@ -82,19 +74,19 @@ class SettingsPage extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: AppColors.successTint,
+                          color: AppColors.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
-                            Icon(Icons.circle,
-                                color: AppColors.success, size: 8),
+                            Icon(Icons.cloud_off,
+                                color: AppColors.outline, size: 14),
                             SizedBox(width: 6),
                             Text(
-                              'Synced',
+                              'Disabled',
                               style: TextStyle(
-                                color: AppColors.success,
+                                color: AppColors.outline,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),

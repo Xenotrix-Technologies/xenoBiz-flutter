@@ -1,17 +1,25 @@
-const fs = require('fs');
-const path = require('path');
-const env = require('../src/config/env');
+const { pool, initDb } = require('../src/db/database');
 
-console.log('Resetting development database...');
-if (fs.existsSync(env.DB_PATH)) {
+console.log('🔄 Resetting XenoBiz PostgreSQL Database...');
+
+async function reset() {
   try {
-    fs.unlinkSync(env.DB_PATH);
-    console.log(`Deleted existing database file: ${env.DB_PATH}`);
+    await pool.query(`
+      DROP TABLE IF EXISTS payments CASCADE;
+      DROP TABLE IF EXISTS subscriptions CASCADE;
+      DROP TABLE IF EXISTS plans CASCADE;
+      DROP TABLE IF EXISTS shops CASCADE;
+    `);
+
+    console.log('✅ PostgreSQL tables dropped successfully!');
+
+    // Re-create schema from schema.sql
+    await initDb();
+    console.log('✅ Fresh PostgreSQL schema created!');
   } catch (err) {
-    console.error(`Error deleting database file: ${err.message}`);
+    console.error('❌ PostgreSQL database reset failed:', err);
+    process.exit(1);
   }
 }
 
-const { initDb } = require('../src/db/database');
-initDb();
-console.log('✅ Database reset and re-initialized successfully!');
+reset();

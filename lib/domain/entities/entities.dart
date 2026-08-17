@@ -8,4 +8,6 @@ export 'product_entity.dart';
 export 'purchase_entity.dart';
 export 'subscription_entity.dart';
 export 'sync_item_entity.dart';
+export 'tax_settings_entity.dart';
 export 'user_entity.dart';
+

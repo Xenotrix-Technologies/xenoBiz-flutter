@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../application/providers/app_providers.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../widgets/app_card.dart';
 
-class WhatsAppTemplatesPage extends StatelessWidget {
+class WhatsAppTemplatesPage extends ConsumerWidget {
   const WhatsAppTemplatesPage({super.key});
 
   Future<void> _launchWhatsApp(String message) async {
@@ -17,7 +19,9 @@ class WhatsAppTemplatesPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templates = ref.watch(whatsappTemplatesProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -40,27 +44,53 @@ class WhatsAppTemplatesPage extends StatelessWidget {
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: ListView(
+      body: ListView.separated(
         padding: const EdgeInsets.all(16),
-        children: [
-          AppCard(
+        itemCount: templates.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (ctx, idx) {
+          final tpl = templates[idx];
+          return AppCard(
             onTap: () {
-              _launchWhatsApp(
-                'Dear Customer, your invoice #XB-2026-004 of ₹45,000 is generated. Please pay via UPI link: https://pay.xenobiz.com/inv/101',
-              );
+              _launchWhatsApp(tpl['body'] ?? '');
             },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('Invoice Sharing Template', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.primary)),
-                SizedBox(height: 6),
-                Text('Hi {{customer_name}}, thank you for shopping at {{business_name}}. Here is your invoice #{{invoice_num}} for {{amount}}.', style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13)),
-                SizedBox(height: 10),
-                Text('Tap to Send WhatsApp Message', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.secondary, fontSize: 12)),
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      tpl['title'] ?? 'Template',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.primary),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.successContainer,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        tpl['status'] ?? 'Approved',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.success),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  tpl['body'] ?? '',
+                  style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Tap to Send via WhatsApp',
+                  style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.secondary, fontSize: 12),
+                ),
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

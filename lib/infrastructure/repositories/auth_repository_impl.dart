@@ -196,6 +196,10 @@ class AuthRepositoryImpl implements AuthRepository {
         ApiEndpoints.register,
         data: {
           'name': name,
+          'shopName': name,
+          'ownerName': name,
+          'email': email,
+          'phone': phone,
           'emailOrPhone': email.isNotEmpty ? email : phone,
           'password': password,
         },
@@ -230,6 +234,31 @@ class AuthRepositoryImpl implements AuthRepository {
         throw Exception(response.data['message'] ?? 'Registration failed');
       }
     } on DioException catch (e) {
+      if (e.response == null) {
+        // Offline / server unreachable fallback
+        final userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+        final user = UserEntity(
+          id: userId,
+          name: name.isNotEmpty ? name : 'Merchant',
+          email: email.isNotEmpty ? email : (phone.isNotEmpty ? '$phone@xenobiz.local' : 'merchant@xenobiz.local'),
+          phone: phone,
+          businessId: null,
+          role: 'OWNER',
+          createdAt: DateTime.now(),
+        );
+
+        final offlineToken = 'offline_token_$userId';
+        await secureStorage.saveAccessToken(offlineToken);
+
+        final boxAuth = hiveService.getBox(HiveService.boxAuth);
+        await boxAuth.put('userId', user.id);
+        await boxAuth.put('userName', user.name);
+        await boxAuth.put('userEmail', user.email);
+        await boxAuth.put('userPhone', user.phone);
+
+        return user;
+      }
+
       final msg = e.response?.data?['message'] ?? e.message ?? 'Registration failed';
       throw Exception(msg);
     }

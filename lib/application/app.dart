@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../const/colors.dart';
 import 'bloc/blocs.dart';
 import 'di/injection.dart';
@@ -11,45 +12,55 @@ class XenoBizApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<AuthBloc>(
-          create: (_) => AuthBloc(authRepository: getIt()),
-        ),
-        BlocProvider<SubscriptionBloc>(
-          create: (_) => SubscriptionBloc(subscriptionRepository: getIt()),
-        ),
-        BlocProvider<DashboardBloc>(
-          create: (_) => DashboardBloc(
-            invoiceRepository: getIt(),
-            customerRepository: getIt(),
-            productRepository: getIt(),
-            expenseRepository: getIt(),
+    return ProviderScope(
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthBloc>(
+            create: (_) => AuthBloc(authRepository: getIt()),
           ),
-        ),
-        BlocProvider<CustomerBloc>(
-          create: (_) => CustomerBloc(customerRepository: getIt()),
-        ),
-        BlocProvider<ProductBloc>(
-          create: (_) => ProductBloc(productRepository: getIt()),
-        ),
-        BlocProvider<InvoiceBloc>(
-          create: (_) => InvoiceBloc(
-            invoiceRepository: getIt(),
-            createInvoiceUseCase: getIt(),
-            recordPaymentUseCase: getIt(),
+          BlocProvider<SubscriptionBloc>(
+            create: (_) => SubscriptionBloc(subscriptionRepository: getIt()),
           ),
-        ),
-        BlocProvider<LeadBloc>(
-          create: (_) => LeadBloc(leadRepository: getIt()),
-        ),
-        BlocProvider<SyncBloc>(
-          create: (_) => SyncBloc(
-            syncRepository: getIt(),
-            networkChecker: getIt(),
+          BlocProvider<DashboardBloc>(
+            create: (_) => DashboardBloc(
+              invoiceRepository: getIt(),
+              customerRepository: getIt(),
+              productRepository: getIt(),
+              expenseRepository: getIt(),
+            ),
           ),
-        ),
-      ],
+          BlocProvider<CustomerBloc>(
+            create: (_) => CustomerBloc(customerRepository: getIt()),
+          ),
+          BlocProvider<ProductBloc>(
+            create: (_) => ProductBloc(productRepository: getIt()),
+          ),
+          BlocProvider<InvoiceBloc>(
+            create: (_) => InvoiceBloc(
+              invoiceRepository: getIt(),
+              createInvoiceUseCase: getIt(),
+              recordPaymentUseCase: getIt(),
+            ),
+          ),
+          BlocProvider<LeadBloc>(
+            create: (_) => LeadBloc(leadRepository: getIt()),
+          ),
+          BlocProvider<SyncBloc>(
+            create: (_) => SyncBloc(
+              syncRepository: getIt(),
+              networkChecker: getIt(),
+            ),
+          ),
+          BlocProvider<TaxSettingsBloc>(
+            create: (_) => TaxSettingsBloc(repository: getIt())..add(const FetchTaxSettingsEvent()),
+          ),
+          BlocProvider<PurchaseBloc>(
+            create: (_) => PurchaseBloc(purchaseRepository: getIt())..add(const FetchPurchasesEvent()),
+          ),
+          BlocProvider<ExpenseBloc>(
+            create: (_) => ExpenseBloc(expenseRepository: getIt())..add(const FetchExpensesEvent()),
+          ),
+        ],
       child: MaterialApp.router(
         title: 'XenoBiz Manager',
         debugShowCheckedModeBanner: false,
@@ -81,6 +92,7 @@ class XenoBizApp extends StatelessWidget {
         ),
         routerConfig: AppRouter.router,
       ),
+    ),
     );
   }
 }

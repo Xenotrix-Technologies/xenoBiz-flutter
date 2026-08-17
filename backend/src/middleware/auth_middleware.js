@@ -1,9 +1,8 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
-const userRepository = require('../repositories/user_repository');
-const businessRepository = require('../repositories/business_repository');
+const shopRepository = require('../repositories/shop_repository');
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -14,37 +13,42 @@ function authenticateToken(req, res, next) {
     });
   }
 
-  jwt.verify(token, env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({
+  try {
+    const decoded = jwt.verify(token, env.JWT_SECRET);
+    const targetId = decoded.shopId || decoded.userId;
+    const shop = await shopRepository.findById(targetId);
+
+    if (!shop) {
+      return res.status(401).json({
         success: false,
-        message: 'Invalid or expired authentication token.',
+        message: 'Shop account not found.',
       });
     }
 
-    const user = userRepository.findById(decoded.userId);
-    if (!user || user.account_status !== 'active') {
-      return res.status(401).json({
+    if (shop.status !== 'active') {
+      return res.status(403).json({
         success: false,
-        message: 'User account disabled or not found.',
+        message: `Shop account is currently ${shop.status}.`,
       });
     }
 
     req.user = {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      fullName: user.full_name,
+      shopId: shop.id,
+      userId: shop.id,
+      email: shop.email,
+      role: shop.role,
+      fullName: shop.owner_name,
+      shopName: shop.shop_name,
     };
 
-    // Attach primary businessId if available
-    const primaryBiz = businessRepository.findPrimaryByUserId(user.id);
-    if (primaryBiz) {
-      req.user.businessId = primaryBiz.id;
-    }
-
+    req.shop = shop;
     next();
-  });
+  } catch (err) {
+    return res.status(403).json({
+      success: false,
+      message: 'Invalid or expired authentication token.',
+    });
+  }
 }
 
 module.exports = {

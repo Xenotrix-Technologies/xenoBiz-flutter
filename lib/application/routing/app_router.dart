@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../domain/entities/customer_entity.dart';
+import '../../domain/entities/invoice_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
 import '../../presentation/customers/pages/customer_list_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/dashboard/pages/dashboard_page.dart';
+import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
+import '../../presentation/invoices/pages/invoice_result_page.dart';
+import '../../presentation/invoices/pages/payment_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
 import '../../presentation/leads/pages/add_lead_page.dart';
 import '../../presentation/leads/pages/followups_page.dart';
@@ -28,8 +33,11 @@ import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
+import '../../presentation/settings/pages/invoice_settings_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
+import '../../presentation/settings/pages/tax_gst_settings_page.dart';
+
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
 import '../../presentation/suppliers/pages/supplier_details_page.dart';
 import '../../presentation/suppliers/pages/supplier_directory_page.dart';
@@ -149,6 +157,47 @@ class AppRouter {
         builder: (context, state) => const InvoiceDetailsPage(),
       ),
       GoRoute(
+        path: RouteNames.invoiceResult,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          final invoice = args?['invoice'] as InvoiceEntity;
+          final customer = args?['customer'] as CustomerEntity?;
+          final paymentMethod = (args?['paymentMethod'] as String?) ?? 'Cash';
+          final amountPaid = (args?['amountPaid'] as double?) ?? 0.0;
+          final previousBalance = (args?['previousBalance'] as double?) ?? 0.0;
+          return InvoiceResultPage(
+            invoice: invoice,
+            customer: customer,
+            paymentMethod: paymentMethod,
+            amountPaid: amountPaid,
+            previousBalance: previousBalance,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.invoiceSettings,
+        builder: (context, state) => const InvoiceSettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.payment,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          final invoice = args?['invoice'] as InvoiceEntity;
+          final customer = args?['customer'] as CustomerEntity?;
+          return PaymentPage(
+            invoice: invoice,
+            customer: customer,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.addProducts,
+        builder: (context, state) {
+          final initialItems = (state.extra as List<InvoiceItemEntity>?) ?? [];
+          return AddProductsPage(initialItems: initialItems);
+        },
+      ),
+      GoRoute(
         path: RouteNames.leadPipeline,
         builder: (context, state) => const LeadPipelinePage(),
       ),
@@ -223,6 +272,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.businessProfile,
         builder: (context, state) => const BusinessProfilePage(),
+      ),
+      GoRoute(
+        path: RouteNames.taxGstSettings,
+        builder: (context, state) => const TaxGstSettingsPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

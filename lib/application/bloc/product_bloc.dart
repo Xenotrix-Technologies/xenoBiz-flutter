@@ -27,6 +27,14 @@ class CreateProductEvent extends ProductEvent {
   List<Object?> get props => [product];
 }
 
+class UpdateProductEvent extends ProductEvent {
+  final ProductEntity product;
+  const UpdateProductEvent(this.product);
+
+  @override
+  List<Object?> get props => [product];
+}
+
 class AdjustStockEvent extends ProductEvent {
   final String productId;
   final int change;
@@ -76,6 +84,7 @@ class ProductBloc extends Bloc<ProductEvent, ProductState> {
   ProductBloc({required this.productRepository}) : super(ProductInitialState()) {
     on<FetchProductsEvent>(_onFetchProducts);
     on<CreateProductEvent>(_onCreateProduct);
+    on<UpdateProductEvent>(_onUpdateProduct);
     on<AdjustStockEvent>(_onAdjustStock);
   }
 
@@ -98,6 +107,18 @@ class ProductBloc extends Bloc<ProductEvent, ProductState> {
     emit(ProductLoadingState());
     try {
       await productRepository.createProduct(event.product);
+      final products = await productRepository.getProducts();
+      emit(ProductsLoadedState(products));
+    } catch (e) {
+      emit(ProductErrorState(e.toString()));
+    }
+  }
+
+  Future<void> _onUpdateProduct(
+      UpdateProductEvent event, Emitter<ProductState> emit) async {
+    emit(ProductLoadingState());
+    try {
+      await productRepository.updateProduct(event.product);
       final products = await productRepository.getProducts();
       emit(ProductsLoadedState(products));
     } catch (e) {

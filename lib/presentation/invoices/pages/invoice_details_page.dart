@@ -3,11 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../const/strings.dart';
 import '../../../domain/entities/payment_entity.dart';
 import '../../widgets/app_button.dart';
+
+
 import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
 
@@ -108,7 +111,12 @@ class InvoiceDetailsPage extends StatelessWidget {
                   const Text('Phone: +91 98470 11223', style: TextStyle(fontSize: 13, color: AppColors.outline)),
                   const SizedBox(height: 16),
                   const _ItemRow('Wireless Smart POS Machine v2 (5x)', '₹42,500'),
-                  const _ItemRow('GST Tax (18%)', '₹7,650'),
+                  Builder(builder: (context) {
+                    final state = context.watch<TaxSettingsBloc>().state;
+                    final isGstEnabled = state is TaxSettingsLoadedState ? state.settings.isGstEnabled : true;
+                    if (!isGstEnabled) return const SizedBox.shrink();
+                    return const _ItemRow('GST Tax (18%)', '₹7,650');
+                  }),
                   const _ItemRow('Special Discount', '-₹5,150'),
                   const Divider(height: 20),
                   const Row(

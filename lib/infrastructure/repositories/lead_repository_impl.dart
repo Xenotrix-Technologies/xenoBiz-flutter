@@ -1,6 +1,5 @@
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/lead_entity.dart';
-import '../../domain/entities/sync_item_entity.dart';
 import '../../domain/repositories/lead_repository.dart';
 import '../../domain/repositories/sync_repository.dart';
 import '../network/dio_client.dart';
@@ -91,56 +90,8 @@ class LeadRepositoryImpl implements LeadRepository {
     final String leadId = lead.id.isNotEmpty ? lead.id : const Uuid().v4();
     final localLead = lead.copyWith(id: leadId);
 
-    // 1. Save to Hive
-    await box.put(leadId, _leadToMap(localLead, syncStatus: 'pendingCreate'));
-
-    // 2. Try online sync
-    if (await networkChecker.isConnected) {
-      try {
-        final response = await dioClient.dio.post(
-          '/crm/leads',
-          data: {
-            'title': localLead.title,
-            'contactName': localLead.contactName,
-            'contactPhone': localLead.phone,
-            'contactEmail': localLead.email,
-            'leadValue': localLead.estimatedValue,
-            'notes': localLead.notes,
-          },
-        );
-
-        if (response.data != null && response.data['success'] == true) {
-          final item = response.data['data'];
-          final serverId = item['id']?.toString() ?? leadId;
-          final synced = localLead.copyWith(id: serverId);
-          if (serverId != leadId) {
-            await box.delete(leadId);
-          }
-          await box.put(serverId, _leadToMap(synced, syncStatus: 'synced'));
-          return synced;
-        }
-      } catch (_) {}
-    }
-
-    // 3. Enqueue
-    await syncRepository.enqueueSyncItem(
-      SyncItemEntity(
-        id: const Uuid().v4(),
-        entityType: 'LEAD',
-        action: SyncAction.create,
-        payload: {
-          'localId': leadId,
-          'title': localLead.title,
-          'contactName': localLead.contactName,
-          'contactPhone': localLead.phone,
-          'contactEmail': localLead.email,
-          'leadValue': localLead.estimatedValue,
-          'notes': localLead.notes,
-        },
-        createdAt: DateTime.now(),
-      ),
-    );
-
+    // Save directly to Hive local storage (single source of truth)
+    await box.put(leadId, _leadToMap(localLead, syncStatus: 'synced'));
     return localLead;
   }
 
@@ -152,34 +103,9 @@ class LeadRepositoryImpl implements LeadRepository {
     if (val is Map) {
       final lead = _mapToLead(val);
       final updated = lead.copyWith(stage: stage);
-      await box.put(leadId, _leadToMap(updated, syncStatus: 'pendingUpdate'));
 
-      if (await networkChecker.isConnected) {
-        try {
-          await dioClient.dio.put(
-            '/crm/leads/$leadId',
-            data: {
-              'stage': stage.name,
-            },
-          );
-          await box.put(leadId, _leadToMap(updated, syncStatus: 'synced'));
-          return updated;
-        } catch (_) {}
-      }
-
-      await syncRepository.enqueueSyncItem(
-        SyncItemEntity(
-          id: const Uuid().v4(),
-          entityType: 'LEAD',
-          action: SyncAction.update,
-          payload: {
-            'id': leadId,
-            'stage': stage.name,
-          },
-          createdAt: DateTime.now(),
-        ),
-      );
-
+      // Save directly to Hive local storage (single source of truth)
+      await box.put(leadId, _leadToMap(updated, syncStatus: 'synced'));
       return updated;
     }
     throw Exception('Lead not found');

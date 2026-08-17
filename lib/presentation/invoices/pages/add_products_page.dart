@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/product_entity.dart';
+import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/product_repository.dart';
 import '../../widgets/app_card.dart';
+
 
 class AddProductsPage extends StatefulWidget {
   final List<InvoiceItemEntity> initialItems;
@@ -154,6 +158,16 @@ class _AddProductsPageState extends State<AddProductsPage>
       _cartItems.fold(0, (sum, item) => sum + item.quantity);
 
   void _addProductToCart(ProductEntity prod) {
+    final taxState = context.read<TaxSettingsBloc>().state;
+    TaxSettingsEntity taxSettings = const TaxSettingsEntity();
+    if (taxState is TaxSettingsLoadedState) {
+      taxSettings = taxState.settings;
+    }
+
+    final double effectiveTaxRate = taxSettings.isGstEnabled
+        ? (prod.taxPercentage ?? taxSettings.defaultGstRate)
+        : 0.0;
+
     final existingIndex =
         _cartItems.indexWhere((item) => item.productId == prod.id);
     if (existingIndex != -1) {
@@ -173,7 +187,7 @@ class _AddProductsPageState extends State<AddProductsPage>
             sku: prod.sku,
             quantity: 1,
             unitPrice: prod.sellingPrice,
-            taxPercentage: 18.0,
+            taxPercentage: effectiveTaxRate,
           ),
         );
       });
