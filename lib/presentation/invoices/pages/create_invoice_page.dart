@@ -14,23 +14,22 @@ import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../application/providers/create_invoice_provider.dart';
 import '../../../application/routing/route_names.dart';
 
 
-class CreateInvoicePage extends StatefulWidget {
+class CreateInvoicePage extends ConsumerStatefulWidget {
   const CreateInvoicePage({super.key});
 
   @override
-  State<CreateInvoicePage> createState() => _CreateInvoicePageState();
+  ConsumerState<CreateInvoicePage> createState() => _CreateInvoicePageState();
 }
 
-class _CreateInvoicePageState extends State<CreateInvoicePage> {
+class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   bool get _isCashSale => _selectedCustomer == null;
   final String _invoiceId = 'XNOB-1001';
-  final DateTime _createdDateTime = DateTime.now();
-
-  CustomerEntity? _selectedCustomer;
   final TextEditingController _customerSearchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   bool _showSearchOverlay = false;
@@ -228,7 +227,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     );
                     setState(() {
                       _allCustomers.insert(0, newCust);
-                      _selectedCustomer = newCust;
+                      ref.read(createInvoiceFormProvider.notifier).selectCustomer(newCust);
                       _showSearchOverlay = false;
                       _customerSearchCtrl.clear();
                     });
@@ -249,31 +248,28 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     );
   }
 
-  List<InvoiceItemEntity> _items = [];
-
   int? _focusedItemIndex;
 
+  List<InvoiceItemEntity> get _items => ref.watch(createInvoiceFormProvider).items;
+  CustomerEntity? get _selectedCustomer => ref.watch(createInvoiceFormProvider).selectedCustomer;
+  DateTime get _createdDateTime => ref.watch(createInvoiceFormProvider).createdDateTime;
+
   Future<void> _navigateToAddProducts() async {
+    final currentItems = ref.read(createInvoiceFormProvider).items;
     final updatedItems = await context.push<List<InvoiceItemEntity>>(
       RouteNames.addProducts,
-      extra: _items,
+      extra: currentItems,
     );
     if (updatedItems != null) {
-      setState(() {
-        _items = List.from(updatedItems);
-        _focusedItemIndex = null;
-      });
+      ref.read(createInvoiceFormProvider.notifier).setItems(updatedItems);
     }
   }
 
   void _updateItemQuantity(int index, int delta) {
-    setState(() {
-      final currentQty = _items[index].quantity;
-      final newQty = currentQty + delta;
-      if (newQty <= 0) {
-        final removedName = _items[index].productName;
-        _items.removeAt(index);
-        _focusedItemIndex = null;
+    ref.read(createInvoiceFormProvider.notifier).updateQuantity(
+      index,
+      delta,
+      (removedName) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$removedName removed'),
@@ -281,24 +277,22 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
             duration: const Duration(seconds: 2),
           ),
         );
-      } else {
-        _items[index] = _items[index].copyWith(quantity: newQty);
-      }
-    });
+      },
+    );
   }
 
   void _removeItem(int index) {
-    final removedName = _items[index].productName;
-    setState(() {
-      _items.removeAt(index);
-      _focusedItemIndex = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$removedName removed'),
-        backgroundColor: AppColors.darkBlueText,
-        duration: const Duration(seconds: 2),
-      ),
+    ref.read(createInvoiceFormProvider.notifier).removeItem(
+      index,
+      (removedName) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$removedName removed'),
+            backgroundColor: AppColors.darkBlueText,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
     );
   }
 
@@ -311,71 +305,11 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   bool get _isGstEnabled => _taxSettings.isGstEnabled;
+  bool get _isIgst => ref.watch(createInvoiceFormProvider).isIgst(_taxSettings);
 
-  bool get _isIgst {
-    if (_selectedCustomer != null &&
-        _selectedCustomer!.state != null &&
-        _selectedCustomer!.state!.isNotEmpty) {
-      return _selectedCustomer!.state!.toLowerCase() !=
-          _taxSettings.businessState.toLowerCase();
-    }
-    return _taxSettings.taxCalculationType == 'IGST';
-  }
-
-  double get subtotal {
-    if (!_isGstEnabled) {
-      return _items.fold(
-          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
-    }
-    if (_taxSettings.isTaxIncludedInPrice) {
-      return _items.fold(0.0, (sum, item) {
-        final rate = item.taxPercentage > 0
-            ? item.taxPercentage
-            : _taxSettings.defaultGstRate;
-        final total = item.quantity * item.unitPrice;
-        final taxable = total / (1 + (rate / 100));
-        return sum + taxable;
-      });
-    } else {
-      return _items.fold(
-          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
-    }
-  }
-
-  double get taxTotal {
-    if (!_isGstEnabled) return 0.0;
-    if (_taxSettings.isTaxIncludedInPrice) {
-      return _items.fold(0.0, (sum, item) {
-        final rate = item.taxPercentage > 0
-            ? item.taxPercentage
-            : _taxSettings.defaultGstRate;
-        final total = item.quantity * item.unitPrice;
-        final taxable = total / (1 + (rate / 100));
-        return sum + (total - taxable);
-      });
-    } else {
-      return _items.fold(0.0, (sum, item) {
-        final rate = item.taxPercentage > 0
-            ? item.taxPercentage
-            : _taxSettings.defaultGstRate;
-        final base = item.quantity * item.unitPrice;
-        return sum + (base * (rate / 100));
-      });
-    }
-  }
-
-  double get grandTotal {
-    if (!_isGstEnabled) {
-      return _items.fold(
-          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
-    }
-    if (_taxSettings.isTaxIncludedInPrice) {
-      return _items.fold(
-          0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
-    } else {
-      return subtotal + taxTotal;
-    }
-  }
+  double get subtotal => ref.watch(createInvoiceFormProvider).subtotal(_taxSettings);
+  double get taxTotal => ref.watch(createInvoiceFormProvider).taxTotal(_taxSettings);
+  double get grandTotal => ref.watch(createInvoiceFormProvider).grandTotal(_taxSettings);
 
   void _onCreateInvoice() {
     if (_items.isEmpty) {
@@ -605,10 +539,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                             const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () {
-                                setState(() {
-                                  _selectedCustomer = null;
-                                  _customerSearchCtrl.clear();
-                                });
+                                ref.read(createInvoiceFormProvider.notifier).selectCustomer(null);
+                                _customerSearchCtrl.clear();
                                 _searchFocusNode.requestFocus();
                               },
                               child: Container(
@@ -764,8 +696,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                                                   return InkWell(
                                                     onTap: () {
                                                       setState(() {
-                                                        _selectedCustomer =
-                                                            cust;
+                                                        ref.read(createInvoiceFormProvider.notifier).selectCustomer(cust);
                                                         _showSearchOverlay =
                                                             false;
                                                       });
