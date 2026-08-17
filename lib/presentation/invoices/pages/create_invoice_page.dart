@@ -15,6 +15,7 @@ import '../../../application/di/injection.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
 import 'add_products_page.dart';
+import 'payment_page.dart';
 
 
 class CreateInvoicePage extends StatefulWidget {
@@ -379,11 +380,21 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   void _onCreateInvoice() {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one item to the invoice'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     final invoice = InvoiceEntity(
       id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
       invoiceNumber: _invoiceId,
       customerId:
-          _isCashSale ? 'cust_cash' : (_selectedCustomer?.id ?? 'cust_101'),
+          _isCashSale ? '' : (_selectedCustomer?.id ?? 'cust_101'),
       customerName: _isCashSale
           ? 'Cash Customer'
           : (_selectedCustomer?.name ?? 'Customer'),
@@ -393,13 +404,21 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       taxTotal: taxTotal,
       grandTotal: grandTotal,
       paidAmount: 0.0,
-      status: _isCashSale ? InvoiceStatus.paid : InvoiceStatus.unpaid,
+      status: InvoiceStatus.unpaid,
       issueDate: _createdDateTime,
       dueDate: _createdDateTime.add(const Duration(days: 10)),
       notes: _notesCtrl.text,
     );
 
-    context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(invoice));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PaymentPage(
+          invoice: invoice,
+          customer: _selectedCustomer,
+        ),
+      ),
+    );
   }
 
   @override
@@ -1281,58 +1300,71 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                AppCard(
-                  child: Column(
-                    children: [
-                      if (_isGstEnabled) ...[
-                        _SummaryRow(
-                            _taxSettings.isTaxIncludedInPrice
-                                ? 'Taxable Base Amount'
-                                : 'Subtotal',
-                            '₹${subtotal.toStringAsFixed(2)}'),
-                        const SizedBox(height: 6),
-                        if (_taxSettings.showTaxDetailsOnInvoice) ...[
-                          if (_isIgst) ...[
-                            _SummaryRow('IGST',
-                                '₹${taxTotal.toStringAsFixed(2)}'),
-                          ] else ...[
-                            _SummaryRow(
-                                'CGST',
-                                '₹${(taxTotal / 2).toStringAsFixed(2)}'),
-                            const SizedBox(height: 6),
-                            _SummaryRow(
-                                'SGST',
-                                '₹${(taxTotal / 2).toStringAsFixed(2)}'),
-                          ],
-                          const SizedBox(height: 6),
-                          _SummaryRow('Total Tax',
-                              '₹${taxTotal.toStringAsFixed(2)}'),
-                        ],
-                        const Divider(height: 20),
-                      ] else ...[
-                        _SummaryRow(
-                            'Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
-                        const Divider(height: 20),
-                      ],
-                      _SummaryRow(
-                          'Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
-                          isBold: true),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                BlocBuilder<InvoiceBloc, InvoiceState>(
-                  builder: (context, state) {
-                    return AppButton(
-                      text: 'Generate & Save Invoice',
-                      onPressed: _onCreateInvoice,
-                      isLoading: state is InvoiceLoadingState,
-                    );
-                  },
-                ),
               ],
             ),
+          ),
+        ),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceCard,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 14,
+            bottom: 14 + MediaQuery.of(context).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isGstEnabled) ...[
+                _SummaryRow(
+                    _taxSettings.isTaxIncludedInPrice
+                        ? 'Taxable Base Amount'
+                        : 'Subtotal',
+                    '₹${subtotal.toStringAsFixed(2)}'),
+                const SizedBox(height: 6),
+                if (_taxSettings.showTaxDetailsOnInvoice) ...[
+                  if (_isIgst) ...[
+                    _SummaryRow('IGST', '₹${taxTotal.toStringAsFixed(2)}'),
+                  ] else ...[
+                    _SummaryRow(
+                        'CGST', '₹${(taxTotal / 2).toStringAsFixed(2)}'),
+                    const SizedBox(height: 6),
+                    _SummaryRow(
+                        'SGST', '₹${(taxTotal / 2).toStringAsFixed(2)}'),
+                  ],
+                  const SizedBox(height: 6),
+                  _SummaryRow(
+                      'Total Tax', '₹${taxTotal.toStringAsFixed(2)}'),
+                ],
+                const Divider(height: 16),
+                _SummaryRow(
+                    'Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
+                    isBold: true),
+              ] else ...[
+                _SummaryRow(
+                    'Total', '₹${grandTotal.toStringAsFixed(2)}',
+                    isBold: true),
+              ],
+              const SizedBox(height: 12),
+              BlocBuilder<InvoiceBloc, InvoiceState>(
+                builder: (context, state) {
+                  return AppButton(
+                    text: 'Generate & Save Invoice',
+                    onPressed: _onCreateInvoice,
+                    isLoading: state is InvoiceLoadingState,
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),
