@@ -20,16 +20,25 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _nameController;
+  late TextEditingController _ownerNameController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
   late TextEditingController _addressController;
   late TextEditingController _gstinController;
   late TextEditingController _logoUrlController;
 
+  // Password Security Controllers
+  late TextEditingController _currentPasswordController;
+  late TextEditingController _newPasswordController;
+  late TextEditingController _confirmPasswordController;
+
   String _selectedCategory = 'General Store';
   String _selectedCurrency = '₹';
   String? _logoUrl;
   bool _isLoading = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
 
   final List<String> _categories = [
     'General Store',
@@ -75,11 +84,16 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _ownerNameController = TextEditingController();
     _phoneController = TextEditingController();
     _emailController = TextEditingController();
     _addressController = TextEditingController();
     _gstinController = TextEditingController();
     _logoUrlController = TextEditingController();
+
+    _currentPasswordController = TextEditingController();
+    _newPasswordController = TextEditingController();
+    _confirmPasswordController = TextEditingController();
 
     _loadExistingProfile();
   }
@@ -89,6 +103,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     try {
       final hive = getIt<HiveService>();
       final bizBox = hive.getBox(HiveService.boxBusiness);
+      final authBox = hive.getBox(HiveService.boxAuth);
 
       String name = bizBox.get('name')?.toString() ?? '';
       String phone = bizBox.get('phone')?.toString() ?? '';
@@ -98,6 +113,10 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       String category = bizBox.get('category')?.toString() ?? 'General Store';
       String currency = bizBox.get('currency')?.toString() ?? '₹';
       String? logo = bizBox.get('logoUrl')?.toString();
+
+      String ownerName = authBox.get('userName')?.toString() ?? '';
+      if (email.isEmpty) email = authBox.get('userEmail')?.toString() ?? '';
+      if (phone.isEmpty) phone = authBox.get('userPhone')?.toString() ?? '';
 
       // If hive is empty, fetch from AuthRepository
       if (name.isEmpty) {
@@ -113,18 +132,24 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
           currency = profile.currency.isNotEmpty ? profile.currency : '₹';
           logo = profile.logoUrl;
         }
+
+        final user = await authRepo.getCurrentUser();
+        if (user != null) {
+          ownerName = user.name;
+          if (email.isEmpty) email = user.email;
+          if (phone.isEmpty) phone = user.phone;
+        }
       }
 
-      // Default fallback if brand new
-      if (name.isEmpty) {
-        name = 'XenoBiz';
-      }
+      if (name.isEmpty) name = 'XenoBiz';
+      if (ownerName.isEmpty) ownerName = name;
 
       if (!_categories.contains(category)) {
         _categories.add(category);
       }
 
       _nameController.text = name;
+      _ownerNameController.text = ownerName;
       _phoneController.text = phone;
       _emailController.text = email;
       _addressController.text = address;
@@ -144,11 +169,15 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _ownerNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
     _gstinController.dispose();
     _logoUrlController.dispose();
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -308,6 +337,37 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Validate password fields if user entered a new password
+    if (_newPasswordController.text.isNotEmpty) {
+      if (_currentPasswordController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter your current password to update password.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
+      }
+      if (_newPasswordController.text.length < 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('New password must be at least 6 characters long.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
+      }
+      if (_newPasswordController.text != _confirmPasswordController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('New passwords do not match.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -316,13 +376,14 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
 
       final String updatedId = bizBox.get('id')?.toString() ?? 'biz_main';
       final String name = _nameController.text.trim();
+      final String ownerName = _ownerNameController.text.trim();
       final String phone = _phoneController.text.trim();
       final String email = _emailController.text.trim();
       final String address = _addressController.text.trim();
       final String gstin = _gstinController.text.trim();
       final String? logo = _logoUrl;
 
-      // Write directly to Hive box to ensure immediate local update
+      // 1. Write directly to Hive business box
       await bizBox.put('id', updatedId);
       await bizBox.put('name', name);
       await bizBox.put('phone', phone);
@@ -352,16 +413,35 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
 
       if (!mounted) return;
 
-      // Dispatch UpdateBusinessProfileEvent to AuthBloc for simultaneous backend DB (Node-PGSQL) & Hive local storage sync
+      // 2. Dispatch Business Profile & Credentials update events to AuthBloc
       context.read<AuthBloc>().add(UpdateBusinessProfileEvent(updatedEntity));
+      context.read<AuthBloc>().add(
+            UpdateUserCredentialsEvent(
+              name: ownerName.isNotEmpty ? ownerName : name,
+              email: email,
+              phone: phone,
+            ),
+          );
+
+      // 3. Update password if requested
+      if (_newPasswordController.text.isNotEmpty) {
+        context.read<AuthBloc>().add(
+              UpdatePasswordEvent(
+                currentPassword: _currentPasswordController.text,
+                newPassword: _newPasswordController.text,
+              ),
+            );
+        _currentPasswordController.clear();
+        _newPasswordController.clear();
+        _confirmPasswordController.clear();
+      }
 
       // Refresh Dashboard data
       context.read<DashboardBloc>().add(FetchDashboardDataEvent());
 
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Business profile updated successfully!'),
+          content: Text('Business profile & security settings updated!'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -370,7 +450,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update business profile: $e'),
+            content: Text('Failed to update settings: $e'),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -487,7 +567,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Business Profile'),
+        title: const Text('Business Profile & Security'),
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.darkBlueText,
         elevation: 0,
@@ -605,7 +685,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Contact & Legal Card
+                    // Contact & Billing Card
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -681,6 +761,113 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 20),
+
+                    // Owner Credentials & Security Card
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Owner Account & Password Security',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Updates credentials in local storage (Hive) and backend (Node-PGSQL).',
+                            style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Owner / Username
+                          TextFormField(
+                            controller: _ownerNameController,
+                            decoration: InputDecoration(
+                              labelText: 'Shop Owner / Username',
+                              prefixIcon: const Icon(Icons.person_outline),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          const Divider(color: AppColors.border),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Change Password (Optional)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Current Password
+                          TextFormField(
+                            controller: _currentPasswordController,
+                            obscureText: _obscureCurrent,
+                            decoration: InputDecoration(
+                              labelText: 'Current Password',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscureCurrent ? Icons.visibility_off : Icons.visibility),
+                                onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                              ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // New Password
+                          TextFormField(
+                            controller: _newPasswordController,
+                            obscureText: _obscureNew,
+                            decoration: InputDecoration(
+                              labelText: 'New Password',
+                              prefixIcon: const Icon(Icons.lock_reset),
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
+                                onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                              ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Confirm New Password
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            obscureText: _obscureConfirm,
+                            decoration: InputDecoration(
+                              labelText: 'Confirm New Password',
+                              prefixIcon: const Icon(Icons.check_circle_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                                onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                              ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 28),
 
                     // Save Button
@@ -699,7 +886,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                         onPressed: _saveProfile,
                         icon: const Icon(Icons.save_rounded),
                         label: const Text(
-                          'Save Profile Changes',
+                          'Save All Changes',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,

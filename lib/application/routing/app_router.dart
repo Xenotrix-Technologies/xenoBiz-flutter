@@ -32,8 +32,8 @@ import '../../presentation/reports/pages/financial_analytics_page.dart';
 import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
-import '../../presentation/settings/pages/account_security_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
+
 import '../../presentation/settings/pages/invoice_settings_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
@@ -276,13 +276,10 @@ class AppRouter {
         builder: (context, state) => const BusinessProfilePage(),
       ),
       GoRoute(
-        path: RouteNames.accountSecurity,
-        builder: (context, state) => const AccountSecurityPage(),
-      ),
-      GoRoute(
         path: RouteNames.taxGstSettings,
         builder: (context, state) => const TaxGstSettingsPage(),
       ),
+
 
     ],
     errorBuilder: (context, state) => Scaffold(

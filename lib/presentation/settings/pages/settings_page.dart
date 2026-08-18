@@ -31,12 +31,8 @@ class SettingsPage extends StatelessWidget {
             _SettingsGroupCard(
               tiles: [
                 _SettingsTile(
-                  title: 'Business profile',
+                  title: 'Business profile & security',
                   onTap: () => context.push(RouteNames.businessProfile),
-                ),
-                _SettingsTile(
-                  title: 'Account credentials & security',
-                  onTap: () => context.push(RouteNames.accountSecurity),
                 ),
                 _SettingsTile(
                   title: 'Tax / GST settings',
@@ -56,6 +52,7 @@ class SettingsPage extends StatelessWidget {
                 ),
               ],
             ),
+
 
             const SizedBox(height: 16),
 
