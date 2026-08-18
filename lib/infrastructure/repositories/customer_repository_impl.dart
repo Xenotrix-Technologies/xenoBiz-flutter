@@ -113,6 +113,13 @@ class CustomerRepositoryImpl implements CustomerRepository {
   }
 
   @override
+  Future<void> deleteCustomer(String id) async {
+    final box = hiveService.getBox(HiveService.boxCustomers);
+    await box.delete(id);
+  }
+
+
+  @override
   Future<List<CustomerTimelineEvent>> getCustomerTimeline(String customerId) async {
     return [];
   }

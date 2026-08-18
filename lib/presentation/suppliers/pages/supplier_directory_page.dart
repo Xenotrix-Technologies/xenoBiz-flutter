@@ -98,10 +98,12 @@ class SupplierDirectoryPage extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () => _showAddSupplierDialog(context),
         child: const Icon(Icons.person_add_outlined, color: Colors.white),
       ),
+
       body: BlocBuilder<PurchaseBloc, PurchaseState>(
         builder: (context, state) {
           if (state is PurchaseLoadingState) {

@@ -50,11 +50,12 @@ class XenoBottomNavigationBar extends StatelessWidget {
               _NavItem(
                 index: 2,
                 currentIndex: currentIndex,
-                icon: Icons.person_outline_rounded,
-                activeIcon: Icons.person_rounded,
-                label: 'Customers',
+                icon: Icons.account_balance_wallet_outlined,
+                activeIcon: Icons.account_balance_wallet_rounded,
+                label: 'Accounts',
                 onTap: () => onTap(2),
               ),
+
               _NavItem(
                 index: 3,
                 currentIndex: currentIndex,

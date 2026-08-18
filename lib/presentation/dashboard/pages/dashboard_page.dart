@@ -162,12 +162,14 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primaryBlue,
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onPressed: () => QuickActionsBottomSheet.show(context),
         child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
       ),
+
       body: BlocBuilder<DashboardBloc, DashboardState>(
         builder: (context, state) {
           if (state is DashboardLoadingState) {

@@ -49,6 +49,43 @@ class BusinessSetupSubmittedEvent extends AuthEvent {
   List<Object?> get props => [business];
 }
 
+class UpdateBusinessProfileEvent extends AuthEvent {
+  final BusinessEntity business;
+
+  const UpdateBusinessProfileEvent(this.business);
+
+  @override
+  List<Object?> get props => [business];
+}
+
+class UpdateUserCredentialsEvent extends AuthEvent {
+  final String name;
+  final String email;
+  final String phone;
+
+  const UpdateUserCredentialsEvent({
+    required this.name,
+    required this.email,
+    required this.phone,
+  });
+
+  @override
+  List<Object?> get props => [name, email, phone];
+}
+
+class UpdatePasswordEvent extends AuthEvent {
+  final String currentPassword;
+  final String newPassword;
+
+  const UpdatePasswordEvent({
+    required this.currentPassword,
+    required this.newPassword,
+  });
+
+  @override
+  List<Object?> get props => [currentPassword, newPassword];
+}
+
 class LogoutEvent extends AuthEvent {}
 
 // States
@@ -101,6 +138,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LoginSubmittedEvent>(_onLoginSubmitted);
     on<RegisterSubmittedEvent>(_onRegisterSubmitted);
     on<BusinessSetupSubmittedEvent>(_onBusinessSetupSubmitted);
+    on<UpdateBusinessProfileEvent>(_onUpdateBusinessProfile);
+    on<UpdateUserCredentialsEvent>(_onUpdateUserCredentials);
+    on<UpdatePasswordEvent>(_onUpdatePassword);
     on<LogoutEvent>(_onLogout);
   }
 
@@ -166,8 +206,61 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  Future<void> _onUpdateBusinessProfile(
+      UpdateBusinessProfileEvent event, Emitter<AuthState> emit) async {
+    emit(AuthLoadingState());
+    try {
+      final updatedBiz = await authRepository.updateBusinessProfile(event.business);
+      final user = await authRepository.getCurrentUser();
+      if (user != null) {
+        emit(AuthenticatedState(user: user, business: updatedBiz));
+      } else {
+        emit(UnauthenticatedState());
+      }
+    } catch (e) {
+      emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onUpdateUserCredentials(
+      UpdateUserCredentialsEvent event, Emitter<AuthState> emit) async {
+    emit(AuthLoadingState());
+    try {
+      final updatedUser = await authRepository.updateUserCredentials(
+        name: event.name,
+        email: event.email,
+        phone: event.phone,
+      );
+      final business = await authRepository.getBusinessProfile();
+      emit(AuthenticatedState(user: updatedUser, business: business));
+    } catch (e) {
+      emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onUpdatePassword(
+      UpdatePasswordEvent event, Emitter<AuthState> emit) async {
+    emit(AuthLoadingState());
+    try {
+      await authRepository.updatePassword(
+        currentPassword: event.currentPassword,
+        newPassword: event.newPassword,
+      );
+      final user = await authRepository.getCurrentUser();
+      final business = await authRepository.getBusinessProfile();
+      if (user != null) {
+        emit(AuthenticatedState(user: user, business: business));
+      } else {
+        emit(UnauthenticatedState());
+      }
+    } catch (e) {
+      emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
   Future<void> _onLogout(LogoutEvent event, Emitter<AuthState> emit) async {
     await authRepository.logout();
     emit(UnauthenticatedState());
   }
+
 }

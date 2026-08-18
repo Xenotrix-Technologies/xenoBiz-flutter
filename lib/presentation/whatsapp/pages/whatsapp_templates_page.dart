@@ -38,12 +38,14 @@ class WhatsAppTemplatesPage extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () {
           context.push(RouteNames.newTemplate);
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
+
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: templates.length,

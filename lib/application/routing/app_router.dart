@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
+import '../../presentation/customers/pages/accounts_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
-import '../../presentation/customers/pages/customer_list_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
+import '../../presentation/customers/pages/expense_account_details_page.dart';
+
+
 import '../../presentation/dashboard/pages/dashboard_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
+import '../../presentation/invoices/pages/daily_ledger_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
+
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
@@ -33,10 +39,12 @@ import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
+
 import '../../presentation/settings/pages/invoice_settings_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
 import '../../presentation/settings/pages/tax_gst_settings_page.dart';
+
 
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
 import '../../presentation/suppliers/pages/supplier_details_page.dart';
@@ -89,12 +97,12 @@ class AppRouter {
               ),
             ],
           ),
-          // Branch 2: Customers
+          // Branch 2: Accounts
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: RouteNames.customers,
-                builder: (context, state) => const CustomerListPage(),
+                builder: (context, state) => const AccountsPage(),
               ),
             ],
           ),
@@ -126,12 +134,23 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.customerDetails,
-        builder: (context, state) => const CustomerDetailsPage(),
+        builder: (context, state) {
+          final cust = state.extra as CustomerEntity?;
+          return CustomerDetailsPage(customer: cust);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.expenseAccountDetails,
+        builder: (context, state) {
+          final acc = state.extra as ExpenseAccountSummary?;
+          return ExpenseAccountDetailsPage(account: acc);
+        },
       ),
       GoRoute(
         path: RouteNames.customerTimeline,
         builder: (context, state) => const CustomerTimelinePage(),
       ),
+
       GoRoute(
         path: RouteNames.products,
         builder: (context, state) => const ProductListPage(),
@@ -149,7 +168,20 @@ class AppRouter {
         builder: (context, state) => const InvoiceListPage(),
       ),
       GoRoute(
+        path: RouteNames.dailyLedger,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          final initialTab = (args?['initialTab'] as int?) ?? 0;
+          final initialDate = args?['initialDate'] as DateTime?;
+          return DailyLedgerPage(
+            initialTab: initialTab,
+            initialDate: initialDate,
+          );
+        },
+      ),
+      GoRoute(
         path: RouteNames.createInvoice,
+
         builder: (context, state) => const CreateInvoicePage(),
       ),
       GoRoute(
@@ -277,6 +309,8 @@ class AppRouter {
         path: RouteNames.taxGstSettings,
         builder: (context, state) => const TaxGstSettingsPage(),
       ),
+
+
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('No route defined for ${state.uri}')),

@@ -31,7 +31,7 @@ class SettingsPage extends StatelessWidget {
             _SettingsGroupCard(
               tiles: [
                 _SettingsTile(
-                  title: 'Business profile',
+                  title: 'Business profile & security',
                   onTap: () => context.push(RouteNames.businessProfile),
                 ),
                 _SettingsTile(
@@ -52,6 +52,8 @@ class SettingsPage extends StatelessWidget {
                 ),
               ],
             ),
+
+
             const SizedBox(height: 16),
 
             // App Configuration & Sync Group
