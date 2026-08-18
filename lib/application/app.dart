@@ -60,7 +60,24 @@ class XenoBizApp extends StatelessWidget {
           BlocProvider<ExpenseBloc>(
             create: (_) => ExpenseBloc(expenseRepository: getIt())..add(const FetchExpensesEvent()),
           ),
+          BlocProvider<SalesOverviewBloc>(
+            create: (_) => SalesOverviewBloc(
+              invoiceRepository: getIt(),
+              expenseRepository: getIt(),
+              customerRepository: getIt(),
+            )..add(FetchSalesOverviewDataEvent()),
+          ),
+          BlocProvider<DailyLedgerBloc>(
+            create: (_) => DailyLedgerBloc(
+              invoiceRepository: getIt(),
+              expenseRepository: getIt(),
+              customerRepository: getIt(),
+              hiveService: getIt(),
+            )..add(FetchDailyLedgerDataEvent(DateTime.now())),
+          ),
         ],
+
+
       child: MaterialApp.router(
         title: 'XenoBiz Manager',
         debugShowCheckedModeBanner: false,

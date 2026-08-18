@@ -50,12 +50,14 @@ abstract class RouteNames {
   static const String whatsappTemplates = '/whatsapp-templates';
   static const String newTemplate = '/new-template';
 
-  // Sync & Settings
+  // Invoices & Sales
+  static const String dailyLedger = '/daily-ledger';
   static const String offlineSync = '/offline-sync';
   static const String settings = '/settings';
   static const String businessProfile = '/business-profile';
   static const String taxGstSettings = '/tax-gst-settings';
   static const String more = '/more';
+
 
 
 }

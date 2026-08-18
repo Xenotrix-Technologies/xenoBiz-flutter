@@ -11,7 +11,9 @@ import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/dashboard/pages/dashboard_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
+import '../../presentation/invoices/pages/daily_ledger_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
+
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
@@ -151,7 +153,20 @@ class AppRouter {
         builder: (context, state) => const InvoiceListPage(),
       ),
       GoRoute(
+        path: RouteNames.dailyLedger,
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          final initialTab = (args?['initialTab'] as int?) ?? 0;
+          final initialDate = args?['initialDate'] as DateTime?;
+          return DailyLedgerPage(
+            initialTab: initialTab,
+            initialDate: initialDate,
+          );
+        },
+      ),
+      GoRoute(
         path: RouteNames.createInvoice,
+
         builder: (context, state) => const CreateInvoicePage(),
       ),
       GoRoute(
