@@ -75,7 +75,16 @@ class XenoBizApp extends StatelessWidget {
               hiveService: getIt(),
             )..add(FetchDailyLedgerDataEvent(DateTime.now())),
           ),
+          BlocProvider<AccountsBloc>(
+            create: (_) => AccountsBloc(
+              customerRepository: getIt(),
+              expenseRepository: getIt(),
+              invoiceRepository: getIt(),
+              hiveService: getIt(),
+            )..add(const FetchAccountsEvent()),
+          ),
         ],
+
 
 
       child: MaterialApp.router(

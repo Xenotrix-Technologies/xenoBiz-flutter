@@ -39,12 +39,14 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () {
           context.push(RouteNames.addLead);
         },
         child: const Icon(Icons.person_add_alt_1, color: Colors.white),
       ),
+
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           if (state is LeadLoadingState) return const LoadingState(message: 'Loading leads...');

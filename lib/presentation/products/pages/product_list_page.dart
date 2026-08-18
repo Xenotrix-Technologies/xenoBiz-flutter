@@ -96,10 +96,12 @@ class _ProductListPageState extends State<ProductListPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: _showAddProductDialog,
         child: const Icon(Icons.add, color: Colors.white),
       ),
+
       body: Column(
         children: [
           Container(

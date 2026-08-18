@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
+import '../../presentation/customers/pages/accounts_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
-import '../../presentation/customers/pages/customer_list_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
+import '../../presentation/customers/pages/expense_account_details_page.dart';
+
+
 import '../../presentation/dashboard/pages/dashboard_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
@@ -93,12 +97,12 @@ class AppRouter {
               ),
             ],
           ),
-          // Branch 2: Customers
+          // Branch 2: Accounts
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: RouteNames.customers,
-                builder: (context, state) => const CustomerListPage(),
+                builder: (context, state) => const AccountsPage(),
               ),
             ],
           ),
@@ -130,12 +134,23 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.customerDetails,
-        builder: (context, state) => const CustomerDetailsPage(),
+        builder: (context, state) {
+          final cust = state.extra as CustomerEntity?;
+          return CustomerDetailsPage(customer: cust);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.expenseAccountDetails,
+        builder: (context, state) {
+          final acc = state.extra as ExpenseAccountSummary?;
+          return ExpenseAccountDetailsPage(account: acc);
+        },
       ),
       GoRoute(
         path: RouteNames.customerTimeline,
         builder: (context, state) => const CustomerTimelinePage(),
       ),
+
       GoRoute(
         path: RouteNames.products,
         builder: (context, state) => const ProductListPage(),

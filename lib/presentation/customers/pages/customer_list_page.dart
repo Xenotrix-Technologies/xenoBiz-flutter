@@ -80,10 +80,12 @@ class _CustomerListPageState extends State<CustomerListPage> {
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: _showAddCustomerDialog,
         child: const Icon(Icons.person_add, color: Colors.white),
       ),
+
       body: Column(
         children: [
           Container(

@@ -46,12 +46,14 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () {
           context.push(RouteNames.createInvoice);
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
+
       body: Column(
         children: [
           Container(

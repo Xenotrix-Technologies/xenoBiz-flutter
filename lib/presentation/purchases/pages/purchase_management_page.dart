@@ -31,6 +31,7 @@ class PurchaseManagementPage extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () {
           context.push(RouteNames.createPurchaseOrder);
@@ -38,6 +39,7 @@ class PurchaseManagementPage extends StatelessWidget {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('New PO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
+
       body: BlocBuilder<PurchaseBloc, PurchaseState>(
         builder: (context, state) {
           if (state is PurchaseLoadingState) {
