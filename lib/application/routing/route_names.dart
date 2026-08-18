@@ -54,6 +54,8 @@ abstract class RouteNames {
   static const String offlineSync = '/offline-sync';
   static const String settings = '/settings';
   static const String businessProfile = '/business-profile';
+  static const String accountSecurity = '/account-security';
   static const String taxGstSettings = '/tax-gst-settings';
   static const String more = '/more';
+
 }

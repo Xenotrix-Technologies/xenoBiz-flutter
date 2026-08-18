@@ -352,11 +352,12 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
 
       if (!mounted) return;
 
-      // Dispatch event to AuthBloc to update app state
-      context.read<AuthBloc>().add(BusinessSetupSubmittedEvent(updatedEntity));
+      // Dispatch UpdateBusinessProfileEvent to AuthBloc for simultaneous backend DB (Node-PGSQL) & Hive local storage sync
+      context.read<AuthBloc>().add(UpdateBusinessProfileEvent(updatedEntity));
 
       // Refresh Dashboard data
       context.read<DashboardBloc>().add(FetchDashboardDataEvent());
+
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

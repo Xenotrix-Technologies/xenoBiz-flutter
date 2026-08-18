@@ -322,6 +322,142 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<BusinessEntity> updateBusinessProfile(BusinessEntity business) async {
+    // 1. Store in Hive local storage (single source of truth for app)
+    final box = hiveService.getBox(HiveService.boxBusiness);
+    await box.put('id', business.id);
+    await box.put('name', business.name);
+    await box.put('email', business.email);
+    await box.put('gstin', business.gstin);
+    await box.put('category', business.category);
+    await box.put('currency', business.currency);
+    await box.put('phone', business.phone);
+    await box.put('address', business.address);
+    if (business.logoUrl != null && business.logoUrl!.isNotEmpty) {
+      await box.put('logoUrl', business.logoUrl);
+    } else {
+      await box.delete('logoUrl');
+    }
+
+    // 2. Synchronize to Node-PGSQL backend
+    try {
+      final response = await dioClient.dio.put(
+        ApiEndpoints.profile,
+        data: {
+          'id': business.id,
+          'name': business.name,
+          'phone': business.phone,
+          'email': business.email,
+          'address': business.address,
+          'gstin': business.gstin,
+          'category': business.category,
+          'currency': business.currency,
+          'logoUrl': business.logoUrl,
+        },
+      );
+
+      if (response.data != null && response.data['success'] == true) {
+        final b = response.data['data'] ?? {};
+        final synced = BusinessEntity(
+          id: (b['id'] ?? business.id).toString(),
+          name: (b['name'] ?? business.name).toString(),
+          email: b['email']?.toString() ?? business.email,
+          gstin: (b['gstin'] ?? b['tax_number'])?.toString() ?? business.gstin,
+          category: (b['category'] ?? b['business_type'] ?? business.category).toString(),
+          currency: (b['currency'] ?? business.currency).toString(),
+          phone: (b['phone'] ?? business.phone).toString(),
+          address: (b['address'] ?? business.address).toString(),
+          logoUrl: (b['logoUrl'] ?? b['logo'] ?? business.logoUrl)?.toString(),
+          createdAt: business.createdAt,
+        );
+        return synced;
+      }
+    } catch (_) {
+      // Offline fallback: profile updated locally and will sync when backend is reachable
+    }
+
+    return business;
+  }
+
+  @override
+  Future<UserEntity> updateUserCredentials({
+    required String name,
+    required String email,
+    required String phone,
+  }) async {
+    // 1. Save locally to Hive boxAuth
+    final boxAuth = hiveService.getBox(HiveService.boxAuth);
+    await boxAuth.put('userName', name);
+    await boxAuth.put('userEmail', email);
+    await boxAuth.put('userPhone', phone);
+
+    final userId = boxAuth.get('userId')?.toString() ?? '';
+    final businessId = boxAuth.get('businessId')?.toString();
+
+    final localUser = UserEntity(
+      id: userId,
+      name: name,
+      email: email,
+      phone: phone,
+      businessId: businessId,
+      role: 'OWNER',
+      createdAt: DateTime.now(),
+    );
+
+    // 2. Synchronize to Node-PGSQL backend
+    try {
+      final response = await dioClient.dio.put(
+        ApiEndpoints.profile,
+        data: {
+          'name': name,
+          'email': email,
+          'phone': phone,
+        },
+      );
+
+      if (response.data != null && response.data['success'] == true) {
+        final u = response.data['data']['user'] ?? response.data['data'] ?? {};
+        return UserEntity(
+          id: (u['id'] ?? userId).toString(),
+          name: (u['name'] ?? name).toString(),
+          email: (u['email'] ?? email).toString(),
+          phone: (u['phone'] ?? phone).toString(),
+          businessId: businessId,
+          role: (u['role'] ?? 'OWNER').toString(),
+          createdAt: DateTime.now(),
+        );
+      }
+    } catch (_) {}
+
+    return localUser;
+  }
+
+  @override
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    // Synchronize password update to Node-PGSQL backend
+    try {
+      final response = await dioClient.dio.post(
+        ApiEndpoints.changePassword,
+        data: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+      );
+
+      if (response.data != null && response.data['success'] == false) {
+        throw Exception(response.data['message'] ?? 'Failed to update password');
+      }
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Failed to update password on backend';
+      throw Exception(msg);
+    }
+  }
+
+
+  @override
   Future<void> logout() async {
     await secureStorage.clearTokens();
     final boxAuth = hiveService.getBox(HiveService.boxAuth);

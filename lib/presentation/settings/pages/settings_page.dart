@@ -35,6 +35,10 @@ class SettingsPage extends StatelessWidget {
                   onTap: () => context.push(RouteNames.businessProfile),
                 ),
                 _SettingsTile(
+                  title: 'Account credentials & security',
+                  onTap: () => context.push(RouteNames.accountSecurity),
+                ),
+                _SettingsTile(
                   title: 'Tax / GST settings',
                   onTap: () => context.push(RouteNames.taxGstSettings),
                 ),
@@ -52,6 +56,7 @@ class SettingsPage extends StatelessWidget {
                 ),
               ],
             ),
+
             const SizedBox(height: 16),
 
             // App Configuration & Sync Group

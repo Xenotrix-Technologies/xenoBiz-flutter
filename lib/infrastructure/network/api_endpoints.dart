@@ -18,6 +18,8 @@ abstract class ApiEndpoints {
   static const String businessSetup = '/auth/business-setup';
   static const String refreshToken = '/auth/refresh';
   static const String profile = '/auth/profile';
+  static const String changePassword = '/auth/change-password';
+
 
   // Subscription
   static const String subscriptionEntitlement = '/subscription/entitlement';
