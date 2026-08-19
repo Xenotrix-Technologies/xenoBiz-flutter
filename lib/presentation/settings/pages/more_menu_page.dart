@@ -128,6 +128,36 @@ class MoreMenuPage extends StatelessWidget {
                 ),
               ],
             ),
+            const Text(
+              'Finance & Accounting',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText),
+            ),
+            const SizedBox(height: 10),
+            _MenuGrid(
+              items: [
+                const _MenuItem(
+                  icon: Icons.arrow_downward_rounded,
+                  title: 'Income',
+                  route: RouteNames.income,
+                  color: AppColors.success,
+                ),
+                const _MenuItem(
+                  icon: Icons.arrow_upward_rounded,
+                  title: 'Expenses',
+                  route: RouteNames.expense,
+                  color: AppColors.danger,
+                ),
+                const _MenuItem(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Daily Ledger',
+                  route: RouteNames.dailyLedger,
+                  color: AppColors.primaryBlue,
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
 
             const Text(
@@ -381,7 +411,8 @@ class _UserProfileHeaderCardState extends State<_UserProfileHeaderCard> {
           if (_serverBusiness!.category.trim().isNotEmpty) {
             fetchedCategory = _serverBusiness!.category.trim();
           }
-          if (_serverBusiness!.logoUrl != null && _serverBusiness!.logoUrl!.trim().isNotEmpty) {
+          if (_serverBusiness!.logoUrl != null &&
+              _serverBusiness!.logoUrl!.trim().isNotEmpty) {
             fetchedLogo = _serverBusiness!.logoUrl!.trim();
           }
         } else if (state is AuthenticatedState && state.business != null) {
@@ -391,7 +422,8 @@ class _UserProfileHeaderCardState extends State<_UserProfileHeaderCard> {
           if (state.business!.category.trim().isNotEmpty) {
             fetchedCategory = state.business!.category.trim();
           }
-          if (state.business!.logoUrl != null && state.business!.logoUrl!.trim().isNotEmpty) {
+          if (state.business!.logoUrl != null &&
+              state.business!.logoUrl!.trim().isNotEmpty) {
             fetchedLogo = state.business!.logoUrl!.trim();
           }
         } else {
@@ -415,12 +447,14 @@ class _UserProfileHeaderCardState extends State<_UserProfileHeaderCard> {
         }
 
         // Apply defaults if backend data is not available
-        final displayBusinessName = (fetchedName != null && fetchedName.isNotEmpty)
-            ? fetchedName
-            : 'Company Name';
-        final displayCategory = (fetchedCategory != null && fetchedCategory.isNotEmpty)
-            ? fetchedCategory
-            : 'Company Category';
+        final displayBusinessName =
+            (fetchedName != null && fetchedName.isNotEmpty)
+                ? fetchedName
+                : 'Company Name';
+        final displayCategory =
+            (fetchedCategory != null && fetchedCategory.isNotEmpty)
+                ? fetchedCategory
+                : 'Company Category';
 
         return AppCard(
           onTap: () => context.push(RouteNames.settings),

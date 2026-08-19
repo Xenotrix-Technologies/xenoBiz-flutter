@@ -67,5 +67,10 @@ abstract class RouteNames {
   static const String salesReturns = '/sales-returns';
   static const String purchaseReturns = '/purchase-returns';
   static const String createReturn = '/create-return';
+
+  // Finance & Transactions
+  static const String income = '/income';
+  static const String expense = '/expense';
+  static const String categories = '/categories';
 }
 

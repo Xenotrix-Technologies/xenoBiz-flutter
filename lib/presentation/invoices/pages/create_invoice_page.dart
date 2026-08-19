@@ -20,7 +20,6 @@ import '../../../domain/entities/purchase_entity.dart';
 import '../../../application/providers/create_invoice_provider.dart';
 import '../../../application/routing/route_names.dart';
 
-
 class CreateInvoicePage extends ConsumerStatefulWidget {
   final InvoiceType invoiceType;
   final InvoiceEntity? invoiceToEdit;
@@ -37,7 +36,9 @@ class CreateInvoicePage extends ConsumerStatefulWidget {
 
 class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   bool get isEditMode => widget.invoiceToEdit != null;
-  bool get isPurchase => (widget.invoiceToEdit?.type ?? widget.invoiceType) == InvoiceType.purchase;
+  bool get isPurchase =>
+      (widget.invoiceToEdit?.type ?? widget.invoiceType) ==
+      InvoiceType.purchase;
 
   bool get _isCashSale => _selectedCustomer == null;
   late String _invoiceId;
@@ -87,7 +88,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         if (inv.customerId.isNotEmpty) {
           ref.read(createInvoiceFormProvider.notifier).selectCustomer(party);
         }
-        ref.read(createInvoiceFormProvider.notifier).updateDateTime(inv.issueDate);
+        ref
+            .read(createInvoiceFormProvider.notifier)
+            .updateDateTime(inv.issueDate);
         _notesCtrl.text = inv.notes;
       } else {
         ref.read(createInvoiceFormProvider.notifier).reset();
@@ -184,7 +187,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                 borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
               ),
               child: Icon(
-                isPurchase ? Icons.business_outlined : Icons.person_add_alt_1_rounded,
+                isPurchase
+                    ? Icons.business_outlined
+                    : Icons.person_add_alt_1_rounded,
                 color: AppColors.primary,
                 size: 22,
               ),
@@ -204,7 +209,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isPurchase ? 'Quickly add supplier details' : 'Quickly add customer details',
+                    isPurchase
+                        ? 'Quickly add supplier details'
+                        : 'Quickly add customer details',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -224,7 +231,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
               label: isPurchase ? 'Supplier Name' : 'Customer Name',
               controller: nameCtrl,
               hint: isPurchase ? 'e.g. Acme Traders' : 'e.g. John Mathew',
-              prefixIcon: isPurchase ? Icons.business_outlined : Icons.person_outline,
+              prefixIcon:
+                  isPurchase ? Icons.business_outlined : Icons.person_outline,
             ),
             const SizedBox(height: 14),
             AppTextField(
@@ -302,7 +310,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                       if (mounted) {
                         setState(() {
                           _allCustomers.insert(0, mappedCust);
-                          ref.read(createInvoiceFormProvider.notifier).selectCustomer(mappedCust);
+                          ref
+                              .read(createInvoiceFormProvider.notifier)
+                              .selectCustomer(mappedCust);
                           _showSearchOverlay = false;
                           _customerSearchCtrl.clear();
                         });
@@ -323,7 +333,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                       if (mounted) {
                         setState(() {
                           _allCustomers.insert(0, newCust);
-                          ref.read(createInvoiceFormProvider.notifier).selectCustomer(newCust);
+                          ref
+                              .read(createInvoiceFormProvider.notifier)
+                              .selectCustomer(newCust);
                           _showSearchOverlay = false;
                           _customerSearchCtrl.clear();
                         });
@@ -348,9 +360,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
 
   int? _focusedItemIndex;
 
-  List<InvoiceItemEntity> get _items => ref.watch(createInvoiceFormProvider).items;
-  CustomerEntity? get _selectedCustomer => ref.watch(createInvoiceFormProvider).selectedCustomer;
-  DateTime get _createdDateTime => ref.watch(createInvoiceFormProvider).createdDateTime;
+  List<InvoiceItemEntity> get _items =>
+      ref.watch(createInvoiceFormProvider).items;
+  CustomerEntity? get _selectedCustomer =>
+      ref.watch(createInvoiceFormProvider).selectedCustomer;
+  DateTime get _createdDateTime =>
+      ref.watch(createInvoiceFormProvider).createdDateTime;
 
   Future<void> _navigateToAddProducts() async {
     final currentItems = ref.read(createInvoiceFormProvider).items;
@@ -405,9 +420,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   bool get _isGstEnabled => _taxSettings.isGstEnabled;
   bool get _isIgst => ref.watch(createInvoiceFormProvider).isIgst(_taxSettings);
 
-  double get subtotal => ref.watch(createInvoiceFormProvider).subtotal(_taxSettings);
-  double get taxTotal => ref.watch(createInvoiceFormProvider).taxTotal(_taxSettings);
-  double get grandTotal => ref.watch(createInvoiceFormProvider).grandTotal(_taxSettings);
+  double get subtotal =>
+      ref.watch(createInvoiceFormProvider).subtotal(_taxSettings);
+  double get taxTotal =>
+      ref.watch(createInvoiceFormProvider).taxTotal(_taxSettings);
+  double get grandTotal =>
+      ref.watch(createInvoiceFormProvider).grandTotal(_taxSettings);
 
   void _onCreateInvoice() {
     if (_items.isEmpty) {
@@ -424,7 +442,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         ? (isPurchase ? 'Cash Supplier' : 'Cash Customer')
         : (_selectedCustomer?.name ?? (isPurchase ? 'Supplier' : 'Customer'));
 
-    final String partyPhone = _isCashSale ? 'N/A' : (_selectedCustomer?.phone ?? 'N/A');
+    final String partyPhone =
+        _isCashSale ? 'N/A' : (_selectedCustomer?.phone ?? 'N/A');
 
     if (isEditMode) {
       final updatedInvoice = widget.invoiceToEdit!.copyWith(
@@ -439,33 +458,19 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         notes: _notesCtrl.text,
       );
 
-      context.read<InvoiceBloc>().add(UpdateInvoiceSubmittedEvent(updatedInvoice));
-    } else if (isPurchase) {
-      final purchaseInvoice = InvoiceEntity(
-        id: 'pur_${DateTime.now().millisecondsSinceEpoch}',
-        invoiceNumber: _invoiceId,
-        type: InvoiceType.purchase,
-        customerId: _selectedCustomer?.id ?? '',
-        customerName: partyName,
-        customerPhone: partyPhone,
-        items: _items,
-        subtotal: subtotal,
-        taxTotal: taxTotal,
-        grandTotal: grandTotal,
-        paidAmount: 0.0,
-        status: InvoiceStatus.unpaid,
-        issueDate: _createdDateTime,
-        dueDate: _createdDateTime.add(const Duration(days: 30)),
-        notes: _notesCtrl.text,
-      );
-
-      context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(purchaseInvoice));
+      context
+          .read<InvoiceBloc>()
+          .add(UpdateInvoiceSubmittedEvent(updatedInvoice));
     } else {
-      final saleInvoice = InvoiceEntity(
-        id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
+      final invoiceToProcess = InvoiceEntity(
+        id: isPurchase
+            ? 'pur_${DateTime.now().millisecondsSinceEpoch}'
+            : 'inv_${DateTime.now().millisecondsSinceEpoch}',
         invoiceNumber: _invoiceId,
-        type: InvoiceType.sale,
-        customerId: _isCashSale ? '' : (_selectedCustomer?.id ?? 'cust_101'),
+        type: isPurchase ? InvoiceType.purchase : InvoiceType.sale,
+        customerId: _isCashSale
+            ? ''
+            : (_selectedCustomer?.id ?? (isPurchase ? 'sup_101' : 'cust_101')),
         customerName: partyName,
         customerPhone: partyPhone,
         items: _items,
@@ -475,14 +480,14 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         paidAmount: 0.0,
         status: InvoiceStatus.unpaid,
         issueDate: _createdDateTime,
-        dueDate: _createdDateTime.add(const Duration(days: 10)),
+        dueDate: _createdDateTime.add(Duration(days: isPurchase ? 30 : 10)),
         notes: _notesCtrl.text,
       );
 
       context.push(
         RouteNames.payment,
         extra: {
-          'invoice': saleInvoice,
+          'invoice': invoiceToProcess,
           'customer': _selectedCustomer,
         },
       );
@@ -549,8 +554,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                     Expanded(
                       child: Text(
                         isEditMode
-                            ? (isPurchase ? 'Edit Purchase Invoice' : 'Edit Sale Invoice')
-                            : (isPurchase ? 'Create Purchase Invoice' : 'New Sale Invoice'),
+                            ? (isPurchase
+                                ? 'Edit Purchase Invoice'
+                                : 'Edit Sale Invoice')
+                            : (isPurchase
+                                ? 'Create Purchase Invoice'
+                                : 'New Sale Invoice'),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -681,7 +690,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                             const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () {
-                                ref.read(createInvoiceFormProvider.notifier).selectCustomer(null);
+                                ref
+                                    .read(createInvoiceFormProvider.notifier)
+                                    .selectCustomer(null);
                                 _customerSearchCtrl.clear();
                                 _searchFocusNode.requestFocus();
                               },
@@ -712,7 +723,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                 const Icon(Icons.person_search_outlined,
                                     size: 18, color: AppColors.primary),
                                 const SizedBox(width: 6),
-                                Text(isPurchase ? 'Supplier / Account' : 'Customer / Account',
+                                Text(
+                                    isPurchase
+                                        ? 'Supplier / Account'
+                                        : 'Customer / Account',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 15,
@@ -843,7 +857,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                   return InkWell(
                                                     onTap: () {
                                                       setState(() {
-                                                        ref.read(createInvoiceFormProvider.notifier).selectCustomer(cust);
+                                                        ref
+                                                            .read(
+                                                                createInvoiceFormProvider
+                                                                    .notifier)
+                                                            .selectCustomer(
+                                                                cust);
                                                         _showSearchOverlay =
                                                             false;
                                                       });
@@ -1020,7 +1039,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                             mainAxisAlignment:
                                                 MainAxisAlignment.center,
                                             children: [
-                                              const Icon(Icons.add_circle_outline,
+                                              const Icon(
+                                                  Icons.add_circle_outline,
                                                   size: 18,
                                                   color: AppColors.primary),
                                               const SizedBox(width: 8),
@@ -1418,16 +1438,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                         'SGST', '₹${(taxTotal / 2).toStringAsFixed(2)}'),
                   ],
                   const SizedBox(height: 6),
-                  _SummaryRow(
-                      'Total Tax', '₹${taxTotal.toStringAsFixed(2)}'),
+                  _SummaryRow('Total Tax', '₹${taxTotal.toStringAsFixed(2)}'),
                 ],
                 const Divider(height: 16),
-                _SummaryRow(
-                    'Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
+                _SummaryRow('Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
                     isBold: true),
               ] else ...[
-                _SummaryRow(
-                    'Total', '₹${grandTotal.toStringAsFixed(2)}',
+                _SummaryRow('Total', '₹${grandTotal.toStringAsFixed(2)}',
                     isBold: true),
               ],
               const SizedBox(height: 12),
@@ -1436,7 +1453,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                   return AppButton(
                     text: isEditMode
                         ? 'Update Invoice'
-                        : (isPurchase ? 'Save Purchase' : 'Get Payment'),
+                        : 'Proceed to Payment',
                     onPressed: _onCreateInvoice,
                     isLoading: state is InvoiceLoadingState,
                   );

@@ -13,7 +13,8 @@ class CreatePurchaseOrderPage extends StatefulWidget {
   const CreatePurchaseOrderPage({super.key});
 
   @override
-  State<CreatePurchaseOrderPage> createState() => _CreatePurchaseOrderPageState();
+  State<CreatePurchaseOrderPage> createState() =>
+      _CreatePurchaseOrderPageState();
 }
 
 class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
@@ -28,7 +29,9 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
   void initState() {
     super.initState();
     _supplierCtrl = TextEditingController();
-    _poNumberCtrl = TextEditingController(text: 'PO-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
+    _poNumberCtrl = TextEditingController(
+        text:
+            'PO-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
     _amountCtrl = TextEditingController();
     _qtyCtrl = TextEditingController(text: '10');
     _notesCtrl = TextEditingController();
@@ -63,7 +66,9 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
         notes: _notesCtrl.text.trim(),
       );
 
-      context.read<PurchaseBloc>().add(CreatePurchaseOrderSubmittedEvent(purchase));
+      context
+          .read<PurchaseBloc>()
+          .add(CreatePurchaseOrderSubmittedEvent(purchase));
 
       // Increase stock in Hive if product selected
       if (_selectedProduct != null && purchasedQty > 0) {
@@ -78,7 +83,8 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Purchase order saved! Stock updated for ${_selectedProduct?.name ?? 'supplier'}.'),
+          content: Text(
+              'Purchase order saved! Stock updated for ${_selectedProduct?.name ?? 'supplier'}.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -87,7 +93,8 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in Supplier Name, PO Number, and Total Amount.'),
+          content: Text(
+              'Please fill in Supplier Name, PO Number, and Total Amount.'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -126,12 +133,16 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
             // Select Product for Stock Increase
             const Text(
               'Select Product to Restock (Optional)',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkBlueText),
             ),
             const SizedBox(height: 6),
             BlocBuilder<ProductBloc, ProductState>(
               builder: (context, pState) {
-                if (pState is ProductsLoadedState && pState.allProducts.isNotEmpty) {
+                if (pState is ProductsLoadedState &&
+                    pState.allProducts.isNotEmpty) {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
@@ -147,15 +158,18 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
                         items: pState.allProducts.map((p) {
                           return DropdownMenuItem<ProductEntity>(
                             value: p,
-                            child: Text('${p.name} (Current Stock: ${p.stockQuantity} ${p.unit})'),
+                            child: Text(
+                                '${p.name} (Current Stock: ${p.stockQuantity} ${p.unit})'),
                           );
                         }).toList(),
                         onChanged: (val) {
                           setState(() {
                             _selectedProduct = val;
                             if (val != null && val.purchasePrice > 0) {
-                              final qty = int.tryParse(_qtyCtrl.text.trim()) ?? 10;
-                              _amountCtrl.text = (val.purchasePrice * qty).toStringAsFixed(0);
+                              final qty =
+                                  int.tryParse(_qtyCtrl.text.trim()) ?? 10;
+                              _amountCtrl.text =
+                                  (val.purchasePrice * qty).toStringAsFixed(0);
                             }
                           });
                         },
@@ -163,7 +177,9 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
                     ),
                   );
                 }
-                return const Text('No products in inventory yet.', style: TextStyle(fontSize: 12, color: AppColors.secondaryText));
+                return const Text('No products in inventory yet.',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.secondaryText));
               },
             ),
             if (_selectedProduct != null) ...[
@@ -176,8 +192,10 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
                 keyboardType: TextInputType.number,
                 onChanged: (qStr) {
                   final q = int.tryParse(qStr) ?? 0;
-                  if (_selectedProduct != null && _selectedProduct!.purchasePrice > 0) {
-                    _amountCtrl.text = (_selectedProduct!.purchasePrice * q).toStringAsFixed(0);
+                  if (_selectedProduct != null &&
+                      _selectedProduct!.purchasePrice > 0) {
+                    _amountCtrl.text = (_selectedProduct!.purchasePrice * q)
+                        .toStringAsFixed(0);
                   }
                 },
               ),

@@ -3,20 +3,23 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/entities/expense_entity.dart';
+import '../../domain/entities/income_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/expense_repository.dart';
+import '../../domain/repositories/income_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../infrastructure/storage/hive_service.dart';
 
 class LedgerSalesTransaction extends Equatable {
   final String id;
-  final String title; // 'Cash Sale' or Customer Name
-  final String subTitle; // '#XNOB-1008' or 'Invoice #XNOB-1007'
+  final String title; // Customer Name or 'Cash Sale' or 'Other Income'
+  final String subTitle; // 'Sales Income' or 'Other Income'
   final double amount;
   final String paymentMethod; // 'Cash', 'GPay/UPI', 'Card', 'Other'
   final DateTime time;
   final InvoiceEntity? invoice;
+  final bool isIncome;
 
   const LedgerSalesTransaction({
     required this.id,
@@ -26,10 +29,11 @@ class LedgerSalesTransaction extends Equatable {
     required this.paymentMethod,
     required this.time,
     this.invoice,
+    this.isIncome = false,
   });
 
   @override
-  List<Object?> get props => [id, title, subTitle, amount, paymentMethod, time, invoice];
+  List<Object?> get props => [id, title, subTitle, amount, paymentMethod, time, invoice, isIncome];
 }
 
 // Events
@@ -107,6 +111,7 @@ class DailyLedgerLoadedState extends DailyLedgerState {
   final double totalSales;
   final double cashSales;
   final double upiCardSales;
+  final double otherIncomeTotal;
 
   final double totalExpenses;
   final double cashExpenses;
@@ -114,6 +119,7 @@ class DailyLedgerLoadedState extends DailyLedgerState {
 
   final List<LedgerSalesTransaction> salesTransactions;
   final List<ExpenseEntity> expenseTransactions;
+  final List<IncomeEntity> incomeTransactions;
 
   const DailyLedgerLoadedState({
     required this.selectedDate,
@@ -124,11 +130,13 @@ class DailyLedgerLoadedState extends DailyLedgerState {
     required this.totalSales,
     required this.cashSales,
     required this.upiCardSales,
+    this.otherIncomeTotal = 0.0,
     required this.totalExpenses,
     required this.cashExpenses,
     required this.accountExpenses,
     required this.salesTransactions,
     required this.expenseTransactions,
+    this.incomeTransactions = const [],
   });
 
   @override
@@ -141,11 +149,13 @@ class DailyLedgerLoadedState extends DailyLedgerState {
         totalSales,
         cashSales,
         upiCardSales,
+        otherIncomeTotal,
         totalExpenses,
         cashExpenses,
         accountExpenses,
         salesTransactions,
         expenseTransactions,
+        incomeTransactions,
       ];
 }
 
@@ -163,12 +173,14 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
   final InvoiceRepository invoiceRepository;
   final ExpenseRepository expenseRepository;
   final CustomerRepository customerRepository;
+  final IncomeRepository? incomeRepository;
   final HiveService hiveService;
 
   DailyLedgerBloc({
     required this.invoiceRepository,
     required this.expenseRepository,
     required this.customerRepository,
+    this.incomeRepository,
     required this.hiveService,
   }) : super(DailyLedgerInitialState()) {
     on<FetchDailyLedgerDataEvent>(_onFetchDailyLedgerData);
@@ -224,15 +236,17 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
 
       final invoices = await invoiceRepository.getInvoices();
       final expenses = await expenseRepository.getExpenses();
+      final incomes = incomeRepository != null ? await incomeRepository!.getIncomes() : <IncomeEntity>[];
 
       // Read Opening Balance for selected date
       final bizBox = hiveService.getBox(HiveService.boxBusiness);
       final openingKey = 'opening_balance_${_getDateKey(selectedDate)}';
       final double openingBalance = (bizBox.get(openingKey) as num?)?.toDouble() ?? 0.0;
 
-      // Filter Sales / Invoices for selected date
+      // Filter Sales Invoices ONLY for selected date (Returns are EXCLUDED from ledger financial entries)
       final dayInvoices = invoices.where((inv) {
-        return inv.issueDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
+        return inv.type == InvoiceType.sale &&
+            inv.issueDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
             inv.issueDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
       }).toList();
 
@@ -246,10 +260,19 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
 
       dayExpenses.sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
 
-      // Process Sales Transactions & Payment Methods
+      // Filter Incomes for selected date
+      final dayIncomes = incomes.where((inc) {
+        return inc.incomeDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
+            inc.incomeDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
+      }).toList();
+
+      dayIncomes.sort((a, b) => b.incomeDate.compareTo(a.incomeDate));
+
+      // 1. Process CASH IN Transactions (Sales Income + Other Income)
       double totalSales = 0.0;
       double cashSales = 0.0;
       double upiCardSales = 0.0;
+      double otherIncomeTotal = 0.0;
 
       final List<LedgerSalesTransaction> salesTxs = [];
 
@@ -276,7 +299,7 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
           LedgerSalesTransaction(
             id: inv.id,
             title: isGuest ? 'Cash Sale' : inv.customerName,
-            subTitle: isGuest ? '#${inv.invoiceNumber}' : 'Invoice #${inv.invoiceNumber}',
+            subTitle: 'Sales Income • #${inv.invoiceNumber}',
             amount: inv.grandTotal,
             paymentMethod: payMode,
             time: inv.issueDate,
@@ -285,7 +308,24 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
         );
       }
 
-      // Process Expense Breakdown
+      for (var inc in dayIncomes) {
+        otherIncomeTotal += inc.amount;
+        salesTxs.add(
+          LedgerSalesTransaction(
+            id: inc.id,
+            title: inc.title,
+            subTitle: (inc.partyName != null && inc.partyName!.isNotEmpty)
+                ? 'Other Income • ${inc.category} • ${inc.partyName}'
+                : 'Other Income • ${inc.category}',
+            amount: inc.amount,
+            paymentMethod: inc.paymentMode,
+            time: inc.incomeDate,
+            isIncome: true,
+          ),
+        );
+      }
+
+      // 2. Process CASH OUT Breakdown (Purchase Expense + Other Expense)
       double totalExp = 0.0;
       double cashExp = 0.0;
       double accountExp = 0.0;
@@ -300,7 +340,7 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
       }
 
       // Physical Cash Balance Calculations
-      final double cashIn = cashSales;
+      final double cashIn = cashSales + otherIncomeTotal;
       final double cashOut = cashExp;
       final double closingBalance = openingBalance + cashIn - cashOut;
 
@@ -314,11 +354,13 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
           totalSales: totalSales,
           cashSales: cashSales,
           upiCardSales: upiCardSales,
+          otherIncomeTotal: otherIncomeTotal,
           totalExpenses: totalExp,
           cashExpenses: cashExp,
           accountExpenses: accountExp,
           salesTransactions: salesTxs,
           expenseTransactions: dayExpenses,
+          incomeTransactions: dayIncomes,
         ),
       );
     } catch (e) {

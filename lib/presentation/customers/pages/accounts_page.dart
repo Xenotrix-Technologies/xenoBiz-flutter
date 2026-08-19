@@ -21,21 +21,19 @@ class AccountsPage extends StatefulWidget {
   State<AccountsPage> createState() => _AccountsPageState();
 }
 
-class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _AccountsPageState extends State<AccountsPage> {
   final TextEditingController _searchController = TextEditingController();
-  int _salePurchaseSubTab = 0; // 0 = Sale Accounts (Customers), 1 = Purchase Accounts (Suppliers)
+  int _activeTab = 0; // 0 = Sale Accounts (Customers), 1 = Purchase Accounts (Suppliers)
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     context.read<AccountsBloc>().add(const FetchAccountsEvent());
+    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -113,32 +111,6 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                   }
                 },
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: AppColors.border),
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.account_balance_rounded, color: AppColors.success),
-                ),
-                title: const Text('Expense Account', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text('Add an expense category account (Electricity, Rent, etc.)', style: TextStyle(fontSize: 12)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await context.push(RouteNames.createMaster, extra: 3);
-                  if (context.mounted) {
-                    context.read<AccountsBloc>().add(const FetchAccountsEvent());
-                    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
-                  }
-                },
-              ),
             ],
           ),
         );
@@ -188,7 +160,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Import Sale (Customer), Purchase (Supplier), and Expense category accounts in bulk.',
+                      'Import Sale (Customer) and Purchase (Supplier) accounts in bulk.',
                       style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
                     ),
                     const SizedBox(height: 12),
@@ -417,22 +389,13 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                                     );
                                     context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(sup));
                                     importedCount++;
-                                  } else if (r.accountType == 'Expense Account') {
-                                    context.read<AccountsBloc>().add(
-                                          CreateExpenseAccountEvent(
-                                            title: r.accountName,
-                                            category: r.category,
-                                            openingBalance: r.openingBalance,
-                                          ),
-                                        );
-                                    importedCount++;
                                   }
                                 }
 
                                 Navigator.pop(sheetCtx);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Successfully imported $importedCount accounts into Hive!'),
+                                    content: Text('Successfully imported $importedCount accounts!'),
                                     backgroundColor: AppColors.success,
                                   ),
                                 );
@@ -449,8 +412,6 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
       },
     );
   }
-
-
 
   void _showFilterBottomSheet(BuildContext context, AccountsLoadedState state) {
     String tempFilter = state.selectedFilterStatus;
@@ -585,27 +546,6 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     );
   }
 
-  void _confirmDeleteExpenseAccount(BuildContext context, ExpenseAccountSummary account) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Expense Account'),
-        content: Text('Are you sure you want to delete the "${account.title}" expense account?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
-            onPressed: () {
-              context.read<AccountsBloc>().add(DeleteExpenseAccountEvent(account.category));
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatCurrency(double amount) {
     final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
     return formatter.format(amount);
@@ -620,18 +560,6 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-          tabs: const [
-            Tab(text: 'Sale / Purchase Accounts'),
-            Tab(text: 'Expense Accounts'),
-          ],
-        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: null,
@@ -658,8 +586,8 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           if (state is AccountsLoadedState) {
             return Column(
               children: [
-                // Overview Summary Header Bar
-                _buildTopSummaryBar(state),
+                // Top Summary Header (Customer Due & Supplier Payable)
+                _buildTopSummaryBar(context, state),
                 const Divider(height: 1, color: AppColors.border),
 
                 // Search Bar + Filter Button Row
@@ -681,7 +609,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                                 );
                           },
                           decoration: InputDecoration(
-                            hintText: 'Search accounts by name, phone, or category...',
+                            hintText: 'Search accounts by name or phone...',
                             hintStyle: const TextStyle(fontSize: 13, color: AppColors.secondaryText),
                             prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText, size: 20),
                             border: OutlineInputBorder(
@@ -721,18 +649,94 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                   ),
                 ),
 
-                // Tab Bar View Content
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
+                // Sale vs Purchase Accounts Filter Sub-bar
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
                     children: [
-                      // TAB 1: SALE / PURCHASE ACCOUNTS
-                      _buildSalePurchaseAccountsTab(context, state),
-
-                      // TAB 2: EXPENSE ACCOUNTS
-                      _buildExpenseAccountsTab(context, state),
+                      Expanded(
+                        child: ChoiceChip(
+                          padding: EdgeInsets.zero,
+                          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                          label: Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person_outline, size: 15),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'Sale Accounts (${state.customerCount})',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          selected: _activeTab == 0,
+                          selectedColor: AppColors.primaryBlue,
+                          labelStyle: TextStyle(
+                            color: _activeTab == 0 ? Colors.white : AppColors.darkBlueText,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            if (val) setState(() => _activeTab = 0);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: BlocBuilder<PurchaseBloc, PurchaseState>(
+                          builder: (context, pState) {
+                            final supCount = (pState is PurchaseLoadedState) ? pState.suppliers.length : 0;
+                            return ChoiceChip(
+                              padding: EdgeInsets.zero,
+                              labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                              label: Center(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.business_outlined, size: 15),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        'Purchase Accounts ($supCount)',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              selected: _activeTab == 1,
+                              selectedColor: AppColors.primaryBlue,
+                              labelStyle: TextStyle(
+                                color: _activeTab == 1 ? Colors.white : AppColors.darkBlueText,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                              onSelected: (val) {
+                                if (val) setState(() => _activeTab = 1);
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     ],
                   ),
+                ),
+                const Divider(height: 1, color: AppColors.border),
+
+                // Main Accounts List View
+                Expanded(
+                  child: _activeTab == 0
+                      ? _buildCustomerAccountsList(context, state)
+                      : _buildSupplierAccountsList(context),
                 ),
               ],
             );
@@ -744,8 +748,13 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     );
   }
 
-  // TOP OVERVIEW SUMMARY BAR
-  Widget _buildTopSummaryBar(AccountsLoadedState state) {
+  // TOP OVERVIEW SUMMARY BAR (Customer Due & Supplier Payable)
+  Widget _buildTopSummaryBar(BuildContext context, AccountsLoadedState state) {
+    final pState = context.watch<PurchaseBloc>().state;
+    final suppliers = (pState is PurchaseLoadedState) ? pState.suppliers : <SupplierEntity>[];
+    final double supplierPayableTotal = suppliers.fold(0.0, (sum, sup) => sum + sup.payableBalance);
+    final int supplierCount = suppliers.length;
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -762,109 +771,14 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           const SizedBox(width: 12),
           Expanded(
             child: _SummaryBox(
-              label: 'Expense Due',
-              value: _formatCurrency(state.expenseDueTotal),
-              subText: '${state.expenseAccountCount} Accounts',
-              valueColor: state.expenseDueTotal > 0 ? AppColors.warning : AppColors.secondaryText,
+              label: 'Supplier Payable',
+              value: _formatCurrency(supplierPayableTotal),
+              subText: '$supplierCount Accounts',
+              valueColor: supplierPayableTotal > 0 ? AppColors.warning : AppColors.secondaryText,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  // TAB 1: SALE / PURCHASE ACCOUNTS VIEW WITH SUB-TOGGLE
-  Widget _buildSalePurchaseAccountsTab(BuildContext context, AccountsLoadedState state) {
-    return Column(
-      children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: ChoiceChip(
-                  padding: EdgeInsets.zero,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  label: Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.person_outline, size: 15),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            'Sale Accounts (${state.customerCount})',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  selected: _salePurchaseSubTab == 0,
-                  selectedColor: AppColors.primaryBlue,
-                  labelStyle: TextStyle(
-                    color: _salePurchaseSubTab == 0 ? Colors.white : AppColors.darkBlueText,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11.5,
-                  ),
-                  onSelected: (val) {
-                    if (val) setState(() => _salePurchaseSubTab = 0);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: BlocBuilder<PurchaseBloc, PurchaseState>(
-                  builder: (context, pState) {
-                    final supCount = (pState is PurchaseLoadedState) ? pState.suppliers.length : 0;
-                    return ChoiceChip(
-                      padding: EdgeInsets.zero,
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                      label: Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.business_outlined, size: 15),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                'Purchase Accounts ($supCount)',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      selected: _salePurchaseSubTab == 1,
-                      selectedColor: AppColors.primaryBlue,
-                      labelStyle: TextStyle(
-                        color: _salePurchaseSubTab == 1 ? Colors.white : AppColors.darkBlueText,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11.5,
-                      ),
-                      onSelected: (val) {
-                        if (val) setState(() => _salePurchaseSubTab = 1);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1, color: AppColors.border),
-
-        Expanded(
-          child: _salePurchaseSubTab == 0
-              ? _buildCustomerAccountsList(context, state)
-              : _buildSupplierAccountsList(context),
-        ),
-      ],
     );
   }
 
@@ -1100,107 +1014,6 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           );
         }
         return const SizedBox.shrink();
-      },
-    );
-  }
-
-  // TAB 2: EXPENSE ACCOUNTS LIST (ONLY FAB FOR ADDING ACCOUNTS)
-  Widget _buildExpenseAccountsTab(BuildContext context, AccountsLoadedState state) {
-    if (state.filteredExpenseAccounts.isEmpty) {
-      return const EmptyState(
-        title: 'No Expense Accounts',
-        message: 'Use the + Add Account button below to create expense accounts such as Electricity, Rent, or Salary.',
-        icon: Icons.account_balance_outlined,
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: state.filteredExpenseAccounts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (ctx, idx) {
-        final expAcc = state.filteredExpenseAccounts[idx];
-        final isDue = expAcc.outstandingBalance > 0;
-
-        return AppCard(
-          onTap: () async {
-            await context.push(RouteNames.expenseAccountDetails, extra: expAcc);
-            if (context.mounted) {
-              context.read<AccountsBloc>().add(const FetchAccountsEvent());
-            }
-          },
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.warning, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      expAcc.title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.darkBlueText,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${expAcc.transactionCount} transactions • Month: ${_formatCurrency(expAcc.currentMonthTotal)}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(isDue ? 'Due' : 'Month Total', style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                  const SizedBox(height: 2),
-                  Text(
-                    _formatCurrency(isDue ? expAcc.outstandingBalance : expAcc.currentMonthTotal),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: isDue ? AppColors.warning : AppColors.darkBlueText,
-                    ),
-                  ),
-                ],
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
-                onSelected: (val) async {
-                  if (val == 'edit') {
-                    await context.push(RouteNames.createMaster, extra: expAcc);
-                    if (context.mounted) {
-                      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-                    }
-                  } else if (val == 'delete') {
-                    _confirmDeleteExpenseAccount(context, expAcc);
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Edit Account')])),
-                  PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.red), SizedBox(width: 8), Text('Delete Account', style: TextStyle(color: Colors.red))])),
-                ],
-              ),
-            ],
-          ),
-        );
       },
     );
   }

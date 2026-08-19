@@ -43,6 +43,10 @@ class SettingsPage extends StatelessWidget {
                   onTap: () => context.push(RouteNames.invoiceSettings),
                 ),
                 _SettingsTile(
+                  title: 'Income & Expense Categories',
+                  onTap: () => context.push(RouteNames.categories),
+                ),
+                _SettingsTile(
                   title: 'User roles & permissions',
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(

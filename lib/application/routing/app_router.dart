@@ -13,14 +13,14 @@ import '../../presentation/customers/pages/customer_details_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/customers/pages/expense_account_details_page.dart';
 
-
 import '../../presentation/dashboard/pages/dashboard_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
-import '../../presentation/invoices/pages/create_return_page.dart';
 import '../../presentation/invoices/pages/daily_ledger_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
+import '../../presentation/invoices/pages/return_voucher_screen.dart';
 import '../../presentation/invoices/pages/returns_list_page.dart';
+import '../../presentation/invoices/pages/transaction_screen.dart';
 
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
@@ -44,12 +44,11 @@ import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
-
+import '../../presentation/settings/pages/category_management_page.dart';
 import '../../presentation/settings/pages/invoice_settings_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
 import '../../presentation/settings/pages/tax_gst_settings_page.dart';
-
 
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
 import '../../presentation/suppliers/pages/supplier_details_page.dart';
@@ -215,7 +214,8 @@ class AppRouter {
             final args = state.extra as Map<String, dynamic>;
             final prod = args['product'] as ProductEntity?;
             final initialAddition = (args['initialAddition'] as bool?) ?? true;
-            return StockAdjustmentPage(product: prod, initialAddition: initialAddition);
+            return StockAdjustmentPage(
+                product: prod, initialAddition: initialAddition);
           }
           return const StockAdjustmentPage();
         },
@@ -228,7 +228,8 @@ class AppRouter {
           if (state.extra is InvoiceType) {
             initialType = state.extra as InvoiceType;
           } else if (state.extra is Map<String, dynamic>) {
-            initialType = (state.extra as Map<String, dynamic>)['initialType'] as InvoiceType?;
+            initialType = (state.extra as Map<String, dynamic>)['initialType']
+                as InvoiceType?;
           }
           return InvoiceListPage(initialType: initialType);
         },
@@ -274,21 +275,69 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.salesReturns,
-        builder: (context, state) => const ReturnsListPage(type: InvoiceType.sale),
+        builder: (context, state) =>
+            const ReturnsListPage(type: InvoiceType.sale),
       ),
       GoRoute(
         path: RouteNames.purchaseReturns,
-        builder: (context, state) => const ReturnsListPage(type: InvoiceType.purchase),
+        builder: (context, state) =>
+            const ReturnsListPage(type: InvoiceType.purchase),
       ),
       GoRoute(
         path: RouteNames.createReturn,
         builder: (context, state) {
-          InvoiceType type = InvoiceType.sale;
+          ReturnType rType = ReturnType.salesReturn;
+          dynamic existingReturn;
           if (state.extra is Map<String, dynamic>) {
-            type = ((state.extra as Map<String, dynamic>)['type'] as InvoiceType?) ?? InvoiceType.sale;
+            final map = state.extra as Map<String, dynamic>;
+            if (map['returnType'] is ReturnType) {
+              rType = map['returnType'] as ReturnType;
+            } else if (map['type'] is InvoiceType) {
+              rType = (map['type'] as InvoiceType) == InvoiceType.purchase ? ReturnType.purchaseReturn : ReturnType.salesReturn;
+            }
+            existingReturn = map['existingReturn'];
+          } else if (state.extra is ReturnType) {
+            rType = state.extra as ReturnType;
           }
-          return CreateReturnPage(type: type);
+          return ReturnVoucherScreen(
+            returnType: rType,
+            existingReturn: existingReturn,
+          );
         },
+      ),
+      GoRoute(
+        path: RouteNames.income,
+        builder: (context, state) {
+          dynamic existing;
+          if (state.extra is Map<String, dynamic>) {
+            existing = (state.extra as Map<String, dynamic>)['existingTransaction'];
+          } else {
+            existing = state.extra;
+          }
+          return TransactionScreen(
+            transactionType: TransactionType.income,
+            existingTransaction: existing,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.expense,
+        builder: (context, state) {
+          dynamic existing;
+          if (state.extra is Map<String, dynamic>) {
+            existing = (state.extra as Map<String, dynamic>)['existingTransaction'];
+          } else {
+            existing = state.extra;
+          }
+          return TransactionScreen(
+            transactionType: TransactionType.expense,
+            existingTransaction: existing,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.categories,
+        builder: (context, state) => const CategoryManagementPage(),
       ),
       GoRoute(
         path: RouteNames.invoiceResult,
@@ -422,9 +471,6 @@ class AppRouter {
         path: RouteNames.createMaster,
         builder: (context, state) => _buildCreateMasterPage(state),
       ),
-
-
-
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('No route defined for ${state.uri}')),

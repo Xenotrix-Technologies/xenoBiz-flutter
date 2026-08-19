@@ -1,6 +1,5 @@
 import 'package:get_it/get_it.dart';
 
-import '../../domain/repositories/returns_repository.dart';
 import '../../domain/repositories/repositories.dart';
 import '../../domain/usecases/create_invoice_usecase.dart';
 import '../../domain/usecases/record_payment_usecase.dart';
@@ -8,8 +7,10 @@ import '../../domain/usecases/update_invoice_usecase.dart';
 import '../../infrastructure/network/dio_client.dart';
 import '../../infrastructure/network/network_checker.dart';
 import '../../infrastructure/repositories/auth_repository_impl.dart';
+import '../../infrastructure/repositories/category_repository_impl.dart';
 import '../../infrastructure/repositories/customer_repository_impl.dart';
 import '../../infrastructure/repositories/expense_repository_impl.dart';
+import '../../infrastructure/repositories/income_repository_impl.dart';
 import '../../infrastructure/repositories/invoice_repository_impl.dart';
 import '../../infrastructure/repositories/lead_repository_impl.dart';
 import '../../infrastructure/repositories/product_repository_impl.dart';
@@ -61,6 +62,10 @@ Future<void> configureDependencies() async {
     () => SubscriptionRepositoryImpl(hiveService: getIt()),
   );
 
+  getIt.registerLazySingleton<CategoryRepository>(
+    () => CategoryRepositoryImpl(getIt()),
+  );
+
   getIt.registerLazySingleton<CustomerRepository>(
     () => CustomerRepositoryImpl(
       dioClient: getIt(),
@@ -99,6 +104,10 @@ Future<void> configureDependencies() async {
 
   getIt.registerLazySingleton<ExpenseRepository>(
     () => ExpenseRepositoryImpl(hiveService: getIt()),
+  );
+
+  getIt.registerLazySingleton<IncomeRepository>(
+    () => IncomeRepositoryImpl(getIt()),
   );
 
   getIt.registerLazySingleton<PurchaseRepository>(

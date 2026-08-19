@@ -74,7 +74,8 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
     }).toList();
 
     final typeStr = map['type']?.toString();
-    final type = typeStr == 'purchase' ? InvoiceType.purchase : InvoiceType.sale;
+    final type =
+        typeStr == 'purchase' ? InvoiceType.purchase : InvoiceType.sale;
 
     return InvoiceReturnEntity(
       id: map['id']?.toString() ?? '',
@@ -86,7 +87,8 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
       type: type,
       items: items,
       totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0.0,
-      returnDate: DateTime.tryParse(map['returnDate']?.toString() ?? '') ?? DateTime.now(),
+      returnDate: DateTime.tryParse(map['returnDate']?.toString() ?? '') ??
+          DateTime.now(),
       notes: map['notes']?.toString() ?? '',
     );
   }
@@ -106,7 +108,20 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
   }
 
   @override
-  Future<Map<String, int>> getReturnedQuantitiesForInvoice(String invoiceId) async {
+  Future<InvoiceReturnEntity?> getReturn(String id) async {
+    for (var type in [InvoiceType.sale, InvoiceType.purchase]) {
+      final box = hiveService.getBox(_getBoxName(type));
+      final map = box.get(id);
+      if (map is Map) {
+        return _mapToReturn(map);
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<Map<String, int>> getReturnedQuantitiesForInvoice(
+      String invoiceId) async {
     final Map<String, int> returnedCounts = {};
     for (var type in [InvoiceType.sale, InvoiceType.purchase]) {
       final box = hiveService.getBox(_getBoxName(type));
@@ -125,10 +140,13 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
   }
 
   @override
-  Future<InvoiceReturnEntity> createReturn(InvoiceReturnEntity returnEntity) async {
+  Future<InvoiceReturnEntity> createReturn(
+      InvoiceReturnEntity returnEntity) async {
     final box = hiveService.getBox(_getBoxName(returnEntity.type));
-    final String id = returnEntity.id.isNotEmpty ? returnEntity.id : const Uuid().v4();
-    final String retNum = returnEntity.returnNumber.isNotEmpty && returnEntity.returnNumber != 'RET-000'
+    final String id =
+        returnEntity.id.isNotEmpty ? returnEntity.id : const Uuid().v4();
+    final String retNum = returnEntity.returnNumber.isNotEmpty &&
+            returnEntity.returnNumber != 'RET-000'
         ? returnEntity.returnNumber
         : 'RET-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
@@ -149,12 +167,12 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
     // 1. Save Return Record
     await box.put(id, _returnToMap(localReturn));
 
-    // 2. Adjust Stock
+    // 2. Adjust Stock only (Sales Return: +stock, Purchase Return: -stock)
     for (var item in localReturn.items) {
       if (item.returnedQuantity > 0) {
         final stockDelta = returnEntity.isSale
-            ? item.returnedQuantity // Sales return -> item added back to stock
-            : -item.returnedQuantity; // Purchase return -> item removed from stock
+            ? item.returnedQuantity
+            : -item.returnedQuantity;
 
         await productRepository.adjustStock(
           item.productId,
@@ -164,31 +182,35 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
       }
     }
 
-    // 3. Adjust Account Balance
-    if (localReturn.partyId.isNotEmpty) {
-      if (localReturn.isSale) {
-        try {
-          final customer = await customerRepository.getCustomer(localReturn.partyId);
-          final updated = customer.copyWith(
-            outstandingBalance: (customer.outstandingBalance - localReturn.totalAmount).clamp(0, double.infinity),
-          );
-          await customerRepository.updateCustomer(updated);
-        } catch (_) {}
-      } else {
-        try {
-          final suppliers = await purchaseRepository.getSuppliers();
-          final matches = suppliers.where((s) => s.id == localReturn.partyId || s.name == localReturn.partyName);
-          if (matches.isNotEmpty) {
-            final sup = matches.first;
-            final updated = sup.copyWith(
-              payableBalance: (sup.payableBalance - localReturn.totalAmount).clamp(0, double.infinity),
-            );
-            await purchaseRepository.updateSupplier(updated);
-          }
-        } catch (_) {}
+    // Returns do NOT create amount transactions in financial ledgers or alter monetary balance.
+    return localReturn;
+  }
+
+  @override
+  Future<void> updateReturn(InvoiceReturnEntity returnEntity) async {
+    final old = await getReturn(returnEntity.id);
+    final oldQtyMap = <String, int>{};
+    if (old != null) {
+      for (var item in old.items) {
+        oldQtyMap[item.productId] = item.returnedQuantity;
       }
     }
 
-    return localReturn;
+    final box = hiveService.getBox(_getBoxName(returnEntity.type));
+    await box.put(returnEntity.id, _returnToMap(returnEntity));
+
+    // Calculate stock delta: (newQty - oldQty)
+    for (var item in returnEntity.items) {
+      final oldQty = oldQtyMap[item.productId] ?? 0;
+      final qtyDiff = item.returnedQuantity - oldQty;
+      if (qtyDiff != 0) {
+        final stockDelta = returnEntity.isSale ? qtyDiff : -qtyDiff;
+        await productRepository.adjustStock(
+          item.productId,
+          stockDelta,
+          'Update Return #${returnEntity.returnNumber}',
+        );
+      }
+    }
   }
 }

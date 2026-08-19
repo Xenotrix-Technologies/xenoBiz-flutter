@@ -9,6 +9,7 @@ import '../../../domain/entities/invoice_return_entity.dart';
 import '../../../domain/repositories/returns_repository.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import 'return_voucher_screen.dart';
 
 class ReturnsListPage extends StatefulWidget {
   final InvoiceType type;
@@ -44,6 +45,8 @@ class _ReturnsListPageState extends State<ReturnsListPage> {
     }
   }
 
+  ReturnType get _rType => widget.type == InvoiceType.sale ? ReturnType.salesReturn : ReturnType.purchaseReturn;
+
   @override
   Widget build(BuildContext context) {
     final title = widget.type == InvoiceType.sale ? 'Sales Returns' : 'Purchase Returns';
@@ -52,14 +55,19 @@ class _ReturnsListPageState extends State<ReturnsListPage> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () async {
-          await context.push(RouteNames.createReturn, extra: {'type': widget.type});
+          await context.push(
+            RouteNames.createReturn,
+            extra: {
+              'returnType': _rType,
+            },
+          );
           _fetchReturns();
         },
         icon: const Icon(Icons.add, color: Colors.white),
@@ -82,6 +90,16 @@ class _ReturnsListPageState extends State<ReturnsListPage> {
                   itemBuilder: (ctx, idx) {
                     final item = _returns[idx];
                     return AppCard(
+                      onTap: () async {
+                        await context.push(
+                          RouteNames.createReturn,
+                          extra: {
+                            'returnType': _rType,
+                            'existingReturn': item,
+                          },
+                        );
+                        _fetchReturns();
+                      },
                       child: Row(
                         children: [
                           Container(
@@ -130,9 +148,15 @@ class _ReturnsListPageState extends State<ReturnsListPage> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                '${item.returnDate.day}/${item.returnDate.month}/${item.returnDate.year}',
-                                style: const TextStyle(fontSize: 11, color: AppColors.outline),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${item.returnDate.day}/${item.returnDate.month}/${item.returnDate.year}',
+                                    style: const TextStyle(fontSize: 11, color: AppColors.outline),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                                ],
                               ),
                             ],
                           ),

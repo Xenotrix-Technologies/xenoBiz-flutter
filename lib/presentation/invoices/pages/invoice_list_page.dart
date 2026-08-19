@@ -43,7 +43,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_selectedFilter == 'PURCHASE' ? 'Purchase Invoices' : AppStrings.invoiceTitle),
+        title: Text(_selectedFilter == 'PURCHASE'
+            ? 'Purchase Invoices'
+            : AppStrings.invoiceTitle),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
@@ -59,15 +61,17 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         heroTag: null,
         backgroundColor: AppColors.primary,
         onPressed: () async {
-          final type = _selectedFilter == 'PURCHASE' ? InvoiceType.purchase : InvoiceType.sale;
+          final type = _selectedFilter == 'PURCHASE'
+              ? InvoiceType.purchase
+              : InvoiceType.sale;
           final bloc = context.read<InvoiceBloc>();
-          await context.push(RouteNames.createInvoice, extra: {'invoiceType': type});
+          await context
+              .push(RouteNames.createInvoice, extra: {'invoiceType': type});
           if (!mounted) return;
           bloc.add(const FetchInvoicesEvent());
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
-
       body: Column(
         children: [
           Container(
@@ -81,7 +85,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   controller: _searchController,
                   prefixIcon: Icons.search,
                   onChanged: (q) {
-                    context.read<InvoiceBloc>().add(FetchInvoicesEvent(query: q));
+                    context
+                        .read<InvoiceBloc>()
+                        .add(FetchInvoicesEvent(query: q));
                   },
                 ),
                 const SizedBox(height: 12),
@@ -144,11 +150,16 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                 color: inv.isPurchase
                                     ? AppColors.warning.withValues(alpha: 0.1)
                                     : AppColors.surfaceContainerLow,
-                                borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                                borderRadius: BorderRadius.circular(
+                                    AppSizes.radiusMedium),
                               ),
                               child: Icon(
-                                inv.isPurchase ? Icons.shopping_bag_outlined : Icons.description,
-                                color: inv.isPurchase ? AppColors.warning : AppColors.primary,
+                                inv.isPurchase
+                                    ? Icons.shopping_bag_outlined
+                                    : Icons.description,
+                                color: inv.isPurchase
+                                    ? AppColors.warning
+                                    : AppColors.primary,
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -158,27 +169,39 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text(
-                                        inv.invoiceNumber,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.onSurface,
+                                      Flexible(
+                                        child: Text(
+                                          inv.invoiceNumber,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.onSurface,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 6),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: inv.isPurchase ? AppColors.warning.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: inv.isPurchase
+                                              ? AppColors.warning
+                                                  .withValues(alpha: 0.15)
+                                              : AppColors.primary
+                                                  .withValues(alpha: 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                         ),
                                         child: Text(
                                           inv.isPurchase ? 'PURCHASE' : 'SALE',
                                           style: TextStyle(
-                                            fontSize: 10,
+                                            fontSize: 9,
                                             fontWeight: FontWeight.w800,
-                                            color: inv.isPurchase ? AppColors.warning : AppColors.primary,
+                                            color: inv.isPurchase
+                                                ? AppColors.warning
+                                                : AppColors.primary,
                                           ),
                                         ),
                                       ),
@@ -187,11 +210,15 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                   const SizedBox(height: 4),
                                   Text(
                                     inv.customerName,
-                                    style: const TextStyle(fontSize: 13, color: AppColors.outline),
+                                    style: const TextStyle(
+                                        fontSize: 12, color: AppColors.outline),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 8),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -209,16 +236,19 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                   children: [
                                     inv.status == InvoiceStatus.paid
                                         ? StatusChip.paid()
-                                        : inv.status == InvoiceStatus.partiallyPaid
+                                        : inv.status ==
+                                                InvoiceStatus.partiallyPaid
                                             ? StatusChip.partiallyPaid()
                                             : StatusChip.unpaid(),
                                     const SizedBox(width: 4),
                                     IconButton(
                                       constraints: const BoxConstraints(),
                                       padding: EdgeInsets.zero,
-                                      icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                      icon: const Icon(Icons.edit_outlined,
+                                          size: 18, color: AppColors.primary),
                                       onPressed: () async {
-                                        final bloc = context.read<InvoiceBloc>();
+                                        final bloc =
+                                            context.read<InvoiceBloc>();
                                         await context.push(
                                           RouteNames.createInvoice,
                                           extra: {
