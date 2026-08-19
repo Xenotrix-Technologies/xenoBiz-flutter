@@ -84,6 +84,23 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
   }
 
   @override
+  Future<SupplierEntity> updateSupplier(SupplierEntity supplier) async {
+    final box = hiveService.getBox(HiveService.boxSuppliers);
+    await box.put(supplier.id, {
+      'id': supplier.id,
+      'name': supplier.name,
+      'companyName': supplier.companyName,
+      'phone': supplier.phone,
+      'email': supplier.email,
+      'address': supplier.address,
+      'payableBalance': supplier.payableBalance,
+      'createdAt': supplier.createdAt.toIso8601String(),
+    });
+    return supplier;
+  }
+
+
+  @override
   Future<List<PurchaseEntity>> getPurchaseOrders() async {
     final box = hiveService.getBox(HiveService.boxPurchases);
     final List<PurchaseEntity> list = [];

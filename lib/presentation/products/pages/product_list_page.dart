@@ -6,7 +6,6 @@ import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../const/strings.dart';
-import '../../../domain/entities/product_entity.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/ui_state_widgets.dart';
@@ -27,56 +26,7 @@ class _ProductListPageState extends State<ProductListPage> {
     context.read<ProductBloc>().add(const FetchProductsEvent());
   }
 
-  void _showAddProductDialog() {
-    final nameCtrl = TextEditingController();
-    final skuCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final stockCtrl = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(AppStrings.addProduct),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppTextField(label: 'Product Name', controller: nameCtrl),
-              const SizedBox(height: 12),
-              AppTextField(label: 'SKU / Barcode', controller: skuCtrl),
-              const SizedBox(height: 12),
-              AppTextField(label: 'Selling Price (₹)', controller: priceCtrl, keyboardType: TextInputType.number),
-              const SizedBox(height: 12),
-              AppTextField(label: 'Initial Stock Qty', controller: stockCtrl, keyboardType: TextInputType.number),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-            onPressed: () {
-              if (nameCtrl.text.isNotEmpty) {
-                final newProd = ProductEntity(
-                  id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
-                  name: nameCtrl.text,
-                  sku: skuCtrl.text.isNotEmpty ? skuCtrl.text : 'SKU-GEN-01',
-                  category: 'General',
-                  sellingPrice: double.tryParse(priceCtrl.text) ?? 100.0,
-                  purchasePrice: (double.tryParse(priceCtrl.text) ?? 100.0) * 0.7,
-                  stockQuantity: int.tryParse(stockCtrl.text) ?? 10,
-                  createdAt: DateTime.now(),
-                );
-                context.read<ProductBloc>().add(CreateProductEvent(newProd));
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save Product'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +48,7 @@ class _ProductListPageState extends State<ProductListPage> {
       floatingActionButton: FloatingActionButton(
         heroTag: null,
         backgroundColor: AppColors.primary,
-        onPressed: _showAddProductDialog,
+        onPressed: () => context.push(RouteNames.createMaster, extra: 0),
         child: const Icon(Icons.add, color: Colors.white),
       ),
 
@@ -207,12 +157,33 @@ class _ProductListPageState extends State<ProductListPage> {
                                 ),
                               ],
                             ),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 20, color: AppColors.outline),
+                              onSelected: (val) {
+                                if (val == 'edit') {
+                                  context.push(RouteNames.createMaster, extra: p);
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Edit Product'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       );
                     },
                   );
                 }
+
                 return const SizedBox.shrink();
               },
             ),

@@ -14,10 +14,18 @@ import '../../widgets/app_card.dart';
 
 class CreateMasterPage extends StatefulWidget {
   final int initialTabIndex; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
+  final ProductEntity? productToEdit;
+  final CustomerEntity? customerToEdit;
+  final SupplierEntity? supplierToEdit;
+  final ExpenseAccountSummary? expenseToEdit;
 
   const CreateMasterPage({
     super.key,
     this.initialTabIndex = 0,
+    this.productToEdit,
+    this.customerToEdit,
+    this.supplierToEdit,
+    this.expenseToEdit,
   });
 
   @override
@@ -26,6 +34,12 @@ class CreateMasterPage extends StatefulWidget {
 
 class _CreateMasterPageState extends State<CreateMasterPage> {
   late int _activeTab; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
+
+  bool get isEditMode =>
+      widget.productToEdit != null ||
+      widget.customerToEdit != null ||
+      widget.supplierToEdit != null ||
+      widget.expenseToEdit != null;
 
   // Product Form Controllers
   final _prodNameCtrl = TextEditingController();
@@ -64,7 +78,55 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   @override
   void initState() {
     super.initState();
-    _activeTab = widget.initialTabIndex;
+    if (widget.productToEdit != null) {
+      _activeTab = 0;
+      final p = widget.productToEdit!;
+      _prodNameCtrl.text = p.name;
+      _prodSkuCtrl.text = p.sku;
+      _prodCategoryCtrl.text = p.category;
+      _prodPurchasePriceCtrl.text = p.purchasePrice > 0
+          ? (p.purchasePrice % 1 == 0 ? p.purchasePrice.toInt().toString() : p.purchasePrice.toStringAsFixed(2))
+          : '0.00';
+      _prodSellingPriceCtrl.text = p.sellingPrice % 1 == 0
+          ? p.sellingPrice.toInt().toString()
+          : p.sellingPrice.toStringAsFixed(2);
+      _prodStockCtrl.text = p.stockQuantity.toString();
+      _prodLowStockCtrl.text = p.reorderLevel.toString();
+      _prodDescCtrl.text = p.description;
+    } else if (widget.customerToEdit != null) {
+      _activeTab = 1;
+      final c = widget.customerToEdit!;
+      _saleNameCtrl.text = c.name;
+      _salePhoneCtrl.text = c.phone;
+      _saleEmailCtrl.text = c.email;
+      _saleAddressCtrl.text = c.address;
+      _saleOpeningBalanceCtrl.text = c.outstandingBalance % 1 == 0
+          ? c.outstandingBalance.toInt().toString()
+          : c.outstandingBalance.toStringAsFixed(2);
+    } else if (widget.supplierToEdit != null) {
+      _activeTab = 2;
+      final s = widget.supplierToEdit!;
+      _purNameCtrl.text = s.name;
+      _purPhoneCtrl.text = s.phone;
+      _purEmailCtrl.text = s.email;
+      _purAddressCtrl.text = s.address;
+      _purOpeningBalanceCtrl.text = s.payableBalance % 1 == 0
+          ? s.payableBalance.toInt().toString()
+          : s.payableBalance.toStringAsFixed(2);
+    } else if (widget.expenseToEdit != null) {
+      _activeTab = 3;
+      final e = widget.expenseToEdit!;
+      _expNameCtrl.text = e.title;
+      _expCategory = e.category;
+      if (!_expenseCategories.contains(_expCategory)) {
+        _expenseCategories.insert(_expenseCategories.length - 1, _expCategory);
+      }
+      _expOpeningBalanceCtrl.text = e.outstandingBalance % 1 == 0
+          ? e.outstandingBalance.toInt().toString()
+          : e.outstandingBalance.toStringAsFixed(2);
+    } else {
+      _activeTab = widget.initialTabIndex;
+    }
   }
 
   @override
@@ -129,23 +191,43 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         ? _prodSkuCtrl.text.trim()
         : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
-    final product = ProductEntity(
-      id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      sku: sku,
-      barcode: sku,
-      category: category,
-      sellingPrice: sellingPrice,
-      purchasePrice: purchasePrice,
-      stockQuantity: stock,
-      reorderLevel: lowStock,
-      unit: 'Pcs',
-      description: _prodDescCtrl.text.trim(),
-      createdAt: DateTime.now(),
-    );
+    if (widget.productToEdit != null) {
+      final existing = widget.productToEdit!;
+      final updatedProduct = existing.copyWith(
+        name: name,
+        sku: sku,
+        barcode: sku,
+        category: category,
+        sellingPrice: sellingPrice,
+        purchasePrice: purchasePrice,
+        stockQuantity: stock,
+        reorderLevel: lowStock,
+        description: _prodDescCtrl.text.trim(),
+        updatedAt: DateTime.now(),
+      );
 
-    context.read<ProductBloc>().add(CreateProductEvent(product));
-    _showSuccessSnackBar('Product "${product.name}" created successfully!');
+      context.read<ProductBloc>().add(UpdateProductEvent(updatedProduct));
+      _showSuccessSnackBar('Product "${updatedProduct.name}" updated successfully!');
+    } else {
+      final product = ProductEntity(
+        id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        sku: sku,
+        barcode: sku,
+        category: category,
+        sellingPrice: sellingPrice,
+        purchasePrice: purchasePrice,
+        stockQuantity: stock,
+        reorderLevel: lowStock,
+        unit: 'Pcs',
+        description: _prodDescCtrl.text.trim(),
+        createdAt: DateTime.now(),
+      );
+
+      context.read<ProductBloc>().add(CreateProductEvent(product));
+      _showSuccessSnackBar('Product "${product.name}" created successfully!');
+    }
+
     if (context.canPop()) {
       context.pop();
     } else {
@@ -161,18 +243,33 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     }
     final balance = double.tryParse(_saleOpeningBalanceCtrl.text.trim()) ?? 0.0;
 
-    final customer = CustomerEntity(
-      id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-      name: name,
-      phone: _salePhoneCtrl.text.trim(),
-      email: _saleEmailCtrl.text.trim(),
-      address: _saleAddressCtrl.text.trim(),
-      outstandingBalance: balance,
-      createdAt: DateTime.now(),
-    );
+    if (widget.customerToEdit != null) {
+      final existing = widget.customerToEdit!;
+      final updatedCustomer = existing.copyWith(
+        name: name,
+        phone: _salePhoneCtrl.text.trim(),
+        email: _saleEmailCtrl.text.trim(),
+        address: _saleAddressCtrl.text.trim(),
+        outstandingBalance: balance,
+      );
 
-    context.read<AccountsBloc>().add(CreateCustomerAccountEvent(customer));
-    _showSuccessSnackBar('Sale Account for "${customer.name}" created successfully!');
+      context.read<AccountsBloc>().add(UpdateCustomerAccountEvent(updatedCustomer));
+      _showSuccessSnackBar('Sale Account for "${updatedCustomer.name}" updated successfully!');
+    } else {
+      final customer = CustomerEntity(
+        id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+        name: name,
+        phone: _salePhoneCtrl.text.trim(),
+        email: _saleEmailCtrl.text.trim(),
+        address: _saleAddressCtrl.text.trim(),
+        outstandingBalance: balance,
+        createdAt: DateTime.now(),
+      );
+
+      context.read<AccountsBloc>().add(CreateCustomerAccountEvent(customer));
+      _showSuccessSnackBar('Sale Account for "${customer.name}" created successfully!');
+    }
+
     if (context.canPop()) {
       context.pop();
     } else {
@@ -188,19 +285,35 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     }
     final balance = double.tryParse(_purOpeningBalanceCtrl.text.trim()) ?? 0.0;
 
-    final supplier = SupplierEntity(
-      id: 'sup_${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      companyName: name,
-      phone: _purPhoneCtrl.text.trim(),
-      email: _purEmailCtrl.text.trim(),
-      address: _purAddressCtrl.text.trim(),
-      payableBalance: balance,
-      createdAt: DateTime.now(),
-    );
+    if (widget.supplierToEdit != null) {
+      final existing = widget.supplierToEdit!;
+      final updatedSupplier = existing.copyWith(
+        name: name,
+        companyName: name,
+        phone: _purPhoneCtrl.text.trim(),
+        email: _purEmailCtrl.text.trim(),
+        address: _purAddressCtrl.text.trim(),
+        payableBalance: balance,
+      );
 
-    context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(supplier));
-    _showSuccessSnackBar('Purchase Account for "${supplier.name}" created successfully!');
+      context.read<PurchaseBloc>().add(UpdateSupplierSubmittedEvent(updatedSupplier));
+      _showSuccessSnackBar('Purchase Account for "${updatedSupplier.name}" updated successfully!');
+    } else {
+      final supplier = SupplierEntity(
+        id: 'sup_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        companyName: name,
+        phone: _purPhoneCtrl.text.trim(),
+        email: _purEmailCtrl.text.trim(),
+        address: _purAddressCtrl.text.trim(),
+        payableBalance: balance,
+        createdAt: DateTime.now(),
+      );
+
+      context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(supplier));
+      _showSuccessSnackBar('Purchase Account for "${supplier.name}" created successfully!');
+    }
+
     if (context.canPop()) {
       context.pop();
     } else {
@@ -216,21 +329,35 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     }
     final balance = double.tryParse(_expOpeningBalanceCtrl.text.trim()) ?? 0.0;
 
-    context.read<AccountsBloc>().add(
-          CreateExpenseAccountEvent(
-            title: name,
-            category: _expCategory,
-            openingBalance: balance,
-          ),
-        );
+    if (widget.expenseToEdit != null) {
+      context.read<AccountsBloc>().add(
+            UpdateExpenseAccountEvent(
+              oldCategory: widget.expenseToEdit!.category,
+              newTitle: name,
+              newCategory: _expCategory,
+            ),
+          );
 
-    _showSuccessSnackBar('Expense Account "$name" created successfully!');
+      _showSuccessSnackBar('Expense Account "$name" updated successfully!');
+    } else {
+      context.read<AccountsBloc>().add(
+            CreateExpenseAccountEvent(
+              title: name,
+              category: _expCategory,
+              openingBalance: balance,
+            ),
+          );
+
+      _showSuccessSnackBar('Expense Account "$name" created successfully!');
+    }
+
     if (context.canPop()) {
       context.pop();
     } else {
       context.go(RouteNames.accounts);
     }
   }
+
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -310,9 +437,9 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Text(
-                    'Create',
-                    style: TextStyle(
+                  Text(
+                    isEditMode ? 'Edit' : 'Create',
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF050B20),
@@ -384,7 +511,9 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                               ),
                               onPressed: _saveCurrentForm,
                               child: Text(
-                                _activeTab == 0 ? 'Save Product' : 'Save Account',
+                                _activeTab == 0
+                                    ? (widget.productToEdit != null ? 'Update Product' : 'Save Product')
+                                    : (isEditMode ? 'Update Account' : 'Save Account'),
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -397,6 +526,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                       ],
                     ),
             ),
+
           ],
         ),
       ),
@@ -495,14 +625,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Add Product',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+        Text(
+          widget.productToEdit != null ? 'Edit Product' : 'Add Product',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
-        const Text(
-          'Add a new item to your inventory',
-          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        Text(
+          widget.productToEdit != null ? 'Update product information' : 'Add a new item to your inventory',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 16),
 
@@ -729,14 +859,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Add Sale Account',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+        Text(
+          widget.customerToEdit != null ? 'Edit Sale Account' : 'Add Sale Account',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
-        const Text(
-          'Create a customer you sell to',
-          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        Text(
+          widget.customerToEdit != null ? 'Update customer information' : 'Create a customer you sell to',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
 
@@ -851,14 +981,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Add Purchase Account',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+        Text(
+          widget.supplierToEdit != null ? 'Edit Purchase Account' : 'Add Purchase Account',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
-        const Text(
-          'Create a supplier you buy from',
-          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        Text(
+          widget.supplierToEdit != null ? 'Update supplier information' : 'Create a supplier you buy from',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
 
@@ -973,14 +1103,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Add Expense Account',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+        Text(
+          widget.expenseToEdit != null ? 'Edit Expense Account' : 'Add Expense Account',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
-        const Text(
-          'Track a recurring or one-off business cost',
-          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        Text(
+          widget.expenseToEdit != null ? 'Update expense account' : 'Track a recurring or one-off business cost',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
 

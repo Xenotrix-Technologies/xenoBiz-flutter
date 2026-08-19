@@ -65,77 +65,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
   }
 
   void _showEditCustomerDialog(BuildContext context) {
-    final nameCtrl = TextEditingController(text: _customer.name);
-    final phoneCtrl = TextEditingController(text: _customer.phone);
-    final emailCtrl = TextEditingController(text: _customer.email);
-    final addressCtrl = TextEditingController(text: _customer.address);
-    final balanceCtrl = TextEditingController(text: _customer.outstandingBalance.toStringAsFixed(0));
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Edit Customer Account', style: TextStyle(fontWeight: FontWeight.w800)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Customer Name *', prefixIcon: Icon(Icons.person_outline)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email_outlined)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: addressCtrl,
-                  decoration: const InputDecoration(labelText: 'Address', prefixIcon: Icon(Icons.location_on_outlined)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: balanceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Outstanding Balance (₹)', prefixIcon: Icon(Icons.currency_rupee)),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-              onPressed: () {
-                if (nameCtrl.text.trim().isNotEmpty) {
-                  final balance = double.tryParse(balanceCtrl.text.trim()) ?? 0.0;
-                  final updatedCust = _customer.copyWith(
-                    name: nameCtrl.text.trim(),
-                    phone: phoneCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    address: addressCtrl.text.trim(),
-                    outstandingBalance: balance,
-                  );
-
-                  context.read<AccountsBloc>().add(UpdateCustomerAccountEvent(updatedCust));
-                  setState(() => _customer = updatedCust);
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text('Save Changes'),
-            ),
-          ],
-        );
-      },
-    );
+    context.push(RouteNames.createMaster, extra: _customer);
   }
 
   void _confirmDeleteCustomer(BuildContext context) {

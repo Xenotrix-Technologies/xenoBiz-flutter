@@ -12,6 +12,7 @@ import '../../../domain/entities/expense_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import '../../../domain/repositories/expense_repository.dart';
 import '../../../infrastructure/pdf/pdf_statement_service.dart';
+import '../../../application/routing/route_names.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
 
@@ -61,75 +62,9 @@ class _ExpenseAccountDetailsPageState extends State<ExpenseAccountDetailsPage> {
   }
 
   void _showEditExpenseAccountDialog(BuildContext context) {
-    final titleCtrl = TextEditingController(text: _account.title);
-    String selectedCat = _account.category;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (dialogCtx, setDialogState) {
-            return AlertDialog(
-              title: const Text('Edit Expense Account', style: TextStyle(fontWeight: FontWeight.w800)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedCat,
-                      decoration: const InputDecoration(labelText: 'Expense Category *', prefixIcon: Icon(Icons.category_outlined)),
-                      items: AccountsBloc.defaultExpenseCategories
-                          .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) setDialogState(() => selectedCat = val);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: titleCtrl,
-                      decoration: const InputDecoration(labelText: 'Account Title', prefixIcon: Icon(Icons.label_outlined)),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-                  onPressed: () {
-                    final title = titleCtrl.text.trim().isNotEmpty ? titleCtrl.text.trim() : selectedCat;
-                    context.read<AccountsBloc>().add(
-                          UpdateExpenseAccountEvent(
-                            oldCategory: _account.category,
-                            newTitle: title,
-                            newCategory: selectedCat,
-                          ),
-                        );
-
-                    setState(() {
-                      _account = ExpenseAccountSummary(
-                        id: _account.id,
-                        title: title,
-                        category: selectedCat,
-                        transactionCount: _account.transactionCount,
-                        currentMonthTotal: _account.currentMonthTotal,
-                        outstandingBalance: _account.outstandingBalance,
-                        lastTransactionDate: _account.lastTransactionDate,
-                      );
-                    });
-
-                    Navigator.pop(dialogCtx);
-                  },
-                  child: const Text('Update Account'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+    context.push(RouteNames.createMaster, extra: _account);
   }
+
 
   void _confirmDeleteExpenseAccount(BuildContext context) {
     showDialog(

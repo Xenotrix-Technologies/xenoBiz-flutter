@@ -5,6 +5,7 @@ import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/entities/product_entity.dart';
+import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
 import '../../presentation/customers/pages/accounts_page.dart';
@@ -57,6 +58,45 @@ import '../../presentation/whatsapp/pages/edit_rule_page.dart';
 import '../../presentation/whatsapp/pages/new_template_page.dart';
 import '../../presentation/whatsapp/pages/whatsapp_templates_page.dart';
 import 'route_names.dart';
+
+Widget _buildCreateMasterPage(GoRouterState state) {
+  int tab = 0;
+  ProductEntity? product;
+  CustomerEntity? customer;
+  SupplierEntity? supplier;
+  ExpenseAccountSummary? expense;
+
+  final extra = state.extra;
+  if (extra is int) {
+    tab = extra;
+  } else if (extra is ProductEntity) {
+    tab = 0;
+    product = extra;
+  } else if (extra is CustomerEntity) {
+    tab = 1;
+    customer = extra;
+  } else if (extra is SupplierEntity) {
+    tab = 2;
+    supplier = extra;
+  } else if (extra is ExpenseAccountSummary) {
+    tab = 3;
+    expense = extra;
+  } else if (extra is Map<String, dynamic>) {
+    tab = (extra['tab'] as int?) ?? 0;
+    product = extra['product'] as ProductEntity?;
+    customer = extra['customer'] as CustomerEntity?;
+    supplier = extra['supplier'] as SupplierEntity?;
+    expense = extra['expense'] as ExpenseAccountSummary?;
+  }
+
+  return CreateMasterPage(
+    initialTabIndex: tab,
+    productToEdit: product,
+    customerToEdit: customer,
+    supplierToEdit: supplier,
+    expenseToEdit: expense,
+  );
+}
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -290,7 +330,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.supplierDetails,
-        builder: (context, state) => const SupplierDetailsPage(),
+        builder: (context, state) {
+          final sup = state.extra as SupplierEntity?;
+          return SupplierDetailsPage(supplier: sup);
+        },
       ),
       GoRoute(
         path: RouteNames.automatedReminders,
@@ -326,18 +369,13 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.addMaster,
-        builder: (context, state) {
-          final tab = (state.extra as int?) ?? 0;
-          return CreateMasterPage(initialTabIndex: tab);
-        },
+        builder: (context, state) => _buildCreateMasterPage(state),
       ),
       GoRoute(
         path: RouteNames.createMaster,
-        builder: (context, state) {
-          final tab = (state.extra as int?) ?? 0;
-          return CreateMasterPage(initialTabIndex: tab);
-        },
+        builder: (context, state) => _buildCreateMasterPage(state),
       ),
+
 
 
     ],

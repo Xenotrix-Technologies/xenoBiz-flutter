@@ -438,167 +438,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     );
   }
 
-  void _showAddCustomerDialog(BuildContext context, {CustomerEntity? customerToEdit}) {
-    final isEditing = customerToEdit != null;
-    final nameCtrl = TextEditingController(text: customerToEdit?.name ?? '');
-    final phoneCtrl = TextEditingController(text: customerToEdit?.phone ?? '');
-    final emailCtrl = TextEditingController(text: customerToEdit?.email ?? '');
-    final addressCtrl = TextEditingController(text: customerToEdit?.address ?? '');
-    final openingBalanceCtrl = TextEditingController(
-      text: isEditing ? customerToEdit.outstandingBalance.toStringAsFixed(0) : '',
-    );
 
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text(isEditing ? 'Edit Customer Account' : 'Add Customer Account', style: const TextStyle(fontWeight: FontWeight.w800)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Customer Name *', prefixIcon: Icon(Icons.person_outline)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email_outlined)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: addressCtrl,
-                  decoration: const InputDecoration(labelText: 'Address', prefixIcon: Icon(Icons.location_on_outlined)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: openingBalanceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Outstanding Balance (₹)', prefixIcon: Icon(Icons.currency_rupee)),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-              onPressed: () {
-                if (nameCtrl.text.trim().isNotEmpty) {
-                  final balance = double.tryParse(openingBalanceCtrl.text.trim()) ?? 0.0;
-                  final cust = CustomerEntity(
-                    id: isEditing ? customerToEdit.id : 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-                    name: nameCtrl.text.trim(),
-                    phone: phoneCtrl.text.trim(),
-                    email: emailCtrl.text.trim(),
-                    address: addressCtrl.text.trim(),
-                    outstandingBalance: balance,
-                    createdAt: isEditing ? customerToEdit.createdAt : DateTime.now(),
-                  );
-
-                  if (isEditing) {
-                    context.read<AccountsBloc>().add(UpdateCustomerAccountEvent(cust));
-                  } else {
-                    context.read<AccountsBloc>().add(CreateCustomerAccountEvent(cust));
-                  }
-                  Navigator.pop(ctx);
-                }
-              },
-              child: Text(isEditing ? 'Update Account' : 'Save Customer'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAddExpenseAccountDialog(BuildContext context, {ExpenseAccountSummary? accountToEdit}) {
-    final isEditing = accountToEdit != null;
-    final titleCtrl = TextEditingController(text: accountToEdit?.title ?? '');
-    final balanceCtrl = TextEditingController(text: isEditing ? accountToEdit.outstandingBalance.toStringAsFixed(0) : '');
-    String selectedCat = accountToEdit?.category ?? 'Electricity';
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (dialogCtx, setDialogState) {
-            return AlertDialog(
-              title: Text(isEditing ? 'Edit Expense Account' : 'Add Expense Account', style: const TextStyle(fontWeight: FontWeight.w800)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedCat,
-                      decoration: const InputDecoration(labelText: 'Expense Category *', prefixIcon: Icon(Icons.category_outlined)),
-                      items: AccountsBloc.defaultExpenseCategories
-                          .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) setDialogState(() => selectedCat = val);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: titleCtrl,
-                      decoration: const InputDecoration(labelText: 'Account Title', prefixIcon: Icon(Icons.label_outlined)),
-                    ),
-                    if (!isEditing) ...[
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: balanceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Opening Balance Due (₹)', prefixIcon: Icon(Icons.currency_rupee)),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-                  onPressed: () {
-                    final title = titleCtrl.text.trim().isNotEmpty ? titleCtrl.text.trim() : selectedCat;
-                    final balance = double.tryParse(balanceCtrl.text.trim()) ?? 0.0;
-
-                    if (isEditing) {
-                      context.read<AccountsBloc>().add(
-                            UpdateExpenseAccountEvent(
-                              oldCategory: accountToEdit.category,
-                              newTitle: title,
-                              newCategory: selectedCat,
-                            ),
-                          );
-                    } else {
-                      context.read<AccountsBloc>().add(
-                            CreateExpenseAccountEvent(
-                              title: title,
-                              category: selectedCat,
-                              openingBalance: balance,
-                            ),
-                          );
-                    }
-                    Navigator.pop(dialogCtx);
-                  },
-                  child: Text(isEditing ? 'Update Account' : 'Save Account'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
   void _showFilterBottomSheet(BuildContext context, AccountsLoadedState state) {
     String tempFilter = state.selectedFilterStatus;
@@ -1104,7 +944,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                 icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
                 onSelected: (val) {
                   if (val == 'edit') {
-                    _showAddCustomerDialog(context, customerToEdit: cust);
+                    context.push(RouteNames.createMaster, extra: cust);
                   } else if (val == 'delete') {
                     _confirmDeleteCustomer(context, cust);
                   }
@@ -1218,6 +1058,17 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                         ),
                       ],
                     ),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
+                      onSelected: (val) {
+                        if (val == 'edit') {
+                          context.push(RouteNames.createMaster, extra: sup);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Edit Account')])),
+                      ],
+                    ),
                   ],
                 ),
               );
@@ -1307,7 +1158,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                 icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
                 onSelected: (val) {
                   if (val == 'edit') {
-                    _showAddExpenseAccountDialog(context, accountToEdit: expAcc);
+                    context.push(RouteNames.createMaster, extra: expAcc);
                   } else if (val == 'delete') {
                     _confirmDeleteExpenseAccount(context, expAcc);
                   }

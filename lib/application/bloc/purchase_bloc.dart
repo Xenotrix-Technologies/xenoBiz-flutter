@@ -32,6 +32,13 @@ class CreateSupplierSubmittedEvent extends PurchaseEvent {
   List<Object?> get props => [supplier];
 }
 
+class UpdateSupplierSubmittedEvent extends PurchaseEvent {
+  final SupplierEntity supplier;
+  const UpdateSupplierSubmittedEvent(this.supplier);
+  @override
+  List<Object?> get props => [supplier];
+}
+
 // --- States ---
 abstract class PurchaseState extends Equatable {
   const PurchaseState();
@@ -72,6 +79,7 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
     on<FetchSuppliersEvent>(_onFetchSuppliers);
     on<CreatePurchaseOrderSubmittedEvent>(_onCreatePurchaseOrder);
     on<CreateSupplierSubmittedEvent>(_onCreateSupplier);
+    on<UpdateSupplierSubmittedEvent>(_onUpdateSupplier);
   }
 
   Future<void> _onFetchPurchases(
@@ -123,4 +131,18 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
       emit(PurchaseErrorState(e.toString().replaceAll('Exception: ', '')));
     }
   }
+
+  Future<void> _onUpdateSupplier(
+      UpdateSupplierSubmittedEvent event, Emitter<PurchaseState> emit) async {
+    emit(PurchaseLoadingState());
+    try {
+      await purchaseRepository.updateSupplier(event.supplier);
+      final suppliers = await purchaseRepository.getSuppliers();
+      final purchases = await purchaseRepository.getPurchaseOrders();
+      emit(PurchaseLoadedState(purchases: purchases, suppliers: suppliers));
+    } catch (e) {
+      emit(PurchaseErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
 }
+
