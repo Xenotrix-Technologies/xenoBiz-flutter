@@ -24,12 +24,15 @@ class PdfInvoiceService {
     final dateFormatter = DateFormat('MMM dd, yyyy');
     final timeFormatter = DateFormat('HH:mm');
 
-    final isGstActive = taxSettings.isGstEnabled && settings.showTax;
+    final isGstActive = taxSettings.isGstEnabled && invoice.gstEnabled && settings.showTax;
     final isCashSale = customer == null;
 
     final subtotal = invoice.subtotal;
+    final discountTotal = invoice.discountTotal;
+    final taxableAmount = (subtotal - discountTotal).clamp(0.0, double.infinity);
     final taxTotal = isGstActive ? invoice.taxTotal : 0.0;
-    final grandTotal = isGstActive ? invoice.grandTotal : subtotal;
+    final extraExpense = invoice.extraExpenseAmount;
+    final grandTotal = invoice.grandTotal;
     final amountPaid = invoice.paidAmount;
     final balanceDue = (grandTotal - amountPaid).clamp(0.0, double.infinity);
 
@@ -151,11 +154,22 @@ class PdfInvoiceService {
                 mainAxisAlignment: pw.MainAxisAlignment.end,
                 children: [
                   pw.Container(
-                    width: 240,
+                    width: 250,
                     child: pw.Column(
                       children: [
                         _pdfSummaryRow('Subtotal', 'INR ${subtotal.toStringAsFixed(2)}'),
+                        if (discountTotal > 0) ...[
+                          _pdfSummaryRow('Discount', '- INR ${discountTotal.toStringAsFixed(2)}', color: PdfColors.green800),
+                          _pdfSummaryRow('Taxable Amount', 'INR ${taxableAmount.toStringAsFixed(2)}'),
+                        ],
                         if (isGstActive) _pdfSummaryRow('Tax (GST)', 'INR ${taxTotal.toStringAsFixed(2)}'),
+                        if (extraExpense > 0)
+                          _pdfSummaryRow(
+                            invoice.extraExpenseDescription.isNotEmpty
+                                ? 'Extra Expense (${invoice.extraExpenseDescription})'
+                                : 'Extra Expense',
+                            'INR ${extraExpense.toStringAsFixed(2)}',
+                          ),
                         if (!isCashSale && settings.showPreviousBalance && previousBalance > 0)
                           _pdfSummaryRow('Previous Balance', 'INR ${previousBalance.toStringAsFixed(2)}'),
                         pw.Divider(thickness: 1, color: PdfColors.grey400),

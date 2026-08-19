@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
@@ -9,11 +10,23 @@ class CreateInvoiceFormState {
   final DateTime createdDateTime;
   final int? focusedItemIndex;
 
+  // New Fields
+  final bool gstEnabled;
+  final double discountAmount;
+  final bool discountIsPercentage;
+  final double extraExpenseAmount;
+  final String extraExpenseDescription;
+
   CreateInvoiceFormState({
     required this.items,
     this.selectedCustomer,
     required this.createdDateTime,
     this.focusedItemIndex,
+    this.gstEnabled = true,
+    this.discountAmount = 0.0,
+    this.discountIsPercentage = false,
+    this.extraExpenseAmount = 0.0,
+    this.extraExpenseDescription = '',
   });
 
   CreateInvoiceFormState copyWith({
@@ -22,12 +35,22 @@ class CreateInvoiceFormState {
     DateTime? createdDateTime,
     int? focusedItemIndex,
     bool clearCustomer = false,
+    bool? gstEnabled,
+    double? discountAmount,
+    bool? discountIsPercentage,
+    double? extraExpenseAmount,
+    String? extraExpenseDescription,
   }) {
     return CreateInvoiceFormState(
       items: items ?? this.items,
       selectedCustomer: clearCustomer ? null : (selectedCustomer ?? this.selectedCustomer),
       createdDateTime: createdDateTime ?? this.createdDateTime,
       focusedItemIndex: focusedItemIndex ?? this.focusedItemIndex,
+      gstEnabled: gstEnabled ?? this.gstEnabled,
+      discountAmount: discountAmount ?? this.discountAmount,
+      discountIsPercentage: discountIsPercentage ?? this.discountIsPercentage,
+      extraExpenseAmount: extraExpenseAmount ?? this.extraExpenseAmount,
+      extraExpenseDescription: extraExpenseDescription ?? this.extraExpenseDescription,
     );
   }
 
@@ -42,45 +65,52 @@ class CreateInvoiceFormState {
     return taxSettings.taxCalculationType == 'IGST';
   }
 
-  double subtotal(TaxSettingsEntity taxSettings) {
-    if (!taxSettings.isGstEnabled) {
-      return items.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
-    }
-    if (taxSettings.isTaxIncludedInPrice) {
-      return items.fold(0.0, (sum, item) {
-        final rate = item.taxPercentage > 0 ? item.taxPercentage : taxSettings.defaultGstRate;
-        final total = item.quantity * item.unitPrice;
-        final taxable = total / (1 + (rate / 100));
-        return sum + taxable;
-      });
+  double get rawSubtotal =>
+      items.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+
+  double get calculatedDiscountTotal {
+    if (rawSubtotal <= 0) return 0.0;
+    if (discountIsPercentage) {
+      return (rawSubtotal * (discountAmount / 100.0)).clamp(0.0, rawSubtotal);
     } else {
-      return items.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+      return discountAmount.clamp(0.0, rawSubtotal);
     }
   }
 
+  double get taxableAmount => max(0.0, rawSubtotal - calculatedDiscountTotal);
+
+  double subtotal(TaxSettingsEntity taxSettings) => rawSubtotal;
+
   double taxTotal(TaxSettingsEntity taxSettings) {
-    if (!taxSettings.isGstEnabled) return 0.0;
+    if (!taxSettings.isGstEnabled || !gstEnabled || taxableAmount <= 0) return 0.0;
+
+    final baseRatio = rawSubtotal > 0 ? (taxableAmount / rawSubtotal) : 1.0;
+
     if (taxSettings.isTaxIncludedInPrice) {
       return items.fold(0.0, (sum, item) {
         final rate = item.taxPercentage > 0 ? item.taxPercentage : taxSettings.defaultGstRate;
-        final total = item.quantity * item.unitPrice;
-        final taxable = total / (1 + (rate / 100));
-        return sum + (total - taxable);
+        final itemTotal = (item.quantity * item.unitPrice) * baseRatio;
+        final itemTaxable = itemTotal / (1 + (rate / 100));
+        return sum + (itemTotal - itemTaxable);
       });
     } else {
       return items.fold(0.0, (sum, item) {
         final rate = item.taxPercentage > 0 ? item.taxPercentage : taxSettings.defaultGstRate;
-        final base = item.quantity * item.unitPrice;
-        return sum + (base * (rate / 100));
+        final itemBase = (item.quantity * item.unitPrice) * baseRatio;
+        return sum + (itemBase * (rate / 100));
       });
     }
   }
 
   double grandTotal(TaxSettingsEntity taxSettings) {
-    if (!taxSettings.isGstEnabled || taxSettings.isTaxIncludedInPrice) {
-      return items.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+    if (!taxSettings.isGstEnabled || !gstEnabled) {
+      return taxableAmount + extraExpenseAmount;
     } else {
-      return subtotal(taxSettings) + taxTotal(taxSettings);
+      if (taxSettings.isTaxIncludedInPrice) {
+        return taxableAmount + extraExpenseAmount;
+      } else {
+        return taxableAmount + taxTotal(taxSettings) + extraExpenseAmount;
+      }
     }
   }
 }
@@ -94,6 +124,13 @@ class CreateInvoiceFormNotifier extends StateNotifier<CreateInvoiceFormState> {
 
   void setItems(List<InvoiceItemEntity> newItems) {
     state = state.copyWith(items: List.from(newItems), focusedItemIndex: null);
+  }
+
+  void updateItemPrice(int index, double newPrice) {
+    if (index < 0 || index >= state.items.length) return;
+    final list = List<InvoiceItemEntity>.from(state.items);
+    list[index] = list[index].copyWith(unitPrice: max(0.0, newPrice));
+    state = state.copyWith(items: list);
   }
 
   void updateQuantity(int index, int delta, void Function(String itemRemoved)? onItemRemoved) {
@@ -126,6 +163,24 @@ class CreateInvoiceFormNotifier extends StateNotifier<CreateInvoiceFormState> {
 
   void updateDateTime(DateTime dateTime) {
     state = state.copyWith(createdDateTime: dateTime);
+  }
+
+  void toggleGst(bool enabled) {
+    state = state.copyWith(gstEnabled: enabled);
+  }
+
+  void updateDiscount(double amount, bool isPercentage) {
+    state = state.copyWith(
+      discountAmount: max(0.0, amount),
+      discountIsPercentage: isPercentage,
+    );
+  }
+
+  void updateExtraExpense(double amount, String description) {
+    state = state.copyWith(
+      extraExpenseAmount: max(0.0, amount),
+      extraExpenseDescription: description,
+    );
   }
 
   void reset() {

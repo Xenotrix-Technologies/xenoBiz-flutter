@@ -64,6 +64,13 @@ class InvoiceEntity extends Equatable {
   final DateTime dueDate;
   final String notes;
 
+  // New Invoice Options
+  final bool gstEnabled;
+  final double discountAmount;
+  final bool discountIsPercentage;
+  final double extraExpenseAmount;
+  final String extraExpenseDescription;
+
   const InvoiceEntity({
     required this.id,
     required this.invoiceNumber,
@@ -81,6 +88,11 @@ class InvoiceEntity extends Equatable {
     required this.issueDate,
     required this.dueDate,
     this.notes = '',
+    this.gstEnabled = true,
+    this.discountAmount = 0.0,
+    this.discountIsPercentage = false,
+    this.extraExpenseAmount = 0.0,
+    this.extraExpenseDescription = '',
   });
 
   bool get isPurchase => type == InvoiceType.purchase;
@@ -105,6 +117,11 @@ class InvoiceEntity extends Equatable {
     DateTime? issueDate,
     DateTime? dueDate,
     String? notes,
+    bool? gstEnabled,
+    double? discountAmount,
+    bool? discountIsPercentage,
+    double? extraExpenseAmount,
+    String? extraExpenseDescription,
   }) {
     return InvoiceEntity(
       id: id ?? this.id,
@@ -123,6 +140,11 @@ class InvoiceEntity extends Equatable {
       issueDate: issueDate ?? this.issueDate,
       dueDate: dueDate ?? this.dueDate,
       notes: notes ?? this.notes,
+      gstEnabled: gstEnabled ?? this.gstEnabled,
+      discountAmount: discountAmount ?? this.discountAmount,
+      discountIsPercentage: discountIsPercentage ?? this.discountIsPercentage,
+      extraExpenseAmount: extraExpenseAmount ?? this.extraExpenseAmount,
+      extraExpenseDescription: extraExpenseDescription ?? this.extraExpenseDescription,
     );
   }
 
@@ -144,6 +166,10 @@ class InvoiceEntity extends Equatable {
         issueDate,
         dueDate,
         notes,
+        gstEnabled,
+        discountAmount,
+        discountIsPercentage,
+        extraExpenseAmount,
+        extraExpenseDescription,
       ];
 }
-
