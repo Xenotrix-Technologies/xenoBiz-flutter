@@ -1,5 +1,4 @@
 import 'package:uuid/uuid.dart';
-import '../../const/dummy.dart';
 import '../../domain/entities/product_entity.dart';
 import '../../domain/repositories/product_repository.dart';
 import '../../domain/repositories/sync_repository.dart';
@@ -97,12 +96,6 @@ class ProductRepositoryImpl implements ProductRepository {
   @override
   Future<List<ProductEntity>> getProducts({String? query, String? category}) async {
     final box = hiveService.getBox(HiveService.boxProducts);
-
-    if (box.isEmpty) {
-      for (final p in DummyData.products) {
-        await box.put(p.id, _productToMap(p));
-      }
-    }
 
     final List<ProductEntity> localProducts = [];
     for (var key in box.keys) {

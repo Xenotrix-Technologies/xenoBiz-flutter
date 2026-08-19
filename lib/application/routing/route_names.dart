@@ -60,6 +60,8 @@ abstract class RouteNames {
   static const String businessProfile = '/business-profile';
   static const String taxGstSettings = '/tax-gst-settings';
   static const String more = '/more';
+  static const String addMaster = '/add-master';
+  static const String createMaster = '/create-master';
 
 
 

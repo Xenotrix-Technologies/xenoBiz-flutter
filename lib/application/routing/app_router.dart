@@ -28,6 +28,7 @@ import '../../presentation/leads/pages/followups_page.dart';
 import '../../presentation/leads/pages/lead_details_page.dart';
 import '../../presentation/leads/pages/lead_pipeline_page.dart';
 import '../../presentation/main/pages/main_shell_page.dart';
+import '../../presentation/main/pages/create_master_page.dart';
 import '../../presentation/onboarding/pages/business_onboarding_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
 import '../../presentation/products/pages/product_list_page.dart';
@@ -322,6 +323,20 @@ class AppRouter {
       GoRoute(
         path: RouteNames.taxGstSettings,
         builder: (context, state) => const TaxGstSettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.addMaster,
+        builder: (context, state) {
+          final tab = (state.extra as int?) ?? 0;
+          return CreateMasterPage(initialTabIndex: tab);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.createMaster,
+        builder: (context, state) {
+          final tab = (state.extra as int?) ?? 0;
+          return CreateMasterPage(initialTabIndex: tab);
+        },
       ),
 
 

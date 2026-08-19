@@ -124,6 +124,27 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       'notes': local.notes,
     });
 
+    // Update supplier payable balance in Hive boxSuppliers
+    final supBox = hiveService.getBox(HiveService.boxSuppliers);
+    final supKey = local.supplierId.isNotEmpty ? local.supplierId : 'sup_${local.supplierName.toLowerCase().replaceAll(' ', '_')}';
+    final existingSup = supBox.get(supKey);
+    if (existingSup is Map) {
+      final double currentPayable = (existingSup['payableBalance'] as num?)?.toDouble() ?? 0.0;
+      existingSup['payableBalance'] = currentPayable + local.totalAmount;
+      await supBox.put(supKey, existingSup);
+    } else {
+      await supBox.put(supKey, {
+        'id': supKey,
+        'name': local.supplierName,
+        'companyName': local.supplierName,
+        'phone': '',
+        'email': '',
+        'address': '',
+        'payableBalance': local.totalAmount,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
+
     return local;
   }
 }

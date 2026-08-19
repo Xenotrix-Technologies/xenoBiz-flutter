@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../application/bloc/accounts_bloc.dart';
+import '../../../application/bloc/purchase_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/customer_entity.dart';
@@ -21,6 +22,7 @@ class AccountsPage extends StatefulWidget {
 class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  int _salePurchaseSubTab = 0; // 0 = Sale Accounts (Customers), 1 = Purchase Accounts (Suppliers)
 
   @override
   void initState() {
@@ -72,11 +74,11 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                   ),
                   child: const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primaryBlue),
                 ),
-                title: const Text('Customer Account', style: TextStyle(fontWeight: FontWeight.w700)),
+                title: const Text('Sale Account (Customer)', style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: const Text('Add a customer for sales and credit tracking', style: TextStyle(fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showAddCustomerDialog(context);
+                  context.push(RouteNames.createMaster, extra: 1);
                 },
               ),
               const SizedBox(height: 12),
@@ -92,13 +94,35 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                     color: AppColors.warning.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.account_balance_rounded, color: AppColors.warning),
+                  child: const Icon(Icons.business_outlined, color: AppColors.warning),
+                ),
+                title: const Text('Purchase Account (Supplier)', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Add a vendor/supplier for purchases and payables', style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(RouteNames.createMaster, extra: 2);
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.account_balance_rounded, color: AppColors.success),
                 ),
                 title: const Text('Expense Account', style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: const Text('Add an expense category account (Electricity, Rent, etc.)', style: TextStyle(fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showAddExpenseAccountDialog(context);
+                  context.push(RouteNames.createMaster, extra: 3);
                 },
               ),
             ],
@@ -446,7 +470,7 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           unselectedLabelColor: Colors.white70,
           labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
           tabs: const [
-            Tab(text: 'Customer Accounts'),
+            Tab(text: 'Sale / Purchase Accounts'),
             Tab(text: 'Expense Accounts'),
           ],
         ),
@@ -476,14 +500,14 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
           if (state is AccountsLoadedState) {
             return Column(
               children: [
-                // Top Overview Summary Header
+                // Overview Summary Header Bar
                 _buildTopSummaryBar(state),
                 const Divider(height: 1, color: AppColors.border),
 
                 // Search Bar + Filter Button Row
                 Container(
                   color: Colors.white,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
                       Expanded(
@@ -534,8 +558,8 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // TAB 1: CUSTOMER ACCOUNTS
-                      _buildCustomerAccountsTab(context, state),
+                      // TAB 1: SALE / PURCHASE ACCOUNTS
+                      _buildSalePurchaseAccountsTab(context, state),
 
                       // TAB 2: EXPENSE ACCOUNTS
                       _buildExpenseAccountsTab(context, state),
@@ -581,8 +605,102 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
     );
   }
 
-  // TAB 1: CUSTOMER ACCOUNTS LIST (ONLY FAB FOR ADDING ACCOUNTS)
-  Widget _buildCustomerAccountsTab(BuildContext context, AccountsLoadedState state) {
+  // TAB 1: SALE / PURCHASE ACCOUNTS VIEW WITH SUB-TOGGLE
+  Widget _buildSalePurchaseAccountsTab(BuildContext context, AccountsLoadedState state) {
+    return Column(
+      children: [
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  padding: EdgeInsets.zero,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  label: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person_outline, size: 15),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            'Sale Accounts (${state.customerCount})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  selected: _salePurchaseSubTab == 0,
+                  selectedColor: AppColors.primaryBlue,
+                  labelStyle: TextStyle(
+                    color: _salePurchaseSubTab == 0 ? Colors.white : AppColors.darkBlueText,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11.5,
+                  ),
+                  onSelected: (val) {
+                    if (val) setState(() => _salePurchaseSubTab = 0);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: BlocBuilder<PurchaseBloc, PurchaseState>(
+                  builder: (context, pState) {
+                    final supCount = (pState is PurchaseLoadedState) ? pState.suppliers.length : 0;
+                    return ChoiceChip(
+                      padding: EdgeInsets.zero,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      label: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.business_outlined, size: 15),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Purchase Accounts ($supCount)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      selected: _salePurchaseSubTab == 1,
+                      selectedColor: AppColors.primaryBlue,
+                      labelStyle: TextStyle(
+                        color: _salePurchaseSubTab == 1 ? Colors.white : AppColors.darkBlueText,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11.5,
+                      ),
+                      onSelected: (val) {
+                        if (val) setState(() => _salePurchaseSubTab = 1);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+
+        Expanded(
+          child: _salePurchaseSubTab == 0
+              ? _buildCustomerAccountsList(context, state)
+              : _buildSupplierAccountsList(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomerAccountsList(BuildContext context, AccountsLoadedState state) {
     if (state.filteredCustomers.isEmpty) {
       return const EmptyState(
         title: 'No Customer Accounts',
@@ -683,6 +801,114 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
             ],
           ),
         );
+      },
+    );
+  }
+
+  Widget _buildSupplierAccountsList(BuildContext context) {
+    return BlocBuilder<PurchaseBloc, PurchaseState>(
+      builder: (context, pState) {
+        if (pState is PurchaseLoadingState) {
+          return const LoadingState(message: 'Loading purchase accounts...');
+        }
+        if (pState is PurchaseLoadedState) {
+          if (pState.suppliers.isEmpty) {
+            return const EmptyState(
+              title: 'No Purchase Accounts',
+              message: 'Add supplier accounts to manage purchase orders, stock bills, and vendor payables.',
+              icon: Icons.business_outlined,
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: pState.suppliers.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (ctx, idx) {
+              final sup = pState.suppliers[idx];
+              final isDue = sup.payableBalance > 0;
+
+              return AppCard(
+                onTap: () {
+                  context.push(RouteNames.supplierDetails, extra: sup);
+                },
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: AppColors.warning.withValues(alpha: 0.12),
+                      child: Text(
+                        sup.name.isNotEmpty ? sup.name.substring(0, 1).toUpperCase() : 'S',
+                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.warning),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  sup.name,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.darkBlueText,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              if (isDue)
+                                StatusChip.unpaid(label: 'Payable')
+                              else
+                                StatusChip.paid(label: 'Clear'),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Company: ${sup.companyName} ${sup.phone.isNotEmpty ? "• ${sup.phone}" : ""}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _formatCurrency(sup.payableBalance),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: isDue ? AppColors.warning : AppColors.secondaryText,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isDue ? 'Payable Due' : 'No Due',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDue ? AppColors.warning : AppColors.secondaryText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }
+        return const SizedBox.shrink();
       },
     );
   }
