@@ -549,7 +549,7 @@ class InvoiceResultPage extends ConsumerWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () {
-                      PdfInvoiceService.printInvoice(
+                      PdfInvoiceService.print2InchThermalInvoice(
                         invoice: invoice,
                         business: business,
                         settings: displaySettings,
