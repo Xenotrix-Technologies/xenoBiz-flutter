@@ -197,6 +197,12 @@ class MoreMenuPage extends StatelessWidget {
             _MenuGrid(
               items: [
                 const _MenuItem(
+                  icon: Icons.cloud_upload_outlined,
+                  title: 'Backup & Restore',
+                  route: RouteNames.backupRestore,
+                  color: AppColors.primaryBlue,
+                ),
+                const _MenuItem(
                   icon: Icons.sync_outlined,
                   title: 'Offline Sync',
                   route: RouteNames.offlineSync,

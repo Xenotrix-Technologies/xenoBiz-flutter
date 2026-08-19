@@ -16,6 +16,7 @@ import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../infrastructure/pdf/pdf_invoice_service.dart';
+import '../../../infrastructure/services/thermal_printer_service.dart';
 
 class InvoiceResultPage extends ConsumerWidget {
   final InvoiceEntity invoice;
@@ -548,8 +549,9 @@ class InvoiceResultPage extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: () {
-                      PdfInvoiceService.print2InchThermalInvoice(
+                    onPressed: () async {
+                      final result = await ThermalPrinterService.printInvoiceEscPos(
+                        context: context,
                         invoice: invoice,
                         business: business,
                         settings: displaySettings,
@@ -558,6 +560,15 @@ class InvoiceResultPage extends ConsumerWidget {
                         previousBalance: previousBalance,
                         paymentMethod: paymentMethod,
                       );
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result.message),
+                            backgroundColor: result.success ? AppColors.success : AppColors.error,
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.print_outlined, size: 18),
                     label: const Text(

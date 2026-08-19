@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/bloc/auth_bloc.dart';
@@ -10,6 +12,7 @@ import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../const/strings.dart';
 import '../../../domain/entities/invoice_entity.dart';
+import '../../../infrastructure/services/backup_restore_service.dart';
 import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/quick_actions_bottom_sheet.dart';
@@ -83,44 +86,165 @@ class _DashboardPageState extends State<DashboardPage> {
     return _formatAmount(amount);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        toolbarHeight: 70,
-        titleSpacing: 20,
-        automaticallyImplyLeading: false,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+  Future<void> _showCloseShopDialog(BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.storefront_rounded, color: AppColors.danger, size: 26),
+            SizedBox(width: 10),
             Text(
-              _getGreeting(),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.secondaryText,
-                height: 1.2,
-              ),
+              'Close Shop',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
             ),
-            const SizedBox(height: 3),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
             Text(
-              _getBusinessName(context),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.darkBlueText,
-                letterSpacing: -0.4,
-                height: 1.2,
-              ),
+              'Are you sure you want to close shop and exit the application?',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkBlueText),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'A database backup file will be saved automatically to XenoBiz/database before closing.',
+              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
             ),
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              _closeShopAndExit(context);
+            },
+            icon: const Icon(Icons.power_settings_new_rounded, size: 18),
+            label: const Text('Close Shop & Exit', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _closeShopAndExit(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: const [
+                CircularProgressIndicator(color: AppColors.primaryBlue),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Backing up database & closing shop...',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final backupService = BackupRestoreService(getIt<HiveService>());
+    await backupService.saveExitBackupToStorage();
+
+    await SystemNavigator.pop();
+    exit(0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          _showCloseShopDialog(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          toolbarHeight: 70,
+          titleSpacing: 20,
+          automaticallyImplyLeading: false,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _getGreeting(),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                _getBusinessName(context),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText,
+                  letterSpacing: -0.4,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            // Close Shop Exit Button
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: InkWell(
+                onTap: () => _showCloseShopDialog(context),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorContainer.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.power_settings_new_rounded, color: AppColors.danger, size: 18),
+                      SizedBox(width: 4),
+                      Text(
+                        'Close Shop',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.danger),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 20.0),
             child: InkWell(
@@ -645,8 +769,9 @@ class _DashboardPageState extends State<DashboardPage> {
           return const SizedBox.shrink();
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _MetricCard extends StatelessWidget {

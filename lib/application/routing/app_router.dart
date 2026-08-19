@@ -43,6 +43,7 @@ import '../../presentation/reports/pages/financial_analytics_page.dart';
 import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
+import '../../presentation/settings/pages/backup_restore_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
 import '../../presentation/settings/pages/category_management_page.dart';
 import '../../presentation/settings/pages/invoice_settings_page.dart';
@@ -450,6 +451,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.offlineSync,
         builder: (context, state) => const OfflineSyncCenterPage(),
+      ),
+      GoRoute(
+        path: RouteNames.backupRestore,
+        builder: (context, state) => const BackupRestorePage(),
       ),
       GoRoute(
         path: RouteNames.settings,

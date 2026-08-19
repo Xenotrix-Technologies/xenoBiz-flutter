@@ -55,6 +55,7 @@ abstract class RouteNames {
   static const String expenseAccountDetails = '/expense-account-details';
   static const String dailyLedger = '/daily-ledger';
   static const String offlineSync = '/offline-sync';
+  static const String backupRestore = '/backup-restore';
   static const String settings = '/settings';
 
   static const String businessProfile = '/business-profile';
