@@ -1,7 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/bloc/product_bloc.dart';
 import '../../../application/bloc/purchase_bloc.dart';
@@ -10,10 +11,12 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../../domain/entities/purchase_entity.dart';
+import '../../../infrastructure/services/stock_import_service.dart';
 import '../../widgets/app_card.dart';
 
 class CreateMasterPage extends StatefulWidget {
-  final int initialTabIndex; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
+  final int
+      initialTabIndex; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
   final ProductEntity? productToEdit;
   final CustomerEntity? customerToEdit;
   final SupplierEntity? supplierToEdit;
@@ -33,7 +36,8 @@ class CreateMasterPage extends StatefulWidget {
 }
 
 class _CreateMasterPageState extends State<CreateMasterPage> {
-  late int _activeTab; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
+  late int
+      _activeTab; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
 
   bool get isEditMode =>
       widget.productToEdit != null ||
@@ -50,7 +54,11 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   final _prodStockCtrl = TextEditingController(text: '0');
   final _prodLowStockCtrl = TextEditingController(text: '10');
   final _prodDescCtrl = TextEditingController();
-  String? _prodImagePath;
+
+  // SKU Barcode Scanner controls & state
+  MobileScannerController? _skuScannerController;
+  bool _isSkuCameraOn = false;
+  bool _isSkuFlashOn = false;
 
   // Sale Account Form Controllers
   final _saleNameCtrl = TextEditingController();
@@ -68,12 +76,29 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   final _purOpeningBalanceCtrl = TextEditingController(text: '0.00');
   final _purNotesCtrl = TextEditingController();
 
-  // Expense Account Form Controllers
+  // Expense/Income Account Form Controllers
   final _expNameCtrl = TextEditingController();
-  String _expCategory = 'Rent';
+  String _expAccountType = 'Expense';
+  String _expCategory = 'General';
   final _expDescCtrl = TextEditingController();
   final _expOpeningBalanceCtrl = TextEditingController(text: '0.00');
-  final List<String> _expenseCategories = ['Utilities', 'Rent', 'Salary', 'Transport', 'Fuel', 'Custom +'];
+  final List<String> _expenseCategories = [
+    'General',
+    'Utilities',
+    'Rent',
+    'Salary',
+    'Transport',
+    'Fuel',
+  ];
+  final List<String> _incomeCategories = [
+    'General',
+    'Sales Income',
+    'Services',
+    'Consulting',
+    'Commission',
+    'Rental Income',
+    'Interest',
+  ];
 
   @override
   void initState() {
@@ -85,7 +110,9 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       _prodSkuCtrl.text = p.sku;
       _prodCategoryCtrl.text = p.category;
       _prodPurchasePriceCtrl.text = p.purchasePrice > 0
-          ? (p.purchasePrice % 1 == 0 ? p.purchasePrice.toInt().toString() : p.purchasePrice.toStringAsFixed(2))
+          ? (p.purchasePrice % 1 == 0
+              ? p.purchasePrice.toInt().toString()
+              : p.purchasePrice.toStringAsFixed(2))
           : '0.00';
       _prodSellingPriceCtrl.text = p.sellingPrice % 1 == 0
           ? p.sellingPrice.toInt().toString()
@@ -131,6 +158,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
 
   @override
   void dispose() {
+    _skuScannerController?.dispose();
     _prodNameCtrl.dispose();
     _prodSkuCtrl.dispose();
     _prodCategoryCtrl.dispose();
@@ -160,6 +188,45 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     super.dispose();
   }
 
+  void _toggleSkuScanner() {
+    setState(() {
+      _isSkuCameraOn = !_isSkuCameraOn;
+      if (_isSkuCameraOn) {
+        _skuScannerController ??= MobileScannerController(
+          detectionSpeed: DetectionSpeed.normal,
+          torchEnabled: false,
+          autoStart: true,
+        );
+        _skuScannerController?.start();
+      } else {
+        _skuScannerController?.stop();
+      }
+    });
+  }
+
+  void _toggleSkuFlash() async {
+    if (_skuScannerController != null) {
+      await _skuScannerController!.toggleTorch();
+      setState(() {
+        _isSkuFlashOn = !_isSkuFlashOn;
+      });
+    }
+  }
+
+  void _onSkuBarcodeDetected(BarcodeCapture capture) {
+    for (final barcode in capture.barcodes) {
+      final code = barcode.rawValue ?? barcode.displayValue;
+      if (code != null && code.trim().isNotEmpty) {
+        setState(() {
+          _prodSkuCtrl.text = code.trim();
+          _isSkuCameraOn = false;
+        });
+        _skuScannerController?.stop();
+        break;
+      }
+    }
+  }
+
   void _saveCurrentForm() {
     if (_activeTab == 0) {
       _saveProduct();
@@ -178,15 +245,19 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       _showErrorSnackBar('Please enter product name');
       return;
     }
-    final sellingPrice = double.tryParse(_prodSellingPriceCtrl.text.trim()) ?? 0.0;
+    final sellingPrice =
+        double.tryParse(_prodSellingPriceCtrl.text.trim()) ?? 0.0;
     if (sellingPrice <= 0) {
       _showErrorSnackBar('Please enter a valid selling price');
       return;
     }
-    final purchasePrice = double.tryParse(_prodPurchasePriceCtrl.text.trim()) ?? 0.0;
+    final purchasePrice =
+        double.tryParse(_prodPurchasePriceCtrl.text.trim()) ?? 0.0;
     final stock = int.tryParse(_prodStockCtrl.text.trim()) ?? 0;
     final lowStock = int.tryParse(_prodLowStockCtrl.text.trim()) ?? 10;
-    final category = _prodCategoryCtrl.text.trim().isNotEmpty ? _prodCategoryCtrl.text.trim() : 'Grocery';
+    final category = _prodCategoryCtrl.text.trim().isNotEmpty
+        ? _prodCategoryCtrl.text.trim()
+        : 'Grocery';
     final sku = _prodSkuCtrl.text.trim().isNotEmpty
         ? _prodSkuCtrl.text.trim()
         : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
@@ -208,7 +279,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
 
       context.read<ProductBloc>().add(UpdateProductEvent(updatedProduct));
       context.read<ProductBloc>().add(const FetchProductsEvent());
-      _showSuccessSnackBar('Product "${updatedProduct.name}" updated successfully!');
+      _showSuccessSnackBar(
+          'Product "${updatedProduct.name}" updated successfully!');
     } else {
       final product = ProductEntity(
         id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
@@ -255,9 +327,12 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         outstandingBalance: balance,
       );
 
-      context.read<AccountsBloc>().add(UpdateCustomerAccountEvent(updatedCustomer));
+      context
+          .read<AccountsBloc>()
+          .add(UpdateCustomerAccountEvent(updatedCustomer));
       context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar('Sale Account for "${updatedCustomer.name}" updated successfully!');
+      _showSuccessSnackBar(
+          'Sale Account for "${updatedCustomer.name}" updated successfully!');
     } else {
       final customer = CustomerEntity(
         id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
@@ -271,7 +346,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
 
       context.read<AccountsBloc>().add(CreateCustomerAccountEvent(customer));
       context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar('Sale Account for "${customer.name}" created successfully!');
+      _showSuccessSnackBar(
+          'Sale Account for "${customer.name}" created successfully!');
     }
 
     if (context.canPop()) {
@@ -300,10 +376,13 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         payableBalance: balance,
       );
 
-      context.read<PurchaseBloc>().add(UpdateSupplierSubmittedEvent(updatedSupplier));
+      context
+          .read<PurchaseBloc>()
+          .add(UpdateSupplierSubmittedEvent(updatedSupplier));
       context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
       context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar('Purchase Account for "${updatedSupplier.name}" updated successfully!');
+      _showSuccessSnackBar(
+          'Purchase Account for "${updatedSupplier.name}" updated successfully!');
     } else {
       final supplier = SupplierEntity(
         id: 'sup_${DateTime.now().millisecondsSinceEpoch}',
@@ -319,7 +398,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(supplier));
       context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
       context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar('Purchase Account for "${supplier.name}" created successfully!');
+      _showSuccessSnackBar(
+          'Purchase Account for "${supplier.name}" created successfully!');
     }
 
     if (context.canPop()) {
@@ -347,7 +427,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           );
       context.read<AccountsBloc>().add(const FetchAccountsEvent());
 
-      _showSuccessSnackBar('Expense Account "$name" updated successfully!');
+      _showSuccessSnackBar('$_expAccountType Account "$name" updated successfully!');
     } else {
       context.read<AccountsBloc>().add(
             CreateExpenseAccountEvent(
@@ -358,7 +438,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           );
       context.read<AccountsBloc>().add(const FetchAccountsEvent());
 
-      _showSuccessSnackBar('Expense Account "$name" created successfully!');
+      _showSuccessSnackBar('$_expAccountType Account "$name" created successfully!');
     }
 
     if (context.canPop()) {
@@ -367,7 +447,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       context.go(RouteNames.accounts);
     }
   }
-
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -378,39 +457,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.success),
-    );
-  }
-
-  void _promptAddCustomCategory() {
-    final customCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('Add Custom Category', style: TextStyle(fontWeight: FontWeight.w800)),
-        content: TextField(
-          controller: customCtrl,
-          decoration: const InputDecoration(hintText: 'Enter category name (e.g. Marketing)'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF050B20), foregroundColor: Colors.white),
-            onPressed: () {
-              final cat = customCtrl.text.trim();
-              if (cat.isNotEmpty) {
-                setState(() {
-                  if (!_expenseCategories.contains(cat)) {
-                    _expenseCategories.insert(_expenseCategories.length - 1, cat);
-                  }
-                  _expCategory = cat;
-                });
-                Navigator.pop(dialogCtx);
-              }
-            },
-            child: const Text('Add Category'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -443,7 +489,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF050B20)),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded,
+                          size: 16, color: Color(0xFF050B20)),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -464,13 +511,21 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Expanded(child: _buildSelectorTab(0, 'Product', Icons.inventory_2_outlined)),
+                  Expanded(
+                      child: _buildSelectorTab(
+                          0, 'Product', Icons.inventory_2_outlined)),
                   const SizedBox(width: 8),
-                  Expanded(child: _buildSelectorTab(1, 'Sale', Icons.person_outline)),
+                  Expanded(
+                      child:
+                          _buildSelectorTab(1, 'Sale', Icons.person_outline)),
                   const SizedBox(width: 8),
-                  Expanded(child: _buildSelectorTab(2, 'Purchase', Icons.business_outlined)),
+                  Expanded(
+                      child: _buildSelectorTab(
+                          2, 'Purchase', Icons.business_outlined)),
                   const SizedBox(width: 8),
-                  Expanded(child: _buildSelectorTab(3, 'Expense', Icons.account_balance_outlined)),
+                  Expanded(
+                      child: _buildSelectorTab(
+                          3, 'Income/Expense', Icons.account_balance_outlined)),
                 ],
               ),
             ),
@@ -494,8 +549,10 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
 
                                 if (_activeTab == 0) _buildAddProductForm(),
                                 if (_activeTab == 1) _buildAddSaleAccountForm(),
-                                if (_activeTab == 2) _buildAddPurchaseAccountForm(),
-                                if (_activeTab == 3) _buildAddExpenseAccountForm(),
+                                if (_activeTab == 2)
+                                  _buildAddPurchaseAccountForm(),
+                                if (_activeTab == 3)
+                                  _buildAddExpenseAccountForm(),
                               ],
                             ),
                           ),
@@ -514,7 +571,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                                 backgroundColor: AppColors.primaryBlue,
                                 foregroundColor: Colors.white,
                                 elevation: 4,
-                                shadowColor: AppColors.primaryBlue.withValues(alpha: 0.3),
+                                shadowColor: AppColors.primaryBlue
+                                    .withValues(alpha: 0.3),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -522,8 +580,12 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                               onPressed: _saveCurrentForm,
                               child: Text(
                                 _activeTab == 0
-                                    ? (widget.productToEdit != null ? 'Update Product' : 'Save Product')
-                                    : (isEditMode ? 'Update Account' : 'Save Account'),
+                                    ? (widget.productToEdit != null
+                                        ? 'Update Product'
+                                        : 'Save Product')
+                                    : (isEditMode
+                                        ? 'Update Account'
+                                        : 'Save Account'),
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -536,7 +598,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                       ],
                     ),
             ),
-
           ],
         ),
       ),
@@ -598,7 +659,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         tagText = 'CREATETYPE.PURCHASE';
         break;
       case 3:
-        tagText = 'CREATETYPE.EXPENSE';
+        tagText = 'CREATETYPE.INCOME_EXPENSE';
         break;
       default:
         tagText = 'CREATETYPE.ACCOUNT';
@@ -635,83 +696,70 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.productToEdit != null ? 'Edit Product' : 'Add Product',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          widget.productToEdit != null ? 'Update product information' : 'Add a new item to your inventory',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-        ),
-        const SizedBox(height: 16),
-
-        // DASHED IMAGE UPLOAD AREA
-        GestureDetector(
-          onTap: () {
-            // Pick image simulation/placeholder
-            setState(() {
-              _prodImagePath = 'assets/icons/app_icon.png';
-            });
-          },
-          child: Container(
-            width: double.infinity,
-            height: 110,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFD1D5DB), width: 1.5, style: BorderStyle.solid),
-            ),
-            child: _prodImagePath != null
-                ? Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.file(
-                          File(_prodImagePath!),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: 110,
-                          errorBuilder: (ctx, err, stack) => const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.image, size: 36, color: Color(0xFF050B20)),
-                              SizedBox(height: 6),
-                              Text('Image Uploaded', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: CircleAvatar(
-                          radius: 14,
-                          backgroundColor: Colors.black54,
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.close, size: 16, color: Colors.white),
-                            onPressed: () => setState(() => _prodImagePath = null),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.image_outlined, size: 32, color: Color(0xFF4B5563)),
-                      SizedBox(height: 8),
-                      Text(
-                        'Upload product image',
-                        style: TextStyle(fontSize: 13, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
-                      ),
-                    ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.productToEdit != null
+                        ? 'Edit Product'
+                        : 'Add Product',
+                    style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF050B20)),
                   ),
-          ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.productToEdit != null
+                        ? 'Update product information'
+                        : 'Add a new item to your inventory',
+                    style:
+                        const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  ),
+                ],
+              ),
+            ),
+            InkWell(
+              onTap: () => _showImportStockDialog(context),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.file_upload_outlined,
+                        size: 16, color: AppColors.primaryBlue),
+                    SizedBox(width: 4),
+                    Text(
+                      'Upload Excel/CSV',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
+
+        const SizedBox(height: 14),
+        if (_isSkuCameraOn) _buildSkuScannerHeader(),
 
         // Product Name *
         _buildFormFieldLabel('Product Name', required: true),
@@ -734,7 +782,17 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                   _buildCustomTextField(
                     controller: _prodSkuCtrl,
                     hint: 'Scan or enter',
-                    suffixIcon: const Icon(Icons.qr_code_scanner, size: 18, color: Color(0xFF6B7280)),
+                    suffixIcon: InkWell(
+                      onTap: _toggleSkuScanner,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Icon(
+                        _isSkuCameraOn ? Icons.close : Icons.qr_code_scanner,
+                        size: 18,
+                        color: _isSkuCameraOn
+                            ? AppColors.danger
+                            : const Color(0xFF6B7280),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -756,16 +814,33 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: ['Grocery', 'Beverages', 'Electronics', 'Clothing', 'General'].contains(_prodCategoryCtrl.text)
+                        value: [
+                          'Grocery',
+                          'Beverages',
+                          'Electronics',
+                          'Clothing',
+                          'General'
+                        ].contains(_prodCategoryCtrl.text)
                             ? _prodCategoryCtrl.text
                             : 'Grocery',
                         isExpanded: true,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF050B20)),
-                        items: ['Grocery', 'Beverages', 'Electronics', 'Clothing', 'General'].map((cat) {
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF050B20)),
+                        items: [
+                          'Grocery',
+                          'Beverages',
+                          'Electronics',
+                          'Clothing',
+                          'General'
+                        ].map((cat) {
                           return DropdownMenuItem(value: cat, child: Text(cat));
                         }).toList(),
                         onChanged: (val) {
-                          if (val != null) setState(() => _prodCategoryCtrl.text = val);
+                          if (val != null) {
+                            setState(() => _prodCategoryCtrl.text = val);
+                          }
                         },
                       ),
                     ),
@@ -870,12 +945,19 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          widget.customerToEdit != null ? 'Edit Sale Account' : 'Add Sale Account',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+          widget.customerToEdit != null
+              ? 'Edit Sale Account'
+              : 'Add Sale Account',
+          style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
         Text(
-          widget.customerToEdit != null ? 'Update customer information' : 'Create a customer you sell to',
+          widget.customerToEdit != null
+              ? 'Update customer information'
+              : 'Create a customer you sell to',
           style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
@@ -955,7 +1037,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF0284C7)),
+              Icon(Icons.info_outline_rounded,
+                  size: 18, color: Color(0xFF0284C7)),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -992,12 +1075,19 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          widget.supplierToEdit != null ? 'Edit Purchase Account' : 'Add Purchase Account',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+          widget.supplierToEdit != null
+              ? 'Edit Purchase Account'
+              : 'Add Purchase Account',
+          style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
         Text(
-          widget.supplierToEdit != null ? 'Update supplier information' : 'Create a supplier you buy from',
+          widget.supplierToEdit != null
+              ? 'Update supplier information'
+              : 'Create a supplier you buy from',
           style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
@@ -1077,7 +1167,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF0284C7)),
+              Icon(Icons.info_outline_rounded,
+                  size: 18, color: Color(0xFF0284C7)),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -1107,29 +1198,76 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   }
 
   // ==========================================
-  // 4. ADD EXPENSE ACCOUNT FORM
+  // 4. ADD INCOME/EXPENSE ACCOUNT FORM
   // ==========================================
   Widget _buildAddExpenseAccountForm() {
+    final activeCategories = _expAccountType == 'Income' ? _incomeCategories : _expenseCategories;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          widget.expenseToEdit != null ? 'Edit Expense Account' : 'Add Expense Account',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+          widget.expenseToEdit != null
+              ? 'Edit Income/Expense Account'
+              : 'Add Income/Expense Account',
+          style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF050B20)),
         ),
         const SizedBox(height: 2),
         Text(
-          widget.expenseToEdit != null ? 'Update expense account' : 'Track a recurring or one-off business cost',
+          widget.expenseToEdit != null
+              ? 'Update income/expense account'
+              : 'Track recurring or one-off business income or costs',
           style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
+
+        // Account Type Dropdown
+        _buildFormFieldLabel('Account Type'),
+        const SizedBox(height: 6),
+        Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _expAccountType,
+              isExpanded: true,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF050B20)),
+              items: ['Expense', 'Income'].map((type) {
+                return DropdownMenuItem(value: type, child: Text(type));
+              }).toList(),
+              onChanged: (val) {
+                if (val != null && val != _expAccountType) {
+                  setState(() {
+                    _expAccountType = val;
+                    final targetCategories = val == 'Income' ? _incomeCategories : _expenseCategories;
+                    if (!targetCategories.contains(_expCategory)) {
+                      _expCategory = targetCategories.first;
+                    }
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
 
         // Account Name *
         _buildFormFieldLabel('Account Name', required: true),
         const SizedBox(height: 6),
         _buildCustomTextField(
           controller: _expNameCtrl,
-          hint: 'e.g. Shop Electricity',
+          hint: _expAccountType == 'Income' ? 'e.g. Consulting Revenue' : 'e.g. Shop Electricity',
         ),
         const SizedBox(height: 14),
 
@@ -1146,46 +1284,25 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: _expenseCategories.contains(_expCategory) ? _expCategory : 'Rent',
+              value: activeCategories.contains(_expCategory) ? _expCategory : activeCategories.first,
               isExpanded: true,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF050B20)),
-              items: _expenseCategories.where((c) => c != 'Custom +').map((cat) {
-                return DropdownMenuItem(value: cat, child: Text(cat));
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF050B20)),
+              items: activeCategories.map((cat) {
+                return DropdownMenuItem(
+                  value: cat,
+                  child: Text(cat),
+                );
               }).toList(),
               onChanged: (val) {
-                if (val != null) setState(() => _expCategory = val);
+                if (val != null) {
+                  setState(() => _expCategory = val);
+                }
               },
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-
-        // CATEGORY CHIPS
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _expenseCategories.map((cat) {
-            final isSel = _expCategory == cat;
-            return ChoiceChip(
-              label: Text(cat),
-              selected: isSel,
-              selectedColor: AppColors.primaryBlue,
-              backgroundColor: Colors.white,
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
-              labelStyle: TextStyle(
-                color: isSel ? Colors.white : const Color(0xFF050B20),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-              onSelected: (selected) {
-                if (cat == 'Custom +') {
-                  _promptAddCustomCategory();
-                } else if (selected) {
-                  setState(() => _expCategory = cat);
-                }
-              },
-            );
-          }).toList(),
         ),
         const SizedBox(height: 14),
 
@@ -1223,7 +1340,10 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         children: [
           const Text(
             'Add Account',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+            style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF050B20)),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -1248,7 +1368,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     color: AppColors.primaryBlue.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.person_outline, size: 28, color: AppColors.primaryBlue),
+                  child: const Icon(Icons.person_outline,
+                      size: 28, color: AppColors.primaryBlue),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -1257,17 +1378,22 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     children: [
                       Text(
                         'Sale Account',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF050B20)),
                       ),
                       SizedBox(height: 4),
                       Text(
                         'Create a customer account for sales',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                        style:
+                            TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF6B7280)),
+                const Icon(Icons.arrow_forward_ios,
+                    size: 16, color: Color(0xFF6B7280)),
               ],
             ),
           ),
@@ -1289,7 +1415,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     color: AppColors.warning.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.business_outlined, size: 28, color: AppColors.warning),
+                  child: const Icon(Icons.business_outlined,
+                      size: 28, color: AppColors.warning),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -1298,17 +1425,22 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     children: [
                       Text(
                         'Purchase Account',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF050B20)),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF050B20)),
                       ),
                       SizedBox(height: 4),
                       Text(
                         'Create a supplier account for purchases',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                        style:
+                            TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF6B7280)),
+                const Icon(Icons.arrow_forward_ios,
+                    size: 16, color: Color(0xFF6B7280)),
               ],
             ),
           ),
@@ -1320,6 +1452,676 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   // ==========================================
   // HELPER WIDGETS
   // ==========================================
+  void _showImportStockDialog(BuildContext context) {
+    final prodState = context.read<ProductBloc>().state;
+    List<ProductEntity> existingProducts = [];
+    if (prodState is ProductsLoadedState) {
+      existingProducts = prodState.allProducts;
+    }
+
+    final textController = TextEditingController(
+      text: StockImportService.generateSampleCsvTemplate(),
+    );
+    StockImportAnalysis analysis = StockImportService.parseAndValidateCsv(
+      textController.text,
+      existingProducts,
+    );
+    DuplicateImportStrategy strategy = DuplicateImportStrategy.addStock;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            void reanalyze() {
+              setSheetState(() {
+                analysis = StockImportService.parseAndValidateCsv(
+                  textController.text,
+                  existingProducts,
+                );
+              });
+            }
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetCtx).size.height * 0.88,
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryBlue
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.file_upload_outlined,
+                                  color: AppColors.primaryBlue, size: 22),
+                            ),
+                            const SizedBox(width: 10),
+                            const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Import Stock (Excel / CSV)',
+                                    style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF050B20))),
+                                Text('Upload or paste CSV stock data',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF6B7280))),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(sheetCtx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryBlue,
+                        side: const BorderSide(color: AppColors.primaryBlue),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(
+                            text: StockImportService
+                                .generateSampleCsvTemplate()));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Sample CSV template copied to clipboard! Paste it into Excel or CSV file.'),
+                            backgroundColor: AppColors.primaryBlue,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('Download / Copy Excel Template',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Paste or Edit CSV Stock Data:',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF050B20))),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: textController,
+                              maxLines: 5,
+                              style: const TextStyle(
+                                  fontSize: 12, fontFamily: 'monospace'),
+                              decoration: InputDecoration(
+                                hintText:
+                                    'Product Name,SKU,Barcode,Category,Selling Price,Cost Price,Opening Stock,Unit,Low Stock Threshold,Description',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.all(10),
+                              ),
+                              onChanged: (_) => reanalyze(),
+                            ),
+                            const SizedBox(height: 14),
+                            const Text('Validation Results:',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF050B20))),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                _ImportMetricChip(
+                                    label: 'Total Rows',
+                                    count: analysis.totalRows,
+                                    color: const Color(0xFF050B20)),
+                                _ImportMetricChip(
+                                    label: 'Valid',
+                                    count: analysis.validRows,
+                                    color: AppColors.success),
+                                _ImportMetricChip(
+                                    label: 'Invalid',
+                                    count: analysis.invalidRows,
+                                    color: analysis.invalidRows > 0
+                                        ? AppColors.danger
+                                        : const Color(0xFF6B7280)),
+                                _ImportMetricChip(
+                                    label: 'Duplicates',
+                                    count: analysis.duplicateRows,
+                                    color: analysis.duplicateRows > 0
+                                        ? AppColors.warning
+                                        : const Color(0xFF6B7280)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (analysis.errorSummary.isNotEmpty) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.danger.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Row Errors:',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.danger)),
+                                    const SizedBox(height: 4),
+                                    ...analysis.errorSummary.take(3).map(
+                                        (err) => Text('• $err',
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: AppColors.danger))),
+                                    if (analysis.errorSummary.length > 3)
+                                      Text(
+                                          '+ ${analysis.errorSummary.length - 3} more errors...',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.danger)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            if (analysis.duplicateRows > 0) ...[
+                              const Text('Duplicate Product Handling Strategy:',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF050B20))),
+                              const SizedBox(height: 6),
+                              Column(
+                                children: [
+                                  ListTile(
+                                    title: const Text('Add Stock (Recommended)',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700)),
+                                    subtitle: const Text(
+                                        'Add imported stock to existing product stock level',
+                                        style: TextStyle(fontSize: 11)),
+                                    leading: Icon(
+                                      strategy ==
+                                              DuplicateImportStrategy.addStock
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_unchecked,
+                                      color: strategy ==
+                                              DuplicateImportStrategy.addStock
+                                          ? AppColors.primaryBlue
+                                          : const Color(0xFF6B7280),
+                                    ),
+                                    onTap: () => setSheetState(() => strategy =
+                                        DuplicateImportStrategy.addStock),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
+                                  ListTile(
+                                    title: const Text('Update Existing',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700)),
+                                    subtitle: const Text(
+                                        'Update price, category & overwrite stock level',
+                                        style: TextStyle(fontSize: 11)),
+                                    leading: Icon(
+                                      strategy ==
+                                              DuplicateImportStrategy
+                                                  .updateExisting
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_unchecked,
+                                      color: strategy ==
+                                              DuplicateImportStrategy
+                                                  .updateExisting
+                                          ? AppColors.primaryBlue
+                                          : const Color(0xFF6B7280),
+                                    ),
+                                    onTap: () => setSheetState(() => strategy =
+                                        DuplicateImportStrategy.updateExisting),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
+                                  ListTile(
+                                    title: const Text('Skip Duplicates',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700)),
+                                    subtitle: const Text(
+                                        'Ignore duplicate rows and do not import',
+                                        style: TextStyle(fontSize: 11)),
+                                    leading: Icon(
+                                      strategy == DuplicateImportStrategy.skip
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_unchecked,
+                                      color: strategy ==
+                                              DuplicateImportStrategy.skip
+                                          ? AppColors.primaryBlue
+                                          : const Color(0xFF6B7280),
+                                    ),
+                                    onTap: () => setSheetState(() => strategy =
+                                        DuplicateImportStrategy.skip),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            const Text('Parsed Rows Preview:',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF050B20))),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 180,
+                              decoration: BoxDecoration(
+                                border:
+                                    Border.all(color: const Color(0xFFE5E7EB)),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.vertical,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: DataTable(
+                                    columnSpacing: 16,
+                                    headingRowHeight: 32,
+                                    dataRowMinHeight: 32,
+                                    dataRowMaxHeight: 36,
+                                    columns: const [
+                                      DataColumn(
+                                          label: Text('Row',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w800))),
+                                      DataColumn(
+                                          label: Text('Product Name',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w800))),
+                                      DataColumn(
+                                          label: Text('SKU',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w800))),
+                                      DataColumn(
+                                          label: Text('Selling Price',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w800))),
+                                      DataColumn(
+                                          label: Text('Opening Stock',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w800))),
+                                      DataColumn(
+                                          label: Text('Status',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w800))),
+                                    ],
+                                    rows: analysis.rows.map((row) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(Text('#${row.rowIndex}',
+                                              style: const TextStyle(
+                                                  fontSize: 11))),
+                                          DataCell(Text(row.productName,
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight:
+                                                      FontWeight.w700))),
+                                          DataCell(Text(row.sku,
+                                              style: const TextStyle(
+                                                  fontSize: 11))),
+                                          DataCell(Text(
+                                              '₹${row.sellingPrice.toStringAsFixed(0)}',
+                                              style: const TextStyle(
+                                                  fontSize: 11))),
+                                          DataCell(Text(
+                                              '${row.openingStock} ${row.unit}',
+                                              style: const TextStyle(
+                                                  fontSize: 11))),
+                                          DataCell(
+                                            Text(
+                                              !row.isValid
+                                                  ? 'INVALID'
+                                                  : (row.isDuplicate
+                                                      ? 'DUPLICATE'
+                                                      : 'NEW'),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: !row.isValid
+                                                    ? AppColors.danger
+                                                    : (row.isDuplicate
+                                                        ? AppColors.warning
+                                                        : AppColors.success),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: analysis.validRows == 0
+                            ? null
+                            : () {
+                                int importedCount = 0;
+                                for (var r in analysis.rows) {
+                                  if (!r.isValid) continue;
+
+                                  if (r.isDuplicate) {
+                                    if (strategy ==
+                                        DuplicateImportStrategy.skip) {
+                                      continue;
+                                    } else if (strategy ==
+                                            DuplicateImportStrategy.addStock &&
+                                        r.existingProductId != null) {
+                                      context.read<ProductBloc>().add(
+                                            AdjustStockEvent(
+                                              productId: r.existingProductId!,
+                                              change: r.openingStock,
+                                              reason: 'Excel/CSV Import',
+                                            ),
+                                          );
+                                      importedCount++;
+                                    } else if (strategy ==
+                                            DuplicateImportStrategy
+                                                .updateExisting &&
+                                        r.existingProductId != null) {
+                                      final updated = ProductEntity(
+                                        id: r.existingProductId!,
+                                        name: r.productName,
+                                        sku: r.sku,
+                                        barcode: r.barcode,
+                                        category: r.category,
+                                        sellingPrice: r.sellingPrice,
+                                        purchasePrice: r.costPrice,
+                                        stockQuantity: r.openingStock,
+                                        unit: r.unit,
+                                        reorderLevel: r.reorderLevel,
+                                        description: r.description,
+                                        createdAt: DateTime.now(),
+                                      );
+                                      context
+                                          .read<ProductBloc>()
+                                          .add(UpdateProductEvent(updated));
+                                      importedCount++;
+                                    }
+                                  } else {
+                                    final newProd = ProductEntity(
+                                      id: 'prod_imp_${DateTime.now().millisecondsSinceEpoch}_$importedCount',
+                                      name: r.productName,
+                                      sku: r.sku,
+                                      barcode: r.barcode,
+                                      category: r.category,
+                                      sellingPrice: r.sellingPrice,
+                                      purchasePrice: r.costPrice,
+                                      stockQuantity: r.openingStock,
+                                      unit: r.unit,
+                                      reorderLevel: r.reorderLevel,
+                                      description: r.description,
+                                      createdAt: DateTime.now(),
+                                    );
+                                    context
+                                        .read<ProductBloc>()
+                                        .add(CreateProductEvent(newProd));
+                                    importedCount++;
+                                  }
+                                }
+
+                                context
+                                    .read<ProductBloc>()
+                                    .add(const FetchProductsEvent());
+                                Navigator.pop(sheetCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Successfully imported $importedCount products into inventory!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              },
+                        child: Text(
+                          'Confirm & Import ${analysis.validRows} Products',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSkuScannerHeader() {
+    if (!_isSkuCameraOn || _skuScannerController == null) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      height: 180,
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12, bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryBlue, width: 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            MobileScanner(
+              controller: _skuScannerController!,
+              onDetect: _onSkuBarcodeDetected,
+              errorBuilder: (context, error) {
+                return Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.camera_alt_outlined,
+                          color: AppColors.danger, size: 36),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Camera unavailable or permission denied',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF050B20)),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () => _skuScannerController?.start(),
+                        child: const Text('Retry Camera',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            // Barcode Box Overlay Area
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: AppColors.primaryBlue,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              width: 220,
+              height: 90,
+              child: Center(
+                child: Container(
+                  height: 2,
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+            ),
+            // Indicator Text
+            Positioned(
+              bottom: 8,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Align Barcode / SKU in box',
+                  style: TextStyle(color: Colors.white, fontSize: 11),
+                ),
+              ),
+            ),
+            // Top Controls (Flash & Cam OFF)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: _toggleSkuFlash,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _isSkuFlashOn
+                            ? Colors.amber
+                            : Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color:
+                                _isSkuFlashOn ? Colors.amber : Colors.white30),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isSkuFlashOn ? Icons.flash_on : Icons.flash_off,
+                            color: _isSkuFlashOn ? Colors.black : Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _isSkuFlashOn ? 'Flash ON' : 'Flash OFF',
+                            style: TextStyle(
+                              color:
+                                  _isSkuFlashOn ? Colors.black : Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _toggleSkuScanner,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white30),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.videocam_off,
+                              color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'Cam OFF',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFormFieldLabel(String label, {bool required = false}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1334,7 +2136,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         ),
         if (required) ...[
           const SizedBox(width: 3),
-          const Text('*', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w800)),
+          const Text('*',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w800)),
         ],
       ],
     );
@@ -1359,18 +2162,68 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         controller: controller,
         keyboardType: keyboardType,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF050B20)),
+        style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF050B20)),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w400),
+          hintStyle: const TextStyle(
+              fontSize: 13.5,
+              color: Color(0xFF9CA3AF),
+              fontWeight: FontWeight.w400),
           prefixText: prefixText,
-          prefixStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF050B20)),
+          prefixStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF050B20)),
           suffixIcon: suffixIcon,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
         ),
+      ),
+    );
+  }
+}
+
+class _ImportMetricChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _ImportMetricChip(
+      {required this.label, required this.count, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(10)),
+            child: Text('$count',
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
