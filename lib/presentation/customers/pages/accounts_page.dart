@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-
 import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/bloc/purchase_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/purchase_entity.dart';
+import '../../../infrastructure/services/account_import_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
@@ -127,6 +129,310 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showImportAccountsDialog(BuildContext context, AccountsLoadedState state) {
+    final textController = TextEditingController(text: AccountImportService.generateSampleCsvTemplate());
+    DuplicateAccountStrategy strategy = DuplicateAccountStrategy.addBalance;
+
+    final pBloc = context.read<PurchaseBloc>();
+    final List<SupplierEntity> suppliers = (pBloc.state is PurchaseLoadedState) ? (pBloc.state as PurchaseLoadedState).suppliers : [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            final analysis = AccountImportService.parseAndValidateCsv(
+              csvContent: textController.text,
+              existingCustomers: state.allCustomers,
+              existingSuppliers: suppliers,
+              existingExpenses: state.expenseAccounts,
+            );
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetCtx).size.height * 0.88,
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Import Accounts (CSV / Excel)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(sheetCtx)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Import Sale (Customer), Purchase (Supplier), and Expense category accounts in bulk.',
+                      style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                    ),
+                    const SizedBox(height: 12),
+
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryBlue,
+                        side: const BorderSide(color: AppColors.primaryBlue),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: AccountImportService.generateSampleCsvTemplate()));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sample CSV template copied to clipboard! Paste it into Excel or CSV file.'),
+                            backgroundColor: AppColors.primaryBlue,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('Download / Copy Excel Template', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(height: 12),
+
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Paste or Edit CSV Account Data:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: textController,
+                              maxLines: 5,
+                              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                              decoration: InputDecoration(
+                                hintText: 'Account Type,Account Name,Company Name,Phone,Email,Address,Category,Opening Balance,Notes',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                contentPadding: const EdgeInsets.all(10),
+                              ),
+                              onChanged: (_) => setSheetState(() {}),
+                            ),
+                            const SizedBox(height: 14),
+
+                            const Text('Validation Results:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                _AccountMetricChip(label: 'Total Rows', count: analysis.totalRows, color: AppColors.darkBlueText),
+                                _AccountMetricChip(label: 'Valid', count: analysis.validRows, color: AppColors.success),
+                                _AccountMetricChip(label: 'Invalid', count: analysis.invalidRows, color: analysis.invalidRows > 0 ? AppColors.danger : AppColors.secondaryText),
+                                _AccountMetricChip(label: 'Duplicates', count: analysis.duplicateRows, color: analysis.duplicateRows > 0 ? AppColors.warning : AppColors.secondaryText),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+
+                            if (analysis.errorSummary.isNotEmpty) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.errorContainer,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Row Errors:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.danger)),
+                                    const SizedBox(height: 4),
+                                    ...analysis.errorSummary.take(3).map((err) => Text('• $err', style: const TextStyle(fontSize: 11, color: AppColors.danger))),
+                                    if (analysis.errorSummary.length > 3)
+                                      Text('+ ${analysis.errorSummary.length - 3} more errors...', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+
+                            if (analysis.duplicateRows > 0) ...[
+                              const Text('Duplicate Account Strategy:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                              const SizedBox(height: 6),
+                              Column(
+                                children: [
+                                  ListTile(
+                                    title: const Text('Add Balance (Recommended)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                                    subtitle: const Text('Add imported balance to existing account balance', style: TextStyle(fontSize: 11)),
+                                    leading: Icon(
+                                      strategy == DuplicateAccountStrategy.addBalance ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                      color: strategy == DuplicateAccountStrategy.addBalance ? AppColors.primaryBlue : AppColors.secondaryText,
+                                    ),
+                                    onTap: () => setSheetState(() => strategy = DuplicateAccountStrategy.addBalance),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
+                                  ListTile(
+                                    title: const Text('Update Existing', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                                    subtitle: const Text('Update contact details & overwrite opening balance', style: TextStyle(fontSize: 11)),
+                                    leading: Icon(
+                                      strategy == DuplicateAccountStrategy.updateExisting ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                      color: strategy == DuplicateAccountStrategy.updateExisting ? AppColors.primaryBlue : AppColors.secondaryText,
+                                    ),
+                                    onTap: () => setSheetState(() => strategy = DuplicateAccountStrategy.updateExisting),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
+                                  ListTile(
+                                    title: const Text('Skip Duplicates', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                                    subtitle: const Text('Ignore duplicate rows and do not import', style: TextStyle(fontSize: 11)),
+                                    leading: Icon(
+                                      strategy == DuplicateAccountStrategy.skip ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                      color: strategy == DuplicateAccountStrategy.skip ? AppColors.primaryBlue : AppColors.secondaryText,
+                                    ),
+                                    onTap: () => setSheetState(() => strategy = DuplicateAccountStrategy.skip),
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+
+                            const Text('Parsed Accounts Preview:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 180,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: AppColors.border),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.vertical,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: DataTable(
+                                    columnSpacing: 16,
+                                    headingRowHeight: 32,
+                                    dataRowMinHeight: 32,
+                                    dataRowMaxHeight: 36,
+                                    columns: const [
+                                      DataColumn(label: Text('Row', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                                      DataColumn(label: Text('Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                                      DataColumn(label: Text('Account Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                                      DataColumn(label: Text('Phone', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                                      DataColumn(label: Text('Opening Balance', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                                      DataColumn(label: Text('Status', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
+                                    ],
+                                    rows: analysis.rows.map((row) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(Text('#${row.rowIndex}', style: const TextStyle(fontSize: 11))),
+                                          DataCell(Text(row.accountType, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
+                                          DataCell(Text(row.accountName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
+                                          DataCell(Text(row.phone.isNotEmpty ? row.phone : '-', style: const TextStyle(fontSize: 11))),
+                                          DataCell(Text('₹${row.openingBalance.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))),
+                                          DataCell(
+                                            Text(
+                                              !row.isValid
+                                                  ? 'INVALID'
+                                                  : (row.isDuplicate ? 'DUPLICATE' : 'NEW'),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: !row.isValid
+                                                    ? AppColors.danger
+                                                    : (row.isDuplicate ? AppColors.warning : AppColors.success),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: analysis.validRows == 0
+                            ? null
+                            : () {
+                                int importedCount = 0;
+                                for (var r in analysis.rows) {
+                                  if (!r.isValid) continue;
+
+                                  if (r.isDuplicate && strategy == DuplicateAccountStrategy.skip) {
+                                    continue;
+                                  }
+
+                                  if (r.accountType == 'Sale Account') {
+                                    final cust = CustomerEntity(
+                                      id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}-$importedCount',
+                                      name: r.accountName,
+                                      phone: r.phone,
+                                      email: r.email,
+                                      address: r.address,
+                                      outstandingBalance: r.openingBalance,
+                                      createdAt: DateTime.now(),
+                                    );
+                                    context.read<AccountsBloc>().add(CreateCustomerAccountEvent(cust));
+                                    importedCount++;
+                                  } else if (r.accountType == 'Purchase Account') {
+                                    final sup = SupplierEntity(
+                                      id: 'sup_${DateTime.now().millisecondsSinceEpoch}_$importedCount',
+                                      name: r.accountName,
+                                      companyName: r.companyName.isNotEmpty ? r.companyName : r.accountName,
+                                      phone: r.phone,
+                                      email: r.email,
+                                      address: r.address,
+                                      payableBalance: r.openingBalance,
+                                      createdAt: DateTime.now(),
+                                    );
+                                    context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(sup));
+                                    importedCount++;
+                                  } else if (r.accountType == 'Expense Account') {
+                                    context.read<AccountsBloc>().add(
+                                          CreateExpenseAccountEvent(
+                                            title: r.accountName,
+                                            category: r.category,
+                                            openingBalance: r.openingBalance,
+                                          ),
+                                        );
+                                    importedCount++;
+                                  }
+                                }
+
+                                Navigator.pop(sheetCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Successfully imported $importedCount accounts into Hive!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              },
+                        child: Text('Confirm Import (${analysis.validRows} Accounts)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -533,6 +839,16 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           ),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.file_upload_outlined, color: AppColors.primaryBlue),
+                        onPressed: () => _showImportAccountsDialog(context, state),
+                        tooltip: 'Import Accounts (CSV/Excel)',
                       ),
                       const SizedBox(width: 8),
                       IconButton(
@@ -1047,6 +1363,51 @@ class _SummaryBox extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(subText, style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountMetricChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _AccountMetricChip({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white),
+            ),
+          ),
         ],
       ),
     );
