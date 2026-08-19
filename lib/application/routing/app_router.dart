@@ -17,8 +17,10 @@ import '../../presentation/customers/pages/expense_account_details_page.dart';
 import '../../presentation/dashboard/pages/dashboard_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
+import '../../presentation/invoices/pages/create_return_page.dart';
 import '../../presentation/invoices/pages/daily_ledger_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
+import '../../presentation/invoices/pages/returns_list_page.dart';
 
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
@@ -218,9 +220,18 @@ class AppRouter {
           return const StockAdjustmentPage();
         },
       ),
+
       GoRoute(
         path: RouteNames.invoices,
-        builder: (context, state) => const InvoiceListPage(),
+        builder: (context, state) {
+          InvoiceType? initialType;
+          if (state.extra is InvoiceType) {
+            initialType = state.extra as InvoiceType;
+          } else if (state.extra is Map<String, dynamic>) {
+            initialType = (state.extra as Map<String, dynamic>)['initialType'] as InvoiceType?;
+          }
+          return InvoiceListPage(initialType: initialType);
+        },
       ),
       GoRoute(
         path: RouteNames.dailyLedger,
@@ -236,12 +247,48 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.createInvoice,
-
-        builder: (context, state) => const CreateInvoicePage(),
+        builder: (context, state) {
+          InvoiceType invoiceType = InvoiceType.sale;
+          InvoiceEntity? invoiceToEdit;
+          if (state.extra is Map<String, dynamic>) {
+            final map = state.extra as Map<String, dynamic>;
+            if (map['invoiceType'] is InvoiceType) {
+              invoiceType = map['invoiceType'] as InvoiceType;
+            }
+            if (map['invoiceToEdit'] is InvoiceEntity) {
+              invoiceToEdit = map['invoiceToEdit'] as InvoiceEntity;
+            }
+          } else if (state.extra is InvoiceEntity) {
+            invoiceToEdit = state.extra as InvoiceEntity;
+            invoiceType = invoiceToEdit.type;
+          }
+          return CreateInvoicePage(
+            invoiceType: invoiceType,
+            invoiceToEdit: invoiceToEdit,
+          );
+        },
       ),
       GoRoute(
         path: RouteNames.invoiceDetails,
         builder: (context, state) => const InvoiceDetailsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.salesReturns,
+        builder: (context, state) => const ReturnsListPage(type: InvoiceType.sale),
+      ),
+      GoRoute(
+        path: RouteNames.purchaseReturns,
+        builder: (context, state) => const ReturnsListPage(type: InvoiceType.purchase),
+      ),
+      GoRoute(
+        path: RouteNames.createReturn,
+        builder: (context, state) {
+          InvoiceType type = InvoiceType.sale;
+          if (state.extra is Map<String, dynamic>) {
+            type = ((state.extra as Map<String, dynamic>)['type'] as InvoiceType?) ?? InvoiceType.sale;
+          }
+          return CreateReturnPage(type: type);
+        },
       ),
       GoRoute(
         path: RouteNames.invoiceResult,

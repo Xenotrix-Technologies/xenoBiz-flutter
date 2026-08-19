@@ -63,6 +63,9 @@ abstract class RouteNames {
   static const String addMaster = '/add-master';
   static const String createMaster = '/create-master';
 
-
-
+  // Returns
+  static const String salesReturns = '/sales-returns';
+  static const String purchaseReturns = '/purchase-returns';
+  static const String createReturn = '/create-return';
 }
+

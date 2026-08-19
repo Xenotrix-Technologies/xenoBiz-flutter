@@ -39,8 +39,11 @@ class _ProductListPageState extends State<ProductListPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.tune),
-            onPressed: () {
-              context.push(RouteNames.stockAdjustment);
+            onPressed: () async {
+              await context.push(RouteNames.stockAdjustment);
+              if (context.mounted) {
+                context.read<ProductBloc>().add(const FetchProductsEvent());
+              }
             },
           ),
         ],
@@ -48,7 +51,12 @@ class _ProductListPageState extends State<ProductListPage> {
       floatingActionButton: FloatingActionButton(
         heroTag: null,
         backgroundColor: AppColors.primary,
-        onPressed: () => context.push(RouteNames.createMaster, extra: 0),
+        onPressed: () async {
+          await context.push(RouteNames.createMaster, extra: 0);
+          if (context.mounted) {
+            context.read<ProductBloc>().add(const FetchProductsEvent());
+          }
+        },
         child: const Icon(Icons.add, color: Colors.white),
       ),
 
@@ -87,8 +95,11 @@ class _ProductListPageState extends State<ProductListPage> {
                     itemBuilder: (ctx, idx) {
                       final p = state.products[idx];
                       return AppCard(
-                        onTap: () {
-                          context.push(RouteNames.productDetails, extra: p);
+                        onTap: () async {
+                          await context.push(RouteNames.productDetails, extra: p);
+                          if (context.mounted) {
+                            context.read<ProductBloc>().add(const FetchProductsEvent());
+                          }
                         },
                         child: Row(
                           children: [
@@ -159,9 +170,12 @@ class _ProductListPageState extends State<ProductListPage> {
                             ),
                             PopupMenuButton<String>(
                               icon: const Icon(Icons.more_vert, size: 20, color: AppColors.outline),
-                              onSelected: (val) {
+                              onSelected: (val) async {
                                 if (val == 'edit') {
-                                  context.push(RouteNames.createMaster, extra: p);
+                                  await context.push(RouteNames.createMaster, extra: p);
+                                  if (context.mounted) {
+                                    context.read<ProductBloc>().add(const FetchProductsEvent());
+                                  }
                                 }
                               },
                               itemBuilder: (context) => const [

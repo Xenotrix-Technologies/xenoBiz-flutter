@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../application/bloc/accounts_bloc.dart';
+import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
@@ -455,8 +456,17 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
                       itemBuilder: (ctx, idx) {
                         final inv = _customerInvoices[idx];
                         return AppCard(
-                          onTap: () {
-                            context.push(RouteNames.invoiceDetails, extra: inv);
+                          onTap: () async {
+                            final bloc = context.read<InvoiceBloc>();
+                            await context.push(
+                              RouteNames.createInvoice,
+                              extra: {
+                                'invoiceType': inv.type,
+                                'invoiceToEdit': inv,
+                              },
+                            );
+                            if (!mounted) return;
+                            bloc.add(const FetchInvoicesEvent());
                           },
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,

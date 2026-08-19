@@ -6,6 +6,7 @@ import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
+import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
@@ -42,25 +43,32 @@ class MoreMenuPage extends StatelessWidget {
             const SizedBox(height: 10),
             _MenuGrid(
               items: [
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.receipt_long_outlined,
                   title: 'All Invoices',
                   route: RouteNames.invoices,
                   color: AppColors.primaryBlue,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.add_circle_outline,
-                  title: 'New Invoice',
+                  title: 'New Sale Invoice',
                   route: RouteNames.createInvoice,
+                  extra: {'invoiceType': InvoiceType.sale},
                   color: AppColors.primaryBlue,
                 ),
-                _MenuItem(
+                const _MenuItem(
+                  icon: Icons.assignment_return_outlined,
+                  title: 'Sales Returns',
+                  route: RouteNames.salesReturns,
+                  color: AppColors.primaryBlue,
+                ),
+                const _MenuItem(
                   icon: Icons.analytics_outlined,
                   title: 'Sales Analytics',
                   route: RouteNames.salesAnalytics,
                   color: AppColors.success,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.point_of_sale_outlined,
                   title: 'Reports Hub',
                   route: RouteNames.reports,
@@ -80,28 +88,42 @@ class MoreMenuPage extends StatelessWidget {
             const SizedBox(height: 10),
             _MenuGrid(
               items: [
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.inventory_2_outlined,
                   title: 'Product Catalog',
                   route: RouteNames.products,
                   color: AppColors.deepNavy,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.tune_outlined,
                   title: 'Stock Adjustment',
                   route: RouteNames.stockAdjustment,
                   color: AppColors.deepNavy,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.local_shipping_outlined,
                   title: 'Purchases',
-                  route: RouteNames.purchaseManagement,
+                  route: RouteNames.invoices,
+                  extra: {'initialType': InvoiceType.purchase},
                   color: AppColors.primaryBlue,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.store_outlined,
                   title: 'Suppliers',
                   route: RouteNames.supplierDirectory,
+                  color: AppColors.primaryBlue,
+                ),
+                const _MenuItem(
+                  icon: Icons.settings_backup_restore_outlined,
+                  title: 'Purchase Returns',
+                  route: RouteNames.purchaseReturns,
+                  color: AppColors.deepNavy,
+                ),
+                const _MenuItem(
+                  icon: Icons.add_shopping_cart_outlined,
+                  title: 'New Purchase Invoice',
+                  route: RouteNames.createInvoice,
+                  extra: {'invoiceType': InvoiceType.purchase},
                   color: AppColors.primaryBlue,
                 ),
               ],
@@ -118,29 +140,17 @@ class MoreMenuPage extends StatelessWidget {
             const SizedBox(height: 10),
             _MenuGrid(
               items: [
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.leaderboard_outlined,
                   title: 'Lead Pipeline',
                   route: RouteNames.leadPipeline,
                   color: AppColors.success,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.notifications_active_outlined,
                   title: 'Follow-ups',
                   route: RouteNames.followUps,
                   color: AppColors.warning,
-                ),
-                _MenuItem(
-                  icon: Icons.chat_outlined,
-                  title: 'WhatsApp Templates',
-                  route: RouteNames.whatsappTemplates,
-                  color: AppColors.success,
-                ),
-                _MenuItem(
-                  icon: Icons.alarm_outlined,
-                  title: 'Reminders',
-                  route: RouteNames.automatedReminders,
-                  color: AppColors.danger,
                 ),
               ],
             ),
@@ -156,13 +166,13 @@ class MoreMenuPage extends StatelessWidget {
             const SizedBox(height: 10),
             _MenuGrid(
               items: [
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.sync_outlined,
                   title: 'Offline Sync',
                   route: RouteNames.offlineSync,
                   color: AppColors.primaryBlue,
                 ),
-                _MenuItem(
+                const _MenuItem(
                   icon: Icons.settings_outlined,
                   title: 'Settings',
                   route: RouteNames.settings,
@@ -203,12 +213,14 @@ class _MenuItem {
   final String title;
   final String route;
   final Color color;
+  final Object? extra;
 
   const _MenuItem({
     required this.icon,
     required this.title,
     required this.route,
     required this.color,
+    this.extra,
   });
 }
 
@@ -232,7 +244,7 @@ class _MenuGrid extends StatelessWidget {
         final item = items[idx];
         return AppCard(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          onTap: () => context.push(item.route),
+          onTap: () => context.push(item.route, extra: item.extra),
           child: Row(
             children: [
               Container(

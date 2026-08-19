@@ -78,9 +78,13 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                 ),
                 title: const Text('Sale Account (Customer)', style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: const Text('Add a customer for sales and credit tracking', style: TextStyle(fontSize: 12)),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  context.push(RouteNames.createMaster, extra: 1);
+                  await context.push(RouteNames.createMaster, extra: 1);
+                  if (context.mounted) {
+                    context.read<AccountsBloc>().add(const FetchAccountsEvent());
+                    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+                  }
                 },
               ),
               const SizedBox(height: 12),
@@ -100,9 +104,13 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                 ),
                 title: const Text('Purchase Account (Supplier)', style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: const Text('Add a vendor/supplier for purchases and payables', style: TextStyle(fontSize: 12)),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  context.push(RouteNames.createMaster, extra: 2);
+                  await context.push(RouteNames.createMaster, extra: 2);
+                  if (context.mounted) {
+                    context.read<AccountsBloc>().add(const FetchAccountsEvent());
+                    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+                  }
                 },
               ),
               const SizedBox(height: 12),
@@ -122,9 +130,13 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                 ),
                 title: const Text('Expense Account', style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: const Text('Add an expense category account (Electricity, Rent, etc.)', style: TextStyle(fontSize: 12)),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  context.push(RouteNames.createMaster, extra: 3);
+                  await context.push(RouteNames.createMaster, extra: 3);
+                  if (context.mounted) {
+                    context.read<AccountsBloc>().add(const FetchAccountsEvent());
+                    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+                  }
                 },
               ),
             ],
@@ -874,8 +886,11 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
         final isDue = cust.outstandingBalance > 0;
 
         return AppCard(
-          onTap: () {
-            context.push(RouteNames.customerDetails, extra: cust);
+          onTap: () async {
+            await context.push(RouteNames.customerDetails, extra: cust);
+            if (context.mounted) {
+              context.read<AccountsBloc>().add(const FetchAccountsEvent());
+            }
           },
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -942,9 +957,12 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
               ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
-                onSelected: (val) {
+                onSelected: (val) async {
                   if (val == 'edit') {
-                    context.push(RouteNames.createMaster, extra: cust);
+                    await context.push(RouteNames.createMaster, extra: cust);
+                    if (context.mounted) {
+                      context.read<AccountsBloc>().add(const FetchAccountsEvent());
+                    }
                   } else if (val == 'delete') {
                     _confirmDeleteCustomer(context, cust);
                   }
@@ -985,8 +1003,11 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
               final isDue = sup.payableBalance > 0;
 
               return AppCard(
-                onTap: () {
-                  context.push(RouteNames.supplierDetails, extra: sup);
+                onTap: () async {
+                  await context.push(RouteNames.supplierDetails, extra: sup);
+                  if (context.mounted) {
+                    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+                  }
                 },
                 padding: const EdgeInsets.all(14),
                 child: Row(
@@ -1060,9 +1081,12 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
                     ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
-                      onSelected: (val) {
+                      onSelected: (val) async {
                         if (val == 'edit') {
-                          context.push(RouteNames.createMaster, extra: sup);
+                          await context.push(RouteNames.createMaster, extra: sup);
+                          if (context.mounted) {
+                            context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+                          }
                         }
                       },
                       itemBuilder: (context) => const [
@@ -1099,8 +1123,11 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
         final isDue = expAcc.outstandingBalance > 0;
 
         return AppCard(
-          onTap: () {
-            context.push(RouteNames.expenseAccountDetails, extra: expAcc);
+          onTap: () async {
+            await context.push(RouteNames.expenseAccountDetails, extra: expAcc);
+            if (context.mounted) {
+              context.read<AccountsBloc>().add(const FetchAccountsEvent());
+            }
           },
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -1156,9 +1183,12 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
               ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
-                onSelected: (val) {
+                onSelected: (val) async {
                   if (val == 'edit') {
-                    context.push(RouteNames.createMaster, extra: expAcc);
+                    await context.push(RouteNames.createMaster, extra: expAcc);
+                    if (context.mounted) {
+                      context.read<AccountsBloc>().add(const FetchAccountsEvent());
+                    }
                   } else if (val == 'delete') {
                     _confirmDeleteExpenseAccount(context, expAcc);
                   }

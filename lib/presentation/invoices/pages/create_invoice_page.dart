@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
-import '../../../const/strings.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../widgets/app_button.dart';
@@ -16,34 +15,53 @@ import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../domain/repositories/purchase_repository.dart';
+import '../../../domain/entities/purchase_entity.dart';
 import '../../../application/providers/create_invoice_provider.dart';
 import '../../../application/routing/route_names.dart';
 
 
 class CreateInvoicePage extends ConsumerStatefulWidget {
-  const CreateInvoicePage({super.key});
+  final InvoiceType invoiceType;
+  final InvoiceEntity? invoiceToEdit;
+
+  const CreateInvoicePage({
+    super.key,
+    this.invoiceType = InvoiceType.sale,
+    this.invoiceToEdit,
+  });
 
   @override
   ConsumerState<CreateInvoicePage> createState() => _CreateInvoicePageState();
 }
 
 class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
+  bool get isEditMode => widget.invoiceToEdit != null;
+  bool get isPurchase => (widget.invoiceToEdit?.type ?? widget.invoiceType) == InvoiceType.purchase;
+
   bool get _isCashSale => _selectedCustomer == null;
-  final String _invoiceId = 'XNOB-1001';
+  late String _invoiceId;
   final TextEditingController _customerSearchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   bool _showSearchOverlay = false;
 
   List<CustomerEntity> _allCustomers = [];
 
-  final _notesCtrl =
-      TextEditingController(text: 'Thank you for your business!');
+  late TextEditingController _notesCtrl;
 
   @override
   void initState() {
     super.initState();
 
-    _loadCustomers();
+    _notesCtrl = TextEditingController(text: 'Thank you for your business!');
+
+    _invoiceId = isEditMode
+        ? widget.invoiceToEdit!.invoiceNumber
+        : (isPurchase
+            ? 'PUR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
+            : 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
+
+    _loadParties();
 
     _searchFocusNode.addListener(() {
       if (mounted) {
@@ -52,15 +70,58 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         });
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isEditMode) {
+        final inv = widget.invoiceToEdit!;
+        final party = CustomerEntity(
+          id: inv.customerId,
+          name: inv.customerName,
+          phone: inv.customerPhone,
+          email: '',
+          address: '',
+          outstandingBalance: 0.0,
+          createdAt: inv.issueDate,
+        );
+        ref.read(createInvoiceFormProvider.notifier).setItems(inv.items);
+        if (inv.customerId.isNotEmpty) {
+          ref.read(createInvoiceFormProvider.notifier).selectCustomer(party);
+        }
+        ref.read(createInvoiceFormProvider.notifier).updateDateTime(inv.issueDate);
+        _notesCtrl.text = inv.notes;
+      } else {
+        ref.read(createInvoiceFormProvider.notifier).reset();
+      }
+    });
   }
 
-  void _loadCustomers() async {
+  void _loadParties() async {
     try {
-      final customers = await getIt<CustomerRepository>().getCustomers();
-      if (mounted) {
-        setState(() {
-          _allCustomers = customers;
-        });
+      if (isPurchase) {
+        final suppliers = await getIt<PurchaseRepository>().getSuppliers();
+        final mappedAsCustomers = suppliers
+            .map((s) => CustomerEntity(
+                  id: s.id,
+                  name: s.companyName.isNotEmpty ? s.companyName : s.name,
+                  phone: s.phone,
+                  email: s.email,
+                  address: s.address,
+                  outstandingBalance: s.payableBalance,
+                  createdAt: s.createdAt,
+                ))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _allCustomers = mappedAsCustomers;
+          });
+        }
+      } else {
+        final customers = await getIt<CustomerRepository>().getCustomers();
+        if (mounted) {
+          setState(() {
+            _allCustomers = customers;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -122,29 +183,29 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                 color: AppColors.blueTint,
                 borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
               ),
-              child: const Icon(
-                Icons.person_add_alt_1_rounded,
+              child: Icon(
+                isPurchase ? Icons.business_outlined : Icons.person_add_alt_1_rounded,
                 color: AppColors.primary,
                 size: 22,
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Create New Customer',
-                    style: TextStyle(
+                    isPurchase ? 'Create New Supplier' : 'Create New Customer',
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: AppColors.darkBlueText,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
-                    'Quickly add customer details',
-                    style: TextStyle(
+                    isPurchase ? 'Quickly add supplier details' : 'Quickly add customer details',
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: AppColors.secondaryText,
@@ -160,10 +221,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           children: [
             const SizedBox(height: 8),
             AppTextField(
-              label: 'Customer Name',
+              label: isPurchase ? 'Supplier Name' : 'Customer Name',
               controller: nameCtrl,
-              hint: 'e.g. John Mathew',
-              prefixIcon: Icons.person_outline,
+              hint: isPurchase ? 'e.g. Acme Traders' : 'e.g. John Mathew',
+              prefixIcon: isPurchase ? Icons.business_outlined : Icons.person_outline,
             ),
             const SizedBox(height: 14),
             AppTextField(
@@ -211,27 +272,64 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                           BorderRadius.circular(AppSizes.radiusMedium),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     if (nameCtrl.text.trim().isEmpty) return;
-                    final newCust = CustomerEntity(
-                      id: 'cust_${DateTime.now().millisecondsSinceEpoch}',
-                      name: nameCtrl.text.trim(),
-                      phone: phoneCtrl.text.trim().isEmpty
-                          ? '+91 98765 43210'
-                          : phoneCtrl.text.trim(),
-                      email: '',
-                      address: '',
-                      outstandingBalance: 0.0,
-                      totalPurchases: 0.0,
-                      createdAt: DateTime.now(),
-                    );
-                    setState(() {
-                      _allCustomers.insert(0, newCust);
-                      ref.read(createInvoiceFormProvider.notifier).selectCustomer(newCust);
-                      _showSearchOverlay = false;
-                      _customerSearchCtrl.clear();
-                    });
-                    Navigator.pop(ctx);
+                    final phone = phoneCtrl.text.trim().isEmpty
+                        ? '+91 98765 43210'
+                        : phoneCtrl.text.trim();
+                    final nav = Navigator.of(ctx);
+                    if (isPurchase) {
+                      final newSup = SupplierEntity(
+                        id: 'sup_${DateTime.now().millisecondsSinceEpoch}',
+                        name: nameCtrl.text.trim(),
+                        companyName: nameCtrl.text.trim(),
+                        phone: phone,
+                        email: '',
+                        address: '',
+                        payableBalance: 0.0,
+                        createdAt: DateTime.now(),
+                      );
+                      await getIt<PurchaseRepository>().createSupplier(newSup);
+                      final mappedCust = CustomerEntity(
+                        id: newSup.id,
+                        name: newSup.companyName,
+                        phone: newSup.phone,
+                        email: newSup.email,
+                        address: newSup.address,
+                        outstandingBalance: 0.0,
+                        createdAt: newSup.createdAt,
+                      );
+                      if (mounted) {
+                        setState(() {
+                          _allCustomers.insert(0, mappedCust);
+                          ref.read(createInvoiceFormProvider.notifier).selectCustomer(mappedCust);
+                          _showSearchOverlay = false;
+                          _customerSearchCtrl.clear();
+                        });
+                        nav.pop();
+                      }
+                    } else {
+                      final newCust = CustomerEntity(
+                        id: 'cust_${DateTime.now().millisecondsSinceEpoch}',
+                        name: nameCtrl.text.trim(),
+                        phone: phone,
+                        email: '',
+                        address: '',
+                        outstandingBalance: 0.0,
+                        totalPurchases: 0.0,
+                        createdAt: DateTime.now(),
+                      );
+                      await getIt<CustomerRepository>().createCustomer(newCust);
+                      if (mounted) {
+                        setState(() {
+                          _allCustomers.insert(0, newCust);
+                          ref.read(createInvoiceFormProvider.notifier).selectCustomer(newCust);
+                          _showSearchOverlay = false;
+                          _customerSearchCtrl.clear();
+                        });
+                        nav.pop();
+                      }
+                    }
                   },
                   child: const Text(
                     'Save & Select',
@@ -315,40 +413,80 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please add at least one item to the invoice'),
+          content: Text('Please add at least one item'),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
 
-    final invoice = InvoiceEntity(
-      id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
-      invoiceNumber: _invoiceId,
-      customerId:
-          _isCashSale ? '' : (_selectedCustomer?.id ?? 'cust_101'),
-      customerName: _isCashSale
-          ? 'Cash Customer'
-          : (_selectedCustomer?.name ?? 'Customer'),
-      customerPhone: _isCashSale ? 'N/A' : (_selectedCustomer?.phone ?? 'N/A'),
-      items: _items,
-      subtotal: subtotal,
-      taxTotal: taxTotal,
-      grandTotal: grandTotal,
-      paidAmount: 0.0,
-      status: InvoiceStatus.unpaid,
-      issueDate: _createdDateTime,
-      dueDate: _createdDateTime.add(const Duration(days: 10)),
-      notes: _notesCtrl.text,
-    );
+    final String partyName = _isCashSale
+        ? (isPurchase ? 'Cash Supplier' : 'Cash Customer')
+        : (_selectedCustomer?.name ?? (isPurchase ? 'Supplier' : 'Customer'));
 
-    context.push(
-      RouteNames.payment,
-      extra: {
-        'invoice': invoice,
-        'customer': _selectedCustomer,
-      },
-    );
+    final String partyPhone = _isCashSale ? 'N/A' : (_selectedCustomer?.phone ?? 'N/A');
+
+    if (isEditMode) {
+      final updatedInvoice = widget.invoiceToEdit!.copyWith(
+        type: isPurchase ? InvoiceType.purchase : InvoiceType.sale,
+        customerId: _selectedCustomer?.id ?? widget.invoiceToEdit!.customerId,
+        customerName: partyName,
+        customerPhone: partyPhone,
+        items: _items,
+        subtotal: subtotal,
+        taxTotal: taxTotal,
+        grandTotal: grandTotal,
+        notes: _notesCtrl.text,
+      );
+
+      context.read<InvoiceBloc>().add(UpdateInvoiceSubmittedEvent(updatedInvoice));
+    } else if (isPurchase) {
+      final purchaseInvoice = InvoiceEntity(
+        id: 'pur_${DateTime.now().millisecondsSinceEpoch}',
+        invoiceNumber: _invoiceId,
+        type: InvoiceType.purchase,
+        customerId: _selectedCustomer?.id ?? '',
+        customerName: partyName,
+        customerPhone: partyPhone,
+        items: _items,
+        subtotal: subtotal,
+        taxTotal: taxTotal,
+        grandTotal: grandTotal,
+        paidAmount: 0.0,
+        status: InvoiceStatus.unpaid,
+        issueDate: _createdDateTime,
+        dueDate: _createdDateTime.add(const Duration(days: 30)),
+        notes: _notesCtrl.text,
+      );
+
+      context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(purchaseInvoice));
+    } else {
+      final saleInvoice = InvoiceEntity(
+        id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
+        invoiceNumber: _invoiceId,
+        type: InvoiceType.sale,
+        customerId: _isCashSale ? '' : (_selectedCustomer?.id ?? 'cust_101'),
+        customerName: partyName,
+        customerPhone: partyPhone,
+        items: _items,
+        subtotal: subtotal,
+        taxTotal: taxTotal,
+        grandTotal: grandTotal,
+        paidAmount: 0.0,
+        status: InvoiceStatus.unpaid,
+        issueDate: _createdDateTime,
+        dueDate: _createdDateTime.add(const Duration(days: 10)),
+        notes: _notesCtrl.text,
+      );
+
+      context.push(
+        RouteNames.payment,
+        extra: {
+          'invoice': saleInvoice,
+          'customer': _selectedCustomer,
+        },
+      );
+    }
   }
 
   @override
@@ -408,17 +546,21 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    // Title
-                    const Text(
-                      AppStrings.newInvoice,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.onSurface,
+                    Expanded(
+                      child: Text(
+                        isEditMode
+                            ? (isPurchase ? 'Edit Purchase Invoice' : 'Edit Sale Invoice')
+                            : (isPurchase ? 'Create Purchase Invoice' : 'New Sale Invoice'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     // Top Right: Invoice ID & Timestamp
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -566,17 +708,17 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              children: const [
-                                Icon(Icons.person_search_outlined,
+                              children: [
+                                const Icon(Icons.person_search_outlined,
                                     size: 18, color: AppColors.primary),
-                                SizedBox(width: 6),
-                                Text('Customer',
-                                    style: TextStyle(
+                                const SizedBox(width: 6),
+                                Text(isPurchase ? 'Supplier / Account' : 'Customer / Account',
+                                    style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 15,
                                         color: AppColors.onSurface)),
-                                SizedBox(width: 8),
-                                Text('(Optional)',
+                                const SizedBox(width: 8),
+                                const Text('(Optional)',
                                     style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
@@ -623,7 +765,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                   }
                                 },
                                 decoration: InputDecoration(
-                                  hintText: 'Search customer name or phone',
+                                  hintText: isPurchase
+                                      ? 'Search supplier name or phone'
+                                      : 'Search customer name or phone',
                                   hintStyle: const TextStyle(
                                       color: AppColors.outline, fontSize: 14),
                                   prefixIcon: const Icon(Icons.search,
@@ -667,14 +811,17 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                 child: Row(
                                                   mainAxisAlignment:
                                                       MainAxisAlignment.center,
-                                                  children: const [
-                                                    Icon(Icons.search_off,
+                                                  children: [
+                                                    const Icon(Icons.search_off,
                                                         size: 20,
                                                         color:
                                                             AppColors.outline),
-                                                    SizedBox(width: 8),
-                                                    Text('Customer not found',
-                                                        style: TextStyle(
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                        isPurchase
+                                                            ? 'Supplier not found'
+                                                            : 'Customer not found',
+                                                        style: const TextStyle(
                                                             color: AppColors
                                                                 .outline,
                                                             fontSize: 14)),
@@ -872,14 +1019,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                           child: Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.center,
-                                            children: const [
-                                              Icon(Icons.add_circle_outline,
+                                            children: [
+                                              const Icon(Icons.add_circle_outline,
                                                   size: 18,
                                                   color: AppColors.primary),
-                                              SizedBox(width: 8),
+                                              const SizedBox(width: 8),
                                               Text(
-                                                'Create New Customer',
-                                                style: TextStyle(
+                                                isPurchase
+                                                    ? 'Create New Supplier'
+                                                    : 'Create New Customer',
+                                                style: const TextStyle(
                                                   color: AppColors.primary,
                                                   fontWeight: FontWeight.w700,
                                                   fontSize: 14,
@@ -1285,7 +1434,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
               BlocBuilder<InvoiceBloc, InvoiceState>(
                 builder: (context, state) {
                   return AppButton(
-                    text: 'Get Payment',
+                    text: isEditMode
+                        ? 'Update Invoice'
+                        : (isPurchase ? 'Save Purchase' : 'Get Payment'),
                     onPressed: _onCreateInvoice,
                     isLoading: state is InvoiceLoadingState,
                   );

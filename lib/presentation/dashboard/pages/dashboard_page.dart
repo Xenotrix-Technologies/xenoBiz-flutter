@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/bloc/auth_bloc.dart';
 import '../../../application/bloc/dashboard_bloc.dart';
+import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
@@ -568,7 +569,18 @@ class _DashboardPageState extends State<DashboardPage> {
                       itemBuilder: (ctx, idx) {
                         final inv = state.recentInvoices[idx];
                         return AppCard(
-                          onTap: () => context.push(RouteNames.invoiceDetails),
+                          onTap: () async {
+                            final bloc = context.read<InvoiceBloc>();
+                            await context.push(
+                              RouteNames.createInvoice,
+                              extra: {
+                                'invoiceType': inv.type,
+                                'invoiceToEdit': inv,
+                              },
+                            );
+                            if (!mounted) return;
+                            bloc.add(const FetchInvoicesEvent());
+                          },
                           child: Row(
                             children: [
                               Container(

@@ -207,6 +207,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       );
 
       context.read<ProductBloc>().add(UpdateProductEvent(updatedProduct));
+      context.read<ProductBloc>().add(const FetchProductsEvent());
       _showSuccessSnackBar('Product "${updatedProduct.name}" updated successfully!');
     } else {
       final product = ProductEntity(
@@ -225,6 +226,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       );
 
       context.read<ProductBloc>().add(CreateProductEvent(product));
+      context.read<ProductBloc>().add(const FetchProductsEvent());
       _showSuccessSnackBar('Product "${product.name}" created successfully!');
     }
 
@@ -254,6 +256,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       );
 
       context.read<AccountsBloc>().add(UpdateCustomerAccountEvent(updatedCustomer));
+      context.read<AccountsBloc>().add(const FetchAccountsEvent());
       _showSuccessSnackBar('Sale Account for "${updatedCustomer.name}" updated successfully!');
     } else {
       final customer = CustomerEntity(
@@ -267,6 +270,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       );
 
       context.read<AccountsBloc>().add(CreateCustomerAccountEvent(customer));
+      context.read<AccountsBloc>().add(const FetchAccountsEvent());
       _showSuccessSnackBar('Sale Account for "${customer.name}" created successfully!');
     }
 
@@ -297,6 +301,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       );
 
       context.read<PurchaseBloc>().add(UpdateSupplierSubmittedEvent(updatedSupplier));
+      context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+      context.read<AccountsBloc>().add(const FetchAccountsEvent());
       _showSuccessSnackBar('Purchase Account for "${updatedSupplier.name}" updated successfully!');
     } else {
       final supplier = SupplierEntity(
@@ -311,6 +317,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       );
 
       context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(supplier));
+      context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+      context.read<AccountsBloc>().add(const FetchAccountsEvent());
       _showSuccessSnackBar('Purchase Account for "${supplier.name}" created successfully!');
     }
 
@@ -337,6 +345,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
               newCategory: _expCategory,
             ),
           );
+      context.read<AccountsBloc>().add(const FetchAccountsEvent());
 
       _showSuccessSnackBar('Expense Account "$name" updated successfully!');
     } else {
@@ -347,6 +356,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
               openingBalance: balance,
             ),
           );
+      context.read<AccountsBloc>().add(const FetchAccountsEvent());
 
       _showSuccessSnackBar('Expense Account "$name" created successfully!');
     }

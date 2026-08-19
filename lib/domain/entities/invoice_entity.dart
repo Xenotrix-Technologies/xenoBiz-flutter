@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 enum InvoiceStatus { draft, unpaid, partiallyPaid, paid, cancelled }
+enum InvoiceType { sale, purchase }
 
 class InvoiceItemEntity extends Equatable {
   final String productId;
@@ -48,6 +49,7 @@ class InvoiceItemEntity extends Equatable {
 class InvoiceEntity extends Equatable {
   final String id;
   final String invoiceNumber;
+  final InvoiceType type;
   final String customerId;
   final String customerName;
   final String customerPhone;
@@ -65,6 +67,7 @@ class InvoiceEntity extends Equatable {
   const InvoiceEntity({
     required this.id,
     required this.invoiceNumber,
+    this.type = InvoiceType.sale,
     required this.customerId,
     required this.customerName,
     required this.customerPhone,
@@ -80,11 +83,15 @@ class InvoiceEntity extends Equatable {
     this.notes = '',
   });
 
+  bool get isPurchase => type == InvoiceType.purchase;
+  bool get isSale => type == InvoiceType.sale;
+
   double get dueAmount => grandTotal - paidAmount;
 
   InvoiceEntity copyWith({
     String? id,
     String? invoiceNumber,
+    InvoiceType? type,
     String? customerId,
     String? customerName,
     String? customerPhone,
@@ -102,6 +109,7 @@ class InvoiceEntity extends Equatable {
     return InvoiceEntity(
       id: id ?? this.id,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      type: type ?? this.type,
       customerId: customerId ?? this.customerId,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
@@ -122,6 +130,7 @@ class InvoiceEntity extends Equatable {
   List<Object?> get props => [
         id,
         invoiceNumber,
+        type,
         customerId,
         customerName,
         customerPhone,
@@ -137,3 +146,4 @@ class InvoiceEntity extends Equatable {
         notes,
       ];
 }
+

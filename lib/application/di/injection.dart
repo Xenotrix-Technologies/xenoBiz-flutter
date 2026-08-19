@@ -1,8 +1,10 @@
 import 'package:get_it/get_it.dart';
 
+import '../../domain/repositories/returns_repository.dart';
 import '../../domain/repositories/repositories.dart';
 import '../../domain/usecases/create_invoice_usecase.dart';
 import '../../domain/usecases/record_payment_usecase.dart';
+import '../../domain/usecases/update_invoice_usecase.dart';
 import '../../infrastructure/network/dio_client.dart';
 import '../../infrastructure/network/network_checker.dart';
 import '../../infrastructure/repositories/auth_repository_impl.dart';
@@ -12,6 +14,7 @@ import '../../infrastructure/repositories/invoice_repository_impl.dart';
 import '../../infrastructure/repositories/lead_repository_impl.dart';
 import '../../infrastructure/repositories/product_repository_impl.dart';
 import '../../infrastructure/repositories/purchase_repository_impl.dart';
+import '../../infrastructure/repositories/returns_repository_impl.dart';
 import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
@@ -106,13 +109,32 @@ Future<void> configureDependencies() async {
     () => TaxSettingsRepositoryImpl(hiveService: getIt()),
   );
 
+  getIt.registerLazySingleton<ReturnsRepository>(
+    () => ReturnsRepositoryImpl(
+      hiveService: getIt(),
+      productRepository: getIt(),
+      customerRepository: getIt(),
+      purchaseRepository: getIt(),
+    ),
+  );
+
   // 4. Use Cases
   getIt.registerLazySingleton<CreateInvoiceUseCase>(
     () => CreateInvoiceUseCase(
       invoiceRepository: getIt(),
       customerRepository: getIt(),
       productRepository: getIt(),
+      purchaseRepository: getIt(),
       syncRepository: getIt(),
+    ),
+  );
+
+  getIt.registerLazySingleton<UpdateInvoiceUseCase>(
+    () => UpdateInvoiceUseCase(
+      invoiceRepository: getIt(),
+      customerRepository: getIt(),
+      productRepository: getIt(),
+      purchaseRepository: getIt(),
     ),
   );
 

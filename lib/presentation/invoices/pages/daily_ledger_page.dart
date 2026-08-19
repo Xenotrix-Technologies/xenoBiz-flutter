@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../application/bloc/daily_ledger_bloc.dart';
+import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
@@ -524,9 +525,18 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
               itemBuilder: (ctx, idx) {
                 final tx = state.salesTransactions[idx];
                 return AppCard(
-                  onTap: () {
+                  onTap: () async {
                     if (tx.invoice != null) {
-                      context.push(RouteNames.invoiceDetails, extra: tx.invoice);
+                      final bloc = context.read<InvoiceBloc>();
+                      await context.push(
+                        RouteNames.createInvoice,
+                        extra: {
+                          'invoiceType': tx.invoice!.type,
+                          'invoiceToEdit': tx.invoice,
+                        },
+                      );
+                      if (!mounted) return;
+                      bloc.add(const FetchInvoicesEvent());
                     }
                   },
                   padding: const EdgeInsets.all(14),
