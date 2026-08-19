@@ -138,7 +138,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       final p = state.products[idx];
                       return AppCard(
                         onTap: () {
-                          context.push(RouteNames.productDetails);
+                          context.push(RouteNames.productDetails, extra: p);
                         },
                         child: Row(
                           children: [

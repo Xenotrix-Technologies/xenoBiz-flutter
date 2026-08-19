@@ -13,6 +13,7 @@ class HiveService {
   static const String boxPurchases = 'purchases_box';
   static const String boxExpenses = 'expenses_box';
   static const String boxSuppliers = 'suppliers_box';
+  static const String boxStockMovements = 'stock_movements_box';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -28,6 +29,7 @@ class HiveService {
     await Hive.openBox(boxPurchases);
     await Hive.openBox(boxExpenses);
     await Hive.openBox(boxSuppliers);
+    await Hive.openBox(boxStockMovements);
   }
 
   Box getBox(String boxName) => Hive.box(boxName);

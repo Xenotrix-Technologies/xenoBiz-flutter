@@ -6,5 +6,6 @@ abstract class ProductRepository {
   Future<ProductEntity> createProduct(ProductEntity product);
   Future<ProductEntity> updateProduct(ProductEntity product);
   Future<void> adjustStock(String productId, int change, String reason);
+  Future<void> deleteProduct(String id, {bool permanent = false});
   Future<List<InventoryMovement>> getStockMovements(String productId);
 }

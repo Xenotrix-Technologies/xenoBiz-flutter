@@ -46,6 +46,30 @@ class StatusChip extends StatelessWidget {
     );
   }
 
+  factory StatusChip.inStock({String label = 'IN STOCK'}) {
+    return StatusChip(
+      label: label,
+      color: AppColors.success,
+      backgroundColor: AppColors.successContainer,
+    );
+  }
+
+  factory StatusChip.lowStock({String label = 'LOW STOCK'}) {
+    return StatusChip(
+      label: label,
+      color: AppColors.warning,
+      backgroundColor: AppColors.warningContainer,
+    );
+  }
+
+  factory StatusChip.outOfStock({String label = 'OUT OF STOCK'}) {
+    return StatusChip(
+      label: label,
+      color: AppColors.error,
+      backgroundColor: AppColors.errorContainer,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(

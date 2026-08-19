@@ -276,88 +276,104 @@ class _AccountsPageState extends State<AccountsPage> with SingleTickerProviderSt
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (sheetCtx, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Filter & Sort Accounts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(sheetCtx)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  const Text('Filter Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['All', 'With Due', 'Paid'].map((st) {
-                      final isSelected = tempFilter == st;
-                      return ChoiceChip(
-                        label: Text(st),
-                        selected: isSelected,
-                        selectedColor: AppColors.primaryBlue,
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
-                        onSelected: (val) {
-                          if (val) setSheetState(() => tempFilter = st);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-
-                  const Text('Sort By', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['Name', 'Highest Due'].map((sortOpt) {
-                      final isSelected = tempSort == sortOpt;
-                      return ChoiceChip(
-                        label: Text(sortOpt),
-                        selected: isSelected,
-                        selectedColor: AppColors.primaryBlue,
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
-                        onSelected: (val) {
-                          if (val) setSheetState(() => tempSort = sortOpt);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: () {
-                        context.read<AccountsBloc>().add(
-                              FetchAccountsEvent(
-                                query: state.searchQuery,
-                                filterStatus: tempFilter,
-                                sortBy: tempSort,
-                              ),
-                            );
-                        Navigator.pop(sheetCtx);
-                      },
-                      child: const Text('Apply Filter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetCtx).size.height * 0.85,
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Filter & Sort Accounts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(sheetCtx)),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Filter Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: ['All', 'With Due', 'Paid'].map((st) {
+                                final isSelected = tempFilter == st;
+                                return ChoiceChip(
+                                  label: Text(st),
+                                  selected: isSelected,
+                                  selectedColor: AppColors.primaryBlue,
+                                  labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
+                                  onSelected: (val) {
+                                    if (val) setSheetState(() => tempFilter = st);
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+
+                            const Text('Sort By', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: ['Name', 'Highest Due'].map((sortOpt) {
+                                final isSelected = tempSort == sortOpt;
+                                return ChoiceChip(
+                                  label: Text(sortOpt),
+                                  selected: isSelected,
+                                  selectedColor: AppColors.primaryBlue,
+                                  labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
+                                  onSelected: (val) {
+                                    if (val) setSheetState(() => tempSort = sortOpt);
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: () {
+                          context.read<AccountsBloc>().add(
+                                FetchAccountsEvent(
+                                  query: state.searchQuery,
+                                  filterStatus: tempFilter,
+                                  sortBy: tempSort,
+                                ),
+                              );
+                          Navigator.pop(sheetCtx);
+                        },
+                        child: const Text('Apply Filter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

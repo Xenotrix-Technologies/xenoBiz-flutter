@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
+import '../../domain/entities/product_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
 import '../../presentation/customers/pages/accounts_page.dart';
@@ -157,11 +158,24 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.productDetails,
-        builder: (context, state) => const ProductDetailsPage(),
+        builder: (context, state) {
+          final prod = state.extra as ProductEntity?;
+          return ProductDetailsPage(product: prod);
+        },
       ),
       GoRoute(
         path: RouteNames.stockAdjustment,
-        builder: (context, state) => const StockAdjustmentPage(),
+        builder: (context, state) {
+          if (state.extra is ProductEntity) {
+            return StockAdjustmentPage(product: state.extra as ProductEntity);
+          } else if (state.extra is Map<String, dynamic>) {
+            final args = state.extra as Map<String, dynamic>;
+            final prod = args['product'] as ProductEntity?;
+            final initialAddition = (args['initialAddition'] as bool?) ?? true;
+            return StockAdjustmentPage(product: prod, initialAddition: initialAddition);
+          }
+          return const StockAdjustmentPage();
+        },
       ),
       GoRoute(
         path: RouteNames.invoices,
