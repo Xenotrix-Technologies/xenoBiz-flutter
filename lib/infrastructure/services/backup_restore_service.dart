@@ -76,6 +76,8 @@ class BackupRestoreService {
     HiveService.boxPurchaseReturns,
     HiveService.boxIncome,
     HiveService.boxCategories,
+    HiveService.boxCrmNotes,
+    HiveService.boxCrmFollowUps,
   ];
 
   /// Retrieves stored backup directory path or fallback default (Internal Storage / Xenobiz / db / backup).

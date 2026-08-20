@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 
+import '../bloc/crm_bloc.dart';
 import '../../domain/repositories/repositories.dart';
 import '../../domain/usecases/create_invoice_usecase.dart';
 import '../../domain/usecases/record_payment_usecase.dart';
@@ -19,6 +20,7 @@ import '../../infrastructure/repositories/returns_repository_impl.dart';
 import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
+import '../../infrastructure/services/crm_service.dart';
 import '../../infrastructure/storage/hive_service.dart';
 import '../../infrastructure/storage/secure_storage_service.dart';
 
@@ -125,6 +127,19 @@ Future<void> configureDependencies() async {
       customerRepository: getIt(),
       purchaseRepository: getIt(),
     ),
+  );
+
+  getIt.registerLazySingleton<CrmService>(
+    () => CrmService(
+      hiveService: getIt(),
+      customerRepository: getIt(),
+      invoiceRepository: getIt(),
+      leadRepository: getIt(),
+    ),
+  );
+
+  getIt.registerFactory<CrmBloc>(
+    () => CrmBloc(crmService: getIt()),
   );
 
   // 4. Use Cases

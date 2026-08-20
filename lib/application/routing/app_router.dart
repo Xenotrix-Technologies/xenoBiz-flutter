@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
+import '../../domain/entities/lead_entity.dart';
 import '../../domain/entities/product_entity.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
@@ -27,6 +28,10 @@ import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
 import '../../presentation/leads/pages/add_lead_page.dart';
+import '../../presentation/crm/pages/crm_dashboard_page.dart';
+import '../../presentation/crm/pages/crm_shell_page.dart';
+import '../../presentation/crm/pages/crm_settings_page.dart';
+import '../../presentation/crm/pages/outstanding_customers_page.dart';
 import '../../presentation/leads/pages/followups_page.dart';
 import '../../presentation/leads/pages/lead_details_page.dart';
 import '../../presentation/leads/pages/lead_pipeline_page.dart';
@@ -101,7 +106,19 @@ Widget _buildCreateMasterPage(GoRouterState state) {
 }
 
 class AppRouter {
+  static final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNavKey');
+  static final GlobalKey<NavigatorState> shellHomeNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellHomeNavKey');
+  static final GlobalKey<NavigatorState> shellSalesNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellSalesNavKey');
+  static final GlobalKey<NavigatorState> shellAccountsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellAccountsNavKey');
+  static final GlobalKey<NavigatorState> shellStockNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellStockNavKey');
+  static final GlobalKey<NavigatorState> shellMoreNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellMoreNavKey');
+  static final GlobalKey<NavigatorState> shellCrmDashboardNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmDashboardNavKey');
+  static final GlobalKey<NavigatorState> shellCrmLeadsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmLeadsNavKey');
+  static final GlobalKey<NavigatorState> shellCrmOutstandingNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmOutstandingNavKey');
+  static final GlobalKey<NavigatorState> shellCrmSettingsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmSettingsNavKey');
+
   static final GoRouter router = GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: RouteNames.splash,
     routes: [
       GoRoute(
@@ -125,6 +142,7 @@ class AppRouter {
         branches: [
           // Branch 0: Home (Dashboard)
           StatefulShellBranch(
+            navigatorKey: shellHomeNavigatorKey,
             routes: [
               GoRoute(
                 path: RouteNames.dashboard,
@@ -134,6 +152,7 @@ class AppRouter {
           ),
           // Branch 1: Sales
           StatefulShellBranch(
+            navigatorKey: shellSalesNavigatorKey,
             routes: [
               GoRoute(
                 path: RouteNames.salesOverview,
@@ -143,6 +162,7 @@ class AppRouter {
           ),
           // Branch 2: Accounts
           StatefulShellBranch(
+            navigatorKey: shellAccountsNavigatorKey,
             routes: [
               GoRoute(
                 path: RouteNames.customers,
@@ -152,6 +172,7 @@ class AppRouter {
           ),
           // Branch 3: Stock
           StatefulShellBranch(
+            navigatorKey: shellStockNavigatorKey,
             routes: [
               GoRoute(
                 path: RouteNames.stockManagement,
@@ -161,6 +182,7 @@ class AppRouter {
           ),
           // Branch 4: More
           StatefulShellBranch(
+            navigatorKey: shellMoreNavigatorKey,
             routes: [
               GoRoute(
                 path: RouteNames.more,
@@ -381,17 +403,67 @@ class AppRouter {
           return AddProductsPage(initialItems: initialItems);
         },
       ),
-      GoRoute(
-        path: RouteNames.leadPipeline,
-        builder: (context, state) => const LeadPipelinePage(),
+      // Dedicated Shell Route for CRM Module Navigation
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return CrmShellPage(navigationShell: navigationShell);
+        },
+        branches: [
+          // Branch 0: Dashboard
+          StatefulShellBranch(
+            navigatorKey: shellCrmDashboardNavigatorKey,
+            routes: [
+              GoRoute(
+                path: RouteNames.crmDashboard,
+                builder: (context, state) => const CrmDashboardPage(),
+              ),
+            ],
+          ),
+          // Branch 1: Leads & Pipeline
+          StatefulShellBranch(
+            navigatorKey: shellCrmLeadsNavigatorKey,
+            routes: [
+              GoRoute(
+                path: RouteNames.leadPipeline,
+                builder: (context, state) => const LeadPipelinePage(),
+              ),
+            ],
+          ),
+          // Branch 2: Outstanding
+          StatefulShellBranch(
+            navigatorKey: shellCrmOutstandingNavigatorKey,
+            routes: [
+              GoRoute(
+                path: RouteNames.crmOutstanding,
+                builder: (context, state) => const OutstandingCustomersPage(),
+              ),
+            ],
+          ),
+          // Branch 3: Settings
+          StatefulShellBranch(
+            navigatorKey: shellCrmSettingsNavigatorKey,
+            routes: [
+              GoRoute(
+                path: RouteNames.crmSettings,
+                builder: (context, state) => const CrmSettingsPage(),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: RouteNames.addLead,
-        builder: (context, state) => const AddLeadPage(),
+        builder: (context, state) {
+          final lead = state.extra as LeadEntity?;
+          return AddLeadPage(lead: lead);
+        },
       ),
       GoRoute(
         path: RouteNames.leadDetails,
-        builder: (context, state) => const LeadDetailsPage(),
+        builder: (context, state) {
+          final lead = state.extra as LeadEntity?;
+          return LeadDetailsPage(lead: lead);
+        },
       ),
       GoRoute(
         path: RouteNames.followUps,

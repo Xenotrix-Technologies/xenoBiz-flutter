@@ -84,6 +84,11 @@ class XenoBizApp extends StatelessWidget {
               hiveService: getIt(),
             )..add(const FetchAccountsEvent()),
           ),
+          BlocProvider<CrmBloc>(
+            create: (_) => CrmBloc(
+              crmService: getIt(),
+            )..add(const FetchCrmDataEvent()),
+          ),
         ],
 
 
