@@ -111,7 +111,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             SizedBox(height: 10),
             Text(
-              'A database backup file will be saved automatically to XenoBiz/database before closing.',
+              'Your business backup will be saved automatically before closing.',
               style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
             ),
           ],
@@ -129,7 +129,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             onPressed: () {
               Navigator.pop(dialogCtx);
-              _closeShopAndExit(context);
+              _performAutoBackupAndExit(
+                context,
+                isCloseShop: true,
+              );
             },
             icon: const Icon(Icons.power_settings_new_rounded, size: 18),
             label: const Text('Close Shop & Exit', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -139,38 +142,184 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Future<void> _closeShopAndExit(BuildContext context) async {
+  Future<void> _showExitConfirmationDialog(BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.exit_to_app_rounded, color: AppColors.primaryBlue, size: 26),
+            SizedBox(width: 10),
+            Text(
+              'Exit Application',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Are you sure you want to exit Xenobiz?',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkBlueText),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Your business backup will be saved automatically before exiting.',
+              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              _performAutoBackupAndExit(
+                context,
+                isCloseShop: false,
+              );
+            },
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: const Text('Yes, Exit', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performAutoBackupAndExit(
+    BuildContext context, {
+    required bool isCloseShop,
+  }) async {
+    BuildContext? progressCtx;
+
+    // Show blocking progress dialog
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: const [
-                CircularProgressIndicator(color: AppColors.primaryBlue),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    'Backing up database & closing shop...',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+      builder: (dialogCtx) {
+        progressCtx = dialogCtx;
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            content: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(color: AppColors.primaryBlue),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Saving Backup',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    isCloseShop
+                        ? 'Please wait while we securely save your business backup before closing the shop.'
+                        : 'Please wait while we save your business backup.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
 
     final backupService = BackupRestoreService(getIt<HiveService>());
-    await backupService.saveExitBackupToStorage();
+    final result = await backupService.performAutoExitBackup();
 
-    await SystemNavigator.pop();
-    exit(0);
+    // Dismiss progress dialog if open
+    if (progressCtx != null && progressCtx!.mounted) {
+      Navigator.of(progressCtx!).pop();
+    }
+
+    if (result.success) {
+      await SystemNavigator.pop();
+      exit(0);
+    } else {
+      if (!context.mounted) return;
+      _showBackupFailedDialog(context, isCloseShop: isCloseShop);
+    }
+  }
+
+  Future<void> _showBackupFailedDialog(
+    BuildContext context, {
+    required bool isCloseShop,
+  }) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 28),
+            SizedBox(width: 10),
+            Text(
+              'Backup Failed',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              "We couldn't save your backup. Your data is still safe on this device.",
+              style: TextStyle(fontSize: 13, color: AppColors.darkBlueText, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: const BorderSide(color: AppColors.danger),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              await SystemNavigator.pop();
+              exit(0);
+            },
+            child: Text(isCloseShop ? 'Close Shop Without Backup' : 'Exit Without Backup'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              _performAutoBackupAndExit(context, isCloseShop: isCloseShop);
+            },
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -179,7 +328,7 @@ class _DashboardPageState extends State<DashboardPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
-          _showCloseShopDialog(context);
+          _showExitConfirmationDialog(context);
         }
       },
       child: Scaffold(
