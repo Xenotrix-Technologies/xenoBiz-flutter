@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/expense_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/payment_entity.dart';
+import '../../../domain/repositories/expense_repository.dart';
+import '../../../domain/repositories/product_repository.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 
@@ -31,6 +36,7 @@ class _PaymentPageState extends State<PaymentPage> {
   late TextEditingController _amountCtrl;
   final NumberFormat _formatter = NumberFormat('#,##,##0.##', 'en_IN');
   InvoiceEntity? _finalInvoiceCreated;
+  bool _isProcessingPurchase = false;
 
   @override
   void initState() {
@@ -50,12 +56,55 @@ class _PaymentPageState extends State<PaymentPage> {
     return _formatter.format(amount);
   }
 
-  void _onGenerateInvoice() {
+  Future<void> _onGenerateInvoice() async {
     final enteredAmount =
         double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
     final grandTotal = widget.invoice.grandTotal;
 
-    // Calculate paid amount allocated to this invoice
+    // PURCHASE FLOW: Do NOT generate a purchase bill. Record as Expense & Increase Stock!
+    if (widget.invoice.type == InvoiceType.purchase) {
+      setState(() => _isProcessingPurchase = true);
+
+      // 1. Increase product stock for all purchased items (+)
+      for (var item in widget.invoice.items) {
+        try {
+          final productRepo = getIt<ProductRepository>();
+          await productRepo.adjustStock(item.productId, item.quantity, 'Purchase #${widget.invoice.invoiceNumber}');
+        } catch (_) {}
+      }
+
+      // 2. Create Expense Entity in ExpenseRepository (CASH OUT -> Purchase Expense)
+      final expAmount = enteredAmount > 0 ? enteredAmount : grandTotal;
+      final partyName = widget.customer?.name.isNotEmpty == true
+          ? widget.customer!.name
+          : (widget.invoice.customerName.isNotEmpty ? widget.invoice.customerName : 'Supplier');
+
+      final purchaseExpense = ExpenseEntity(
+        id: 'exp_pur_${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Purchase: $partyName',
+        category: 'Purchase Expense',
+        amount: expAmount,
+        paymentMode: _selectedPaymentMethod,
+        expenseDate: DateTime.now(),
+        notes: 'Purchase #${widget.invoice.invoiceNumber} from $partyName (${widget.invoice.items.length} items)',
+      );
+
+      await getIt<ExpenseRepository>().createExpense(purchaseExpense);
+
+      if (mounted) {
+        setState(() => _isProcessingPurchase = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Purchase of ₹${expAmount.toStringAsFixed(0)} recorded in Expenses & Stock Updated!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        context.go(RouteNames.dashboard);
+      }
+      return;
+    }
+
+    // SALES INVOICE FLOW: Calculate paid amount allocated to this invoice
     final paidForInvoice =
         enteredAmount >= grandTotal ? grandTotal : enteredAmount;
 
@@ -94,6 +143,62 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
+  Widget _buildPaymentMethodCard(String title, IconData icon) {
+    final isSelected = _selectedPaymentMethod == title;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedPaymentMethod = title;
+        });
+      },
+      borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.blueTint : AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.surfaceContainerHigh,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.15)
+                    : AppColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: isSelected ? AppColors.primary : AppColors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? AppColors.primary : AppColors.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isCashSale = widget.customer == null;
@@ -121,6 +226,8 @@ class _PaymentPageState extends State<PaymentPage> {
         newBalance = totalDue - enteredAmount;
       }
     }
+
+    final isPurchase = widget.invoice.type == InvoiceType.purchase;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -164,9 +271,9 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Text(
-                    'Payment',
-                    style: TextStyle(
+                  Text(
+                    isPurchase ? 'Supplier Payment' : 'Payment',
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: AppColors.onSurface,
@@ -180,7 +287,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    isCashSale ? 'Cash Sale' : widget.customer!.name,
+                    isCashSale ? (isPurchase ? 'Cash Supplier' : 'Cash Customer') : widget.customer!.name,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -193,7 +300,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
               // Conditional Top Card (Cash Sale vs Customer)
               if (isCashSale) ...[
-                // Prominent Total Amount Card for Cash Sale
+                // Prominent Total Amount Card for Cash Sale/Purchase
                 AppCard(
                   backgroundColor: AppColors.deepNavy,
                   padding:
@@ -201,9 +308,9 @@ class _PaymentPageState extends State<PaymentPage> {
                   child: Center(
                     child: Column(
                       children: [
-                        const Text(
-                          'TOTAL AMOUNT',
-                          style: TextStyle(
+                        Text(
+                          isPurchase ? 'PURCHASE AMOUNT' : 'TOTAL AMOUNT',
+                          style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -224,19 +331,19 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                 ),
               ] else ...[
-                // Balance Summary Card for Customer Invoice
+                // Balance Summary Card for Customer/Supplier Invoice
                 AppCard(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
                       _SummaryRow(
-                        'Previous balance',
+                        isPurchase ? 'Previous payable' : 'Previous balance',
                         '₹${_formatAmount(previousBalance)}',
                         valueColor: AppColors.warning,
                       ),
                       const SizedBox(height: 10),
                       _SummaryRow(
-                        'Current invoice',
+                        isPurchase ? 'Current purchase' : 'Current invoice',
                         '₹${_formatAmount(currentInvoiceAmount)}',
                       ),
                       const Divider(height: 24),
@@ -253,9 +360,9 @@ class _PaymentPageState extends State<PaymentPage> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Total due',
-                              style: TextStyle(
+                            Text(
+                              isPurchase ? 'Total payable' : 'Total due',
+                              style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.darkBlueText,
@@ -324,7 +431,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
               // Amount Field Label
               Text(
-                isCashSale ? 'Amount received' : 'Enter amount paid',
+                isPurchase ? 'Amount paid to supplier' : (isCashSale ? 'Amount received' : 'Enter amount paid'),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -379,7 +486,6 @@ class _PaymentPageState extends State<PaymentPage> {
               // Dynamic Balance / Change-to-Return Card
               if (isCashSale) ...[
                 if (enteredAmount >= currentInvoiceAmount) ...[
-                  // Change to Return Container
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
@@ -393,9 +499,9 @@ class _PaymentPageState extends State<PaymentPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Change to return',
-                          style: TextStyle(
+                        Text(
+                          isPurchase ? 'Balance change' : 'Change to return',
+                          style: const TextStyle(
                             color: AppColors.success,
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
@@ -413,7 +519,6 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                 ] else ...[
-                  // Amount Due Container
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
@@ -427,9 +532,9 @@ class _PaymentPageState extends State<PaymentPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Amount due',
-                          style: TextStyle(
+                        Text(
+                          isPurchase ? 'Unpaid balance' : 'Amount due',
+                          style: const TextStyle(
                             color: AppColors.warning,
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
@@ -448,9 +553,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                 ],
               ] else ...[
-                // Customer Invoice Updated Balance / Change to Return
                 if (enteredAmount > totalDue) ...[
-                  // Overpayment: Change to return
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
@@ -484,7 +587,6 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                 ] else ...[
-                  // Updated Balance Card
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -576,67 +678,11 @@ class _PaymentPageState extends State<PaymentPage> {
           },
           builder: (context, state) {
             return AppButton(
-              text: 'Generate Invoice',
+              text: isPurchase ? 'Record Purchase Expense' : 'Generate Invoice',
               onPressed: _onGenerateInvoice,
-              isLoading: state is InvoiceLoadingState,
+              isLoading: (state is InvoiceLoadingState) || _isProcessingPurchase,
             );
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethodCard(String title, IconData icon) {
-    final isSelected = _selectedPaymentMethod == title;
-
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedPaymentMethod = title;
-        });
-      },
-      borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.blueTint : AppColors.surfaceCard,
-          borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : AppColors.surfaceContainerHigh,
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primary.withValues(alpha: 0.15)
-                    : AppColors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                size: 18,
-                color: isSelected ? AppColors.primary : AppColors.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? AppColors.primary : AppColors.onSurface,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
         ),
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../application/routing/route_names.dart';
 import '../../const/colors.dart';
+import '../invoices/pages/return_voucher_screen.dart';
 
 class QuickActionsBottomSheet extends StatelessWidget {
   const QuickActionsBottomSheet({super.key});
@@ -55,7 +56,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // 2 Rows of 3 Quick Action Items
+          // Row 1
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -69,54 +70,62 @@ class QuickActionsBottomSheet extends StatelessWidget {
                 },
               ),
               _QuickActionGridItem(
-                icon: Icons.person_outline_rounded,
-                label: 'Add Customer',
-                bgColor: creamBg,
-                onTap: () {
-                  Navigator.pop(context);
-                  context.push(RouteNames.customers);
-                },
-              ),
-              _QuickActionGridItem(
-                icon: Icons.inventory_2_outlined,
-                label: 'Add Product',
-                bgColor: creamBg,
-                onTap: () {
-                  Navigator.pop(context);
-                  context.push(RouteNames.products);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _QuickActionGridItem(
-                icon: Icons.credit_card_outlined,
-                label: 'Record Payment',
-                bgColor: creamBg,
-                onTap: () {
-                  Navigator.pop(context);
-                  context.push(RouteNames.invoices);
-                },
-              ),
-              _QuickActionGridItem(
-                icon: Icons.arrow_upward_rounded,
-                label: 'Add Expense',
-                bgColor: creamBg,
-                onTap: () {
-                  Navigator.pop(context);
-                  context.push(RouteNames.financialAnalytics);
-                },
-              ),
-              _QuickActionGridItem(
                 icon: Icons.shopping_cart_outlined,
                 label: 'Add Purchase',
                 bgColor: creamBg,
                 onTap: () {
                   Navigator.pop(context);
                   context.push(RouteNames.createPurchaseOrder);
+                },
+              ),
+              _QuickActionGridItem(
+                icon: Icons.arrow_downward_rounded,
+                label: 'Add Income',
+                bgColor: creamBg,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(RouteNames.income);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Row 2
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _QuickActionGridItem(
+                icon: Icons.arrow_upward_rounded,
+                label: 'Add Expense',
+                bgColor: creamBg,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(RouteNames.expense);
+                },
+              ),
+              _QuickActionGridItem(
+                icon: Icons.assignment_return_outlined,
+                label: 'Sales Return',
+                bgColor: creamBg,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                    RouteNames.createReturn,
+                    extra: {'returnType': ReturnType.salesReturn},
+                  );
+                },
+              ),
+              _QuickActionGridItem(
+                icon: Icons.settings_backup_restore_outlined,
+                label: 'Purchase Return',
+                bgColor: creamBg,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(
+                    RouteNames.createReturn,
+                    extra: {'returnType': ReturnType.purchaseReturn},
+                  );
                 },
               ),
             ],

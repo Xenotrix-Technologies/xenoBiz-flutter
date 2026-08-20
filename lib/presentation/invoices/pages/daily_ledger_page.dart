@@ -4,19 +4,18 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../application/bloc/daily_ledger_bloc.dart';
+import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
-import '../../../domain/entities/expense_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import '../../../infrastructure/pdf/pdf_ledger_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
 
-
 class DailyLedgerPage extends StatefulWidget {
-  final int initialTab; // 0 for Sales, 1 for Expenses
+  final int initialTab; // 0 for Cash In, 1 for Cash Out
   final DateTime? initialDate;
 
   const DailyLedgerPage({
@@ -39,7 +38,6 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
     _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab);
     _selectedDate = widget.initialDate ?? DateTime.now();
 
-    // Fetch ledger data for selected date
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DailyLedgerBloc>().add(FetchDailyLedgerDataEvent(_selectedDate));
     });
@@ -120,8 +118,6 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
     );
   }
 
-
-
   Future<void> _generatePdfReport(DailyLedgerLoadedState state) async {
     try {
       final authRepo = getIt<AuthRepository>();
@@ -134,7 +130,6 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
             category: 'Retail Store',
             createdAt: DateTime.now(),
           );
-
 
       final salesPdfItems = state.salesTransactions.map((tx) {
         return PdfLedgerTransactionItem(
@@ -211,7 +206,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Today\'s Ledger'),
+        title: const Text('Financial Ledger'),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -241,8 +236,8 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           unselectedLabelColor: Colors.white70,
           labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           tabs: const [
-            Tab(text: 'Sales'),
-            Tab(text: 'Expenses'),
+            Tab(text: 'CASH IN'),
+            Tab(text: 'CASH OUT'),
           ],
         ),
       ),
@@ -312,11 +307,11 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // TAB 1: SALES
-                      _buildSalesTab(context, state),
+                      // TAB 1: CASH IN (Sales Income + Other Income)
+                      _buildCashInTab(context, state),
 
-                      // TAB 2: EXPENSES
-                      _buildExpensesTab(context, state),
+                      // TAB 2: CASH OUT (Purchase Expense + Other Expense)
+                      _buildCashOutTab(context, state),
                     ],
                   ),
                 ),
@@ -346,7 +341,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                       size: 18, color: AppColors.primaryBlue),
                   SizedBox(width: 8),
                   Text(
-                    'Cash Balance',
+                    'Cash Balance Summary',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -383,10 +378,8 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Opening Balance',
-                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-              Text(_formatCurrency(state.openingBalance),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              const Text('Opening Balance', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              Text(_formatCurrency(state.openingBalance), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 6),
@@ -394,10 +387,9 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Cash In', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              const Text('Total Cash In', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
               Text('+ ${_formatCurrency(state.cashIn)}',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.success)),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.success)),
             ],
           ),
           const SizedBox(height: 6),
@@ -405,11 +397,9 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Cash Out',
-                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              const Text('Total Cash Out', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
               Text('- ${_formatCurrency(state.cashOut)}',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.danger)),
             ],
           ),
           const Divider(height: 16),
@@ -417,8 +407,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Closing Balance',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              const Text('Closing Balance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
               Text(
                 _formatCurrency(state.closingBalance),
                 style: const TextStyle(
@@ -434,25 +423,24 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
     );
   }
 
-  // SALES TAB UI
-  Widget _buildSalesTab(BuildContext context, DailyLedgerLoadedState state) {
+  // CASH IN TAB UI (Sales Income + Other Income)
+  Widget _buildCashInTab(BuildContext context, DailyLedgerLoadedState state) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cash Balance Section
           _buildCashBalanceCard(context, state),
           const SizedBox(height: 16),
 
-          // Today's Sales Summary Card
+          // Cash In Summary Breakdown
           AppCard(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Today\'s Sales Summary',
+                  'Cash In Classification',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -463,34 +451,17 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Total Sales',
-                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
-                    Text(_formatCurrency(state.totalSales),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                    const Text('Sales Income', style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
+                    Text(_formatCurrency(state.totalSales), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Cash Received',
-                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
-                    Text(_formatCurrency(state.cashSales),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.success)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('UPI / Card / Other',
-                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
-                    Text(_formatCurrency(state.upiCardSales),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: AppColors.primaryBlue)),
+                    const Text('Other Income', style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
+                    Text(_formatCurrency(state.otherIncomeTotal),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.success)),
                   ],
                 ),
               ],
@@ -498,9 +469,8 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           ),
           const SizedBox(height: 20),
 
-          // Sales Transactions List
           const Text(
-            'Sales Transactions',
+            'Cash In Transactions',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
@@ -511,9 +481,9 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
 
           if (state.salesTransactions.isEmpty)
             const EmptyState(
-              title: 'No sales for this date',
-              message: 'Income transactions will appear here as sales are made.',
-              icon: Icons.receipt_long_outlined,
+              title: 'No Cash In records for this date',
+              message: 'Sales Income and Other Income entries will appear here.',
+              icon: Icons.arrow_downward_rounded,
             )
           else
             ListView.separated(
@@ -524,9 +494,18 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
               itemBuilder: (ctx, idx) {
                 final tx = state.salesTransactions[idx];
                 return AppCard(
-                  onTap: () {
+                  onTap: () async {
                     if (tx.invoice != null) {
-                      context.push(RouteNames.invoiceDetails, extra: tx.invoice);
+                      final bloc = context.read<InvoiceBloc>();
+                      await context.push(
+                        RouteNames.createInvoice,
+                        extra: {
+                          'invoiceType': tx.invoice!.type,
+                          'invoiceToEdit': tx.invoice,
+                        },
+                      );
+                      if (!mounted) return;
+                      bloc.add(const FetchInvoicesEvent());
                     }
                   },
                   padding: const EdgeInsets.all(14),
@@ -541,8 +520,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                               color: AppColors.success.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.arrow_downward_rounded,
-                                color: AppColors.success, size: 20),
+                            child: const Icon(Icons.arrow_downward_rounded, color: AppColors.success, size: 20),
                           ),
                           const SizedBox(width: 12),
                           Column(
@@ -607,25 +585,24 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
     );
   }
 
-  // EXPENSES TAB UI
-  Widget _buildExpensesTab(BuildContext context, DailyLedgerLoadedState state) {
+  // CASH OUT TAB UI (Purchase Expense + Other Expense)
+  Widget _buildCashOutTab(BuildContext context, DailyLedgerLoadedState state) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cash Balance Section
           _buildCashBalanceCard(context, state),
           const SizedBox(height: 16),
 
-          // Today's Expenses Summary Card
+          // Cash Out Summary Breakdown
           AppCard(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Today\'s Expenses Summary',
+                  'Cash Out Classification',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -636,35 +613,18 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Total Expenses',
-                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
+                    const Text('Total Cash Out', style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
                     Text(_formatCurrency(state.totalExpenses),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.warning)),
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.warning)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Cash Expenses',
-                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
+                    const Text('Other Expenses', style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
                     Text(_formatCurrency(state.cashExpenses),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.danger)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Account Expenses',
-                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
-                    Text(_formatCurrency(state.accountExpenses),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: AppColors.secondaryText)),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.danger)),
                   ],
                 ),
               ],
@@ -672,9 +632,8 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
           ),
           const SizedBox(height: 20),
 
-          // Expense Transactions Header
           const Text(
-            'Expense Transactions',
+            'Cash Out Transactions',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
@@ -685,11 +644,10 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
 
           if (state.expenseTransactions.isEmpty)
             const EmptyState(
-              title: 'No expenses recorded',
-              message: 'Expense transactions for this date will appear here.',
+              title: 'No Cash Out records for this date',
+              message: 'Purchase Expenses and Other Expenses will appear here.',
               icon: Icons.money_off_outlined,
             )
-
           else
             ListView.separated(
               shrinkWrap: true,
@@ -711,8 +669,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                               color: AppColors.danger.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.arrow_upward_rounded,
-                                color: AppColors.danger, size: 20),
+                            child: const Icon(Icons.arrow_upward_rounded, color: AppColors.danger, size: 20),
                           ),
                           const SizedBox(width: 12),
                           Column(
@@ -728,7 +685,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${exp.category} • ${DateFormat('h:mm a').format(exp.expenseDate)}',
+                                'Other Expense • ${exp.category} • ${DateFormat('h:mm a').format(exp.expenseDate)}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.secondaryText,
@@ -773,228 +730,6 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
               },
             ),
         ],
-      ),
-    );
-  }
-}
-
-// ADD EXPENSE BOTTOM SHEET MODAL
-class _AddExpenseModal extends StatefulWidget {
-  final DateTime selectedDate;
-  final ValueChanged<ExpenseEntity> onSave;
-
-  const _AddExpenseModal({
-    required this.selectedDate,
-    required this.onSave,
-  });
-
-  @override
-  State<_AddExpenseModal> createState() => _AddExpenseModalState();
-}
-
-class _AddExpenseModalState extends State<_AddExpenseModal> {
-  final _formKey = GlobalKey<FormState>();
-  int _expenseTypeIndex = 0; // 0 for Cash Expense, 1 for Expense Account
-
-  late TextEditingController _amountController;
-  late TextEditingController _noteController;
-
-  String _selectedCategory = 'Electricity';
-
-  final List<String> _accountCategories = [
-    'Electricity',
-    'Rent',
-    'Transport',
-    'Internet',
-    'Telephone',
-    'Salary',
-    'Office Supplies',
-    'Maintenance',
-    'Marketing',
-    'Other',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _amountController = TextEditingController();
-    _noteController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    _noteController.dispose();
-    super.dispose();
-  }
-
-  void _saveExpense() {
-    if (!_formKey.currentState!.validate()) return;
-
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
-    final note = _noteController.text.trim();
-
-    final isCash = _expenseTypeIndex == 0;
-    final title = isCash
-        ? (note.isNotEmpty ? note : 'Cash Expense')
-        : '$_selectedCategory Expense';
-    final category = isCash ? 'Cash Expense' : _selectedCategory;
-    final paymentMode = isCash ? 'Cash' : 'Account';
-
-    final newExpense = ExpenseEntity(
-      id: '',
-      title: title,
-      category: category,
-      amount: amount,
-      paymentMode: paymentMode,
-      expenseDate: widget.selectedDate,
-      notes: note,
-    );
-
-    widget.onSave(newExpense);
-    Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Record New Expense',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.darkBlueText,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Expense Type Selector Segmented Control
-            const Text(
-              'Expense Type',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Center(child: Text('Cash Expense')),
-                    selected: _expenseTypeIndex == 0,
-                    selectedColor: AppColors.primaryBlue,
-                    labelStyle: TextStyle(
-                      color: _expenseTypeIndex == 0 ? Colors.white : AppColors.darkBlueText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    onSelected: (val) {
-                      if (val) setState(() => _expenseTypeIndex = 0);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Center(child: Text('Expense Account')),
-                    selected: _expenseTypeIndex == 1,
-                    selectedColor: AppColors.primaryBlue,
-                    labelStyle: TextStyle(
-                      color: _expenseTypeIndex == 1 ? Colors.white : AppColors.darkBlueText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    onSelected: (val) {
-                      if (val) setState(() => _expenseTypeIndex = 1);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // If Expense Account selected -> Show Category Dropdown
-            if (_expenseTypeIndex == 1) ...[
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
-                decoration: InputDecoration(
-                  labelText: 'Expense Category / Account',
-                  prefixIcon: const Icon(Icons.category_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                items: _accountCategories
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedCategory = val);
-                },
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Amount Field
-            TextFormField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Amount *',
-                prefixIcon: const Icon(Icons.currency_rupee),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              validator: (val) {
-                if (val == null || val.trim().isEmpty) return 'Please enter expense amount';
-                if ((double.tryParse(val.trim()) ?? 0) <= 0) return 'Enter valid amount';
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Note Field
-            TextFormField(
-              controller: _noteController,
-              decoration: InputDecoration(
-                labelText: 'Note / Description',
-                prefixIcon: const Icon(Icons.notes_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Save Expense Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.danger,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: _saveExpense,
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Save Expense', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -21,9 +21,32 @@ class SupplierEntity extends Equatable {
     required this.createdAt,
   });
 
+  SupplierEntity copyWith({
+    String? id,
+    String? name,
+    String? companyName,
+    String? phone,
+    String? email,
+    String? address,
+    double? payableBalance,
+    DateTime? createdAt,
+  }) {
+    return SupplierEntity(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      companyName: companyName ?? this.companyName,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      address: address ?? this.address,
+      payableBalance: payableBalance ?? this.payableBalance,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   @override
   List<Object?> get props => [id, name, companyName, phone, email, address, payableBalance, createdAt];
 }
+
 
 class PurchaseEntity extends Equatable {
   final String id;

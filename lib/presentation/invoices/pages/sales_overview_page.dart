@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/bloc/sales_overview_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
@@ -889,8 +890,17 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                     invoice: inv,
                     formattedDate: _formatDate(inv.issueDate),
                     formattedAmount: _formatCurrency(inv.grandTotal),
-                    onTap: () {
-                      context.push(RouteNames.invoiceDetails, extra: inv);
+                    onTap: () async {
+                      final bloc = context.read<InvoiceBloc>();
+                      await context.push(
+                        RouteNames.createInvoice,
+                        extra: {
+                          'invoiceType': inv.type,
+                          'invoiceToEdit': inv,
+                        },
+                      );
+                      if (!mounted) return;
+                      bloc.add(const FetchInvoicesEvent());
                     },
                   );
                 },

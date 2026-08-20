@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
+import '../../domain/entities/product_entity.dart';
+import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
 import '../../presentation/customers/pages/accounts_page.dart';
@@ -11,12 +13,14 @@ import '../../presentation/customers/pages/customer_details_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/customers/pages/expense_account_details_page.dart';
 
-
 import '../../presentation/dashboard/pages/dashboard_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
 import '../../presentation/invoices/pages/daily_ledger_page.dart';
 import '../../presentation/invoices/pages/invoice_details_page.dart';
+import '../../presentation/invoices/pages/return_voucher_screen.dart';
+import '../../presentation/invoices/pages/returns_list_page.dart';
+import '../../presentation/invoices/pages/transaction_screen.dart';
 
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
@@ -27,6 +31,7 @@ import '../../presentation/leads/pages/followups_page.dart';
 import '../../presentation/leads/pages/lead_details_page.dart';
 import '../../presentation/leads/pages/lead_pipeline_page.dart';
 import '../../presentation/main/pages/main_shell_page.dart';
+import '../../presentation/main/pages/create_master_page.dart';
 import '../../presentation/onboarding/pages/business_onboarding_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
 import '../../presentation/products/pages/product_list_page.dart';
@@ -38,13 +43,13 @@ import '../../presentation/reports/pages/financial_analytics_page.dart';
 import '../../presentation/reports/pages/inventory_analytics_page.dart';
 import '../../presentation/reports/pages/reports_page.dart';
 import '../../presentation/reports/pages/sales_analytics_page.dart';
+import '../../presentation/settings/pages/backup_restore_page.dart';
 import '../../presentation/settings/pages/business_profile_page.dart';
-
+import '../../presentation/settings/pages/category_management_page.dart';
 import '../../presentation/settings/pages/invoice_settings_page.dart';
 import '../../presentation/settings/pages/more_menu_page.dart';
 import '../../presentation/settings/pages/settings_page.dart';
 import '../../presentation/settings/pages/tax_gst_settings_page.dart';
-
 
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
 import '../../presentation/suppliers/pages/supplier_details_page.dart';
@@ -55,6 +60,45 @@ import '../../presentation/whatsapp/pages/edit_rule_page.dart';
 import '../../presentation/whatsapp/pages/new_template_page.dart';
 import '../../presentation/whatsapp/pages/whatsapp_templates_page.dart';
 import 'route_names.dart';
+
+Widget _buildCreateMasterPage(GoRouterState state) {
+  int tab = 0;
+  ProductEntity? product;
+  CustomerEntity? customer;
+  SupplierEntity? supplier;
+  ExpenseAccountSummary? expense;
+
+  final extra = state.extra;
+  if (extra is int) {
+    tab = extra;
+  } else if (extra is ProductEntity) {
+    tab = 0;
+    product = extra;
+  } else if (extra is CustomerEntity) {
+    tab = 1;
+    customer = extra;
+  } else if (extra is SupplierEntity) {
+    tab = 2;
+    supplier = extra;
+  } else if (extra is ExpenseAccountSummary) {
+    tab = 3;
+    expense = extra;
+  } else if (extra is Map<String, dynamic>) {
+    tab = (extra['tab'] as int?) ?? 0;
+    product = extra['product'] as ProductEntity?;
+    customer = extra['customer'] as CustomerEntity?;
+    supplier = extra['supplier'] as SupplierEntity?;
+    expense = extra['expense'] as ExpenseAccountSummary?;
+  }
+
+  return CreateMasterPage(
+    initialTabIndex: tab,
+    productToEdit: product,
+    customerToEdit: customer,
+    supplierToEdit: supplier,
+    expenseToEdit: expense,
+  );
+}
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -157,15 +201,39 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.productDetails,
-        builder: (context, state) => const ProductDetailsPage(),
+        builder: (context, state) {
+          final prod = state.extra as ProductEntity?;
+          return ProductDetailsPage(product: prod);
+        },
       ),
       GoRoute(
         path: RouteNames.stockAdjustment,
-        builder: (context, state) => const StockAdjustmentPage(),
+        builder: (context, state) {
+          if (state.extra is ProductEntity) {
+            return StockAdjustmentPage(product: state.extra as ProductEntity);
+          } else if (state.extra is Map<String, dynamic>) {
+            final args = state.extra as Map<String, dynamic>;
+            final prod = args['product'] as ProductEntity?;
+            final initialAddition = (args['initialAddition'] as bool?) ?? true;
+            return StockAdjustmentPage(
+                product: prod, initialAddition: initialAddition);
+          }
+          return const StockAdjustmentPage();
+        },
       ),
+
       GoRoute(
         path: RouteNames.invoices,
-        builder: (context, state) => const InvoiceListPage(),
+        builder: (context, state) {
+          InvoiceType? initialType;
+          if (state.extra is InvoiceType) {
+            initialType = state.extra as InvoiceType;
+          } else if (state.extra is Map<String, dynamic>) {
+            initialType = (state.extra as Map<String, dynamic>)['initialType']
+                as InvoiceType?;
+          }
+          return InvoiceListPage(initialType: initialType);
+        },
       ),
       GoRoute(
         path: RouteNames.dailyLedger,
@@ -181,12 +249,96 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.createInvoice,
-
-        builder: (context, state) => const CreateInvoicePage(),
+        builder: (context, state) {
+          InvoiceType invoiceType = InvoiceType.sale;
+          InvoiceEntity? invoiceToEdit;
+          if (state.extra is Map<String, dynamic>) {
+            final map = state.extra as Map<String, dynamic>;
+            if (map['invoiceType'] is InvoiceType) {
+              invoiceType = map['invoiceType'] as InvoiceType;
+            }
+            if (map['invoiceToEdit'] is InvoiceEntity) {
+              invoiceToEdit = map['invoiceToEdit'] as InvoiceEntity;
+            }
+          } else if (state.extra is InvoiceEntity) {
+            invoiceToEdit = state.extra as InvoiceEntity;
+            invoiceType = invoiceToEdit.type;
+          }
+          return CreateInvoicePage(
+            invoiceType: invoiceType,
+            invoiceToEdit: invoiceToEdit,
+          );
+        },
       ),
       GoRoute(
         path: RouteNames.invoiceDetails,
         builder: (context, state) => const InvoiceDetailsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.salesReturns,
+        builder: (context, state) =>
+            const ReturnsListPage(type: InvoiceType.sale),
+      ),
+      GoRoute(
+        path: RouteNames.purchaseReturns,
+        builder: (context, state) =>
+            const ReturnsListPage(type: InvoiceType.purchase),
+      ),
+      GoRoute(
+        path: RouteNames.createReturn,
+        builder: (context, state) {
+          ReturnType rType = ReturnType.salesReturn;
+          dynamic existingReturn;
+          if (state.extra is Map<String, dynamic>) {
+            final map = state.extra as Map<String, dynamic>;
+            if (map['returnType'] is ReturnType) {
+              rType = map['returnType'] as ReturnType;
+            } else if (map['type'] is InvoiceType) {
+              rType = (map['type'] as InvoiceType) == InvoiceType.purchase ? ReturnType.purchaseReturn : ReturnType.salesReturn;
+            }
+            existingReturn = map['existingReturn'];
+          } else if (state.extra is ReturnType) {
+            rType = state.extra as ReturnType;
+          }
+          return ReturnVoucherScreen(
+            returnType: rType,
+            existingReturn: existingReturn,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.income,
+        builder: (context, state) {
+          dynamic existing;
+          if (state.extra is Map<String, dynamic>) {
+            existing = (state.extra as Map<String, dynamic>)['existingTransaction'];
+          } else {
+            existing = state.extra;
+          }
+          return TransactionScreen(
+            transactionType: TransactionType.income,
+            existingTransaction: existing,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.expense,
+        builder: (context, state) {
+          dynamic existing;
+          if (state.extra is Map<String, dynamic>) {
+            existing = (state.extra as Map<String, dynamic>)['existingTransaction'];
+          } else {
+            existing = state.extra;
+          }
+          return TransactionScreen(
+            transactionType: TransactionType.expense,
+            existingTransaction: existing,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.categories,
+        builder: (context, state) => const CategoryManagementPage(),
       ),
       GoRoute(
         path: RouteNames.invoiceResult,
@@ -275,7 +427,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.supplierDetails,
-        builder: (context, state) => const SupplierDetailsPage(),
+        builder: (context, state) {
+          final sup = state.extra as SupplierEntity?;
+          return SupplierDetailsPage(supplier: sup);
+        },
       ),
       GoRoute(
         path: RouteNames.automatedReminders,
@@ -298,6 +453,10 @@ class AppRouter {
         builder: (context, state) => const OfflineSyncCenterPage(),
       ),
       GoRoute(
+        path: RouteNames.backupRestore,
+        builder: (context, state) => const BackupRestorePage(),
+      ),
+      GoRoute(
         path: RouteNames.settings,
         builder: (context, state) => const SettingsPage(),
       ),
@@ -309,8 +468,14 @@ class AppRouter {
         path: RouteNames.taxGstSettings,
         builder: (context, state) => const TaxGstSettingsPage(),
       ),
-
-
+      GoRoute(
+        path: RouteNames.addMaster,
+        builder: (context, state) => _buildCreateMasterPage(state),
+      ),
+      GoRoute(
+        path: RouteNames.createMaster,
+        builder: (context, state) => _buildCreateMasterPage(state),
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('No route defined for ${state.uri}')),

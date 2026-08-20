@@ -11,7 +11,6 @@ import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/product_repository.dart';
 import '../../widgets/app_card.dart';
 
-
 class AddProductsPage extends StatefulWidget {
   final List<InvoiceItemEntity> initialItems;
 
@@ -32,6 +31,7 @@ class _AddProductsPageState extends State<AddProductsPage>
 
   // Barcode Scanner controls & state
   late final MobileScannerController _scannerController;
+  // bool _isCameraOn = false;
   bool _isCameraOn = true;
   bool _isFlashOn = false;
   DateTime? _lastScanTime;
@@ -47,6 +47,7 @@ class _AddProductsPageState extends State<AddProductsPage>
     _scannerController = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       torchEnabled: false,
+      // autoStart: false,
       autoStart: true,
     );
   }
@@ -65,7 +66,8 @@ class _AddProductsPageState extends State<AddProductsPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!_scannerController.value.isInitialized) return;
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       _scannerController.stop();
     } else if (state == AppLifecycleState.resumed && _isCameraOn) {
       _scannerController.start();
@@ -115,25 +117,24 @@ class _AddProductsPageState extends State<AddProductsPage>
 
       final cleanCode = code.trim().toLowerCase();
       final matchedProduct = _allProducts.cast<ProductEntity?>().firstWhere(
-        (p) =>
-            p != null &&
-            (p.sku.trim().toLowerCase() == cleanCode ||
-                p.id.trim().toLowerCase() == cleanCode ||
-                p.name.trim().toLowerCase() == cleanCode),
-        orElse: () => null,
-      );
+            (p) =>
+                p != null &&
+                (p.sku.trim().toLowerCase() == cleanCode ||
+                    p.id.trim().toLowerCase() == cleanCode ||
+                    p.name.trim().toLowerCase() == cleanCode),
+            orElse: () => null,
+          );
 
       if (matchedProduct != null) {
         _addProductToCart(matchedProduct);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No product found matching barcode: $code'),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+
+        // setState(() {
+        //     _isCameraOn = false;
+        //   });
+        //   _scannerController.stop();
       }
+
+      // If no product is found, silently ignore without showing error snackbar.
       break;
     }
   }
@@ -315,8 +316,7 @@ class _AddProductsPageState extends State<AddProductsPage>
                 children: [
                   InkWell(
                     onTap: () => Navigator.pop(context, widget.initialItems),
-                    borderRadius:
-                        BorderRadius.circular(AppSizes.radiusMedium),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
                     child: Container(
                       width: 44,
                       height: 44,
@@ -413,8 +413,7 @@ class _AddProductsPageState extends State<AddProductsPage>
                   // Camera Toggle Quick Button
                   InkWell(
                     onTap: _toggleCamera,
-                    borderRadius:
-                        BorderRadius.circular(AppSizes.radiusMedium),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
                     child: Container(
                       width: 48,
                       height: 48,
@@ -634,9 +633,7 @@ class _AddProductsPageState extends State<AddProductsPage>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              _isFlashOn
-                                  ? Icons.flash_on
-                                  : Icons.flash_off,
+                              _isFlashOn ? Icons.flash_on : Icons.flash_off,
                               color: _isFlashOn ? Colors.black : Colors.white,
                               size: 16,
                             ),

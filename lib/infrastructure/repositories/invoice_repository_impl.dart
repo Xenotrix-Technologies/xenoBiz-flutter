@@ -34,12 +34,14 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
     return {
       'id': inv.id,
       'invoiceNumber': inv.invoiceNumber,
+      'type': inv.type.name,
       'customerId': inv.customerId,
       'customerName': inv.customerName,
       'customerPhone': inv.customerPhone,
       'items': inv.items.map((i) => {
         'productId': i.productId,
         'productName': i.productName,
+        'sku': i.sku,
         'quantity': i.quantity,
         'unitPrice': i.unitPrice,
         'taxPercentage': i.taxPercentage,
@@ -64,6 +66,7 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
         return InvoiceItemEntity(
           productId: itm['productId']?.toString() ?? itm['product_id']?.toString() ?? '',
           productName: itm['productName']?.toString() ?? itm['product_name']?.toString() ?? 'Item',
+          sku: itm['sku']?.toString() ?? '',
           quantity: (itm['quantity'] as num?)?.toInt() ?? 1,
           unitPrice: (itm['unitPrice'] as num?)?.toDouble() ??
               (itm['unit_price'] as num?)?.toDouble() ?? 0.0,
@@ -74,9 +77,15 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       return const InvoiceItemEntity(productId: '', productName: '', quantity: 1, unitPrice: 0.0);
     }).toList();
 
+    final typeStr = map['type']?.toString();
+    final type = typeStr == 'purchase' || typeStr == 'InvoiceType.purchase'
+        ? InvoiceType.purchase
+        : InvoiceType.sale;
+
     return InvoiceEntity(
       id: map['id']?.toString() ?? '',
       invoiceNumber: map['invoiceNumber']?.toString() ?? map['invoice_number']?.toString() ?? 'INV-000',
+      type: type,
       customerId: map['customerId']?.toString() ?? map['customer_id']?.toString() ?? '',
       customerName: map['customerName']?.toString() ?? map['customer_name']?.toString() ?? 'Guest Customer',
       customerPhone: map['customerPhone']?.toString() ?? map['customer_phone']?.toString() ?? '',

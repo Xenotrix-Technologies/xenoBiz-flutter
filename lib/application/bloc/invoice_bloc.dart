@@ -5,6 +5,7 @@ import '../../domain/entities/payment_entity.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/usecases/create_invoice_usecase.dart';
 import '../../domain/usecases/record_payment_usecase.dart';
+import '../../domain/usecases/update_invoice_usecase.dart';
 
 // Events
 abstract class InvoiceEvent extends Equatable {
@@ -25,6 +26,14 @@ class FetchInvoicesEvent extends InvoiceEvent {
 class CreateInvoiceSubmittedEvent extends InvoiceEvent {
   final InvoiceEntity invoice;
   const CreateInvoiceSubmittedEvent(this.invoice);
+
+  @override
+  List<Object?> get props => [invoice];
+}
+
+class UpdateInvoiceSubmittedEvent extends InvoiceEvent {
+  final InvoiceEntity invoice;
+  const UpdateInvoiceSubmittedEvent(this.invoice);
 
   @override
   List<Object?> get props => [invoice];
@@ -77,15 +86,18 @@ class InvoiceErrorState extends InvoiceState {
 class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
   final InvoiceRepository invoiceRepository;
   final CreateInvoiceUseCase createInvoiceUseCase;
+  final UpdateInvoiceUseCase updateInvoiceUseCase;
   final RecordPaymentUseCase recordPaymentUseCase;
 
   InvoiceBloc({
     required this.invoiceRepository,
     required this.createInvoiceUseCase,
+    required this.updateInvoiceUseCase,
     required this.recordPaymentUseCase,
   }) : super(InvoiceInitialState()) {
     on<FetchInvoicesEvent>(_onFetchInvoices);
     on<CreateInvoiceSubmittedEvent>(_onCreateInvoiceSubmitted);
+    on<UpdateInvoiceSubmittedEvent>(_onUpdateInvoiceSubmitted);
     on<RecordPaymentSubmittedEvent>(_onRecordPaymentSubmitted);
   }
 
@@ -108,7 +120,22 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     emit(InvoiceLoadingState());
     try {
       final created = await createInvoiceUseCase.execute(event.invoice);
-      emit(InvoiceOperationSuccessState('Invoice #${created.invoiceNumber} created successfully!'));
+      final label = created.isPurchase ? 'Purchase' : 'Invoice';
+      emit(InvoiceOperationSuccessState('$label #${created.invoiceNumber} created successfully!'));
+      add(const FetchInvoicesEvent());
+    } catch (e) {
+      emit(InvoiceErrorState(e.toString()));
+    }
+  }
+
+  Future<void> _onUpdateInvoiceSubmitted(
+      UpdateInvoiceSubmittedEvent event, Emitter<InvoiceState> emit) async {
+    emit(InvoiceLoadingState());
+    try {
+      final updated = await updateInvoiceUseCase.execute(event.invoice);
+      final label = updated.isPurchase ? 'Purchase' : 'Invoice';
+      emit(InvoiceOperationSuccessState('$label #${updated.invoiceNumber} updated successfully!'));
+      add(const FetchInvoicesEvent());
     } catch (e) {
       emit(InvoiceErrorState(e.toString()));
     }
@@ -120,8 +147,10 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     try {
       await recordPaymentUseCase.execute(event.payment);
       emit(const InvoiceOperationSuccessState('Payment recorded and balances updated!'));
+      add(const FetchInvoicesEvent());
     } catch (e) {
       emit(InvoiceErrorState(e.toString()));
     }
   }
 }
+

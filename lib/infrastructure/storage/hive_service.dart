@@ -13,6 +13,11 @@ class HiveService {
   static const String boxPurchases = 'purchases_box';
   static const String boxExpenses = 'expenses_box';
   static const String boxSuppliers = 'suppliers_box';
+  static const String boxStockMovements = 'stock_movements_box';
+  static const String boxSalesReturns = 'sales_returns_box';
+  static const String boxPurchaseReturns = 'purchase_returns_box';
+  static const String boxIncome = 'income_box';
+  static const String boxCategories = 'categories_box';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -28,6 +33,11 @@ class HiveService {
     await Hive.openBox(boxPurchases);
     await Hive.openBox(boxExpenses);
     await Hive.openBox(boxSuppliers);
+    await Hive.openBox(boxStockMovements);
+    await Hive.openBox(boxSalesReturns);
+    await Hive.openBox(boxPurchaseReturns);
+    await Hive.openBox(boxIncome);
+    await Hive.openBox(boxCategories);
   }
 
   Box getBox(String boxName) => Hive.box(boxName);
@@ -36,4 +46,3 @@ class HiveService {
     // Left empty so local boxes start clean and only display server or user-created data.
   }
 }
-

@@ -84,6 +84,23 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
   }
 
   @override
+  Future<SupplierEntity> updateSupplier(SupplierEntity supplier) async {
+    final box = hiveService.getBox(HiveService.boxSuppliers);
+    await box.put(supplier.id, {
+      'id': supplier.id,
+      'name': supplier.name,
+      'companyName': supplier.companyName,
+      'phone': supplier.phone,
+      'email': supplier.email,
+      'address': supplier.address,
+      'payableBalance': supplier.payableBalance,
+      'createdAt': supplier.createdAt.toIso8601String(),
+    });
+    return supplier;
+  }
+
+
+  @override
   Future<List<PurchaseEntity>> getPurchaseOrders() async {
     final box = hiveService.getBox(HiveService.boxPurchases);
     final List<PurchaseEntity> list = [];
@@ -123,6 +140,27 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       'orderDate': local.orderDate.toIso8601String(),
       'notes': local.notes,
     });
+
+    // Update supplier payable balance in Hive boxSuppliers
+    final supBox = hiveService.getBox(HiveService.boxSuppliers);
+    final supKey = local.supplierId.isNotEmpty ? local.supplierId : 'sup_${local.supplierName.toLowerCase().replaceAll(' ', '_')}';
+    final existingSup = supBox.get(supKey);
+    if (existingSup is Map) {
+      final double currentPayable = (existingSup['payableBalance'] as num?)?.toDouble() ?? 0.0;
+      existingSup['payableBalance'] = currentPayable + local.totalAmount;
+      await supBox.put(supKey, existingSup);
+    } else {
+      await supBox.put(supKey, {
+        'id': supKey,
+        'name': local.supplierName,
+        'companyName': local.supplierName,
+        'phone': '',
+        'email': '',
+        'address': '',
+        'payableBalance': local.totalAmount,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
 
     return local;
   }

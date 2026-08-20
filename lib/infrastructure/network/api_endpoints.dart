@@ -1,15 +1,16 @@
-import 'package:flutter/foundation.dart';
+// import 'package:flutter/foundation.dart';
 
 /// Centralized REST API endpoint constants.
 abstract class ApiEndpoints {
   // Configured for local Node.js backend server (http://10.0.2.2:3000 for Android emulator, http://localhost:3000 for Desktop/Web)
-  static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:3000/api/v1';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000/api/v1';
-    }
-    return 'http://localhost:3000/api/v1';
-  }
+  static String baseUrl = 'https://xenobiz-admin-flutter.onrender.com/api/v1';
+  // static String get baseUrl {
+  //   if (kIsWeb) return 'http://localhost:3000/api/v1';
+  //   if (defaultTargetPlatform == TargetPlatform.android) {
+  //     return 'http://10.0.2.2:3000/api/v1';
+  //   }
+  //   return 'http://localhost:3000/api/v1';
+  // }
 
   // Auth & Profile
   static const String login = '/auth/login';
@@ -19,7 +20,6 @@ abstract class ApiEndpoints {
   static const String refreshToken = '/auth/refresh';
   static const String profile = '/auth/profile';
   static const String changePassword = '/auth/change-password';
-
 
   // Subscription
   static const String subscriptionEntitlement = '/subscription/entitlement';

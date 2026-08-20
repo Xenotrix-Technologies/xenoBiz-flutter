@@ -55,12 +55,23 @@ abstract class RouteNames {
   static const String expenseAccountDetails = '/expense-account-details';
   static const String dailyLedger = '/daily-ledger';
   static const String offlineSync = '/offline-sync';
+  static const String backupRestore = '/backup-restore';
   static const String settings = '/settings';
 
   static const String businessProfile = '/business-profile';
   static const String taxGstSettings = '/tax-gst-settings';
   static const String more = '/more';
+  static const String addMaster = '/add-master';
+  static const String createMaster = '/create-master';
 
+  // Returns
+  static const String salesReturns = '/sales-returns';
+  static const String purchaseReturns = '/purchase-returns';
+  static const String createReturn = '/create-return';
 
-
+  // Finance & Transactions
+  static const String income = '/income';
+  static const String expense = '/expense';
+  static const String categories = '/categories';
 }
+

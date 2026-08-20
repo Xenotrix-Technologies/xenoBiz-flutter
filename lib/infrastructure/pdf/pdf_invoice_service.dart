@@ -24,12 +24,15 @@ class PdfInvoiceService {
     final dateFormatter = DateFormat('MMM dd, yyyy');
     final timeFormatter = DateFormat('HH:mm');
 
-    final isGstActive = taxSettings.isGstEnabled && settings.showTax;
+    final isGstActive = taxSettings.isGstEnabled && invoice.gstEnabled && settings.showTax;
     final isCashSale = customer == null;
 
     final subtotal = invoice.subtotal;
+    final discountTotal = invoice.discountTotal;
+    final taxableAmount = (subtotal - discountTotal).clamp(0.0, double.infinity);
     final taxTotal = isGstActive ? invoice.taxTotal : 0.0;
-    final grandTotal = isGstActive ? invoice.grandTotal : subtotal;
+    final extraExpense = invoice.extraExpenseAmount;
+    final grandTotal = invoice.grandTotal;
     final amountPaid = invoice.paidAmount;
     final balanceDue = (grandTotal - amountPaid).clamp(0.0, double.infinity);
 
@@ -151,11 +154,22 @@ class PdfInvoiceService {
                 mainAxisAlignment: pw.MainAxisAlignment.end,
                 children: [
                   pw.Container(
-                    width: 240,
+                    width: 250,
                     child: pw.Column(
                       children: [
                         _pdfSummaryRow('Subtotal', 'INR ${subtotal.toStringAsFixed(2)}'),
+                        if (discountTotal > 0) ...[
+                          _pdfSummaryRow('Discount', '- INR ${discountTotal.toStringAsFixed(2)}', color: PdfColors.green800),
+                          _pdfSummaryRow('Taxable Amount', 'INR ${taxableAmount.toStringAsFixed(2)}'),
+                        ],
                         if (isGstActive) _pdfSummaryRow('Tax (GST)', 'INR ${taxTotal.toStringAsFixed(2)}'),
+                        if (extraExpense > 0)
+                          _pdfSummaryRow(
+                            invoice.extraExpenseDescription.isNotEmpty
+                                ? 'Extra Expense (${invoice.extraExpenseDescription})'
+                                : 'Extra Expense',
+                            'INR ${extraExpense.toStringAsFixed(2)}',
+                          ),
                         if (!isCashSale && settings.showPreviousBalance && previousBalance > 0)
                           _pdfSummaryRow('Previous Balance', 'INR ${previousBalance.toStringAsFixed(2)}'),
                         pw.Divider(thickness: 1, color: PdfColors.grey400),
@@ -263,6 +277,331 @@ class PdfInvoiceService {
     await Printing.sharePdf(
       bytes: pdfBytes,
       filename: 'Invoice_${invoice.invoiceNumber}.pdf',
+    );
+  }
+
+  // ===========================================================================
+  // 2-INCH THERMAL RECEIPT GENERATOR & PRINTER
+  // ===========================================================================
+  static Future<Uint8List> generate2InchThermalPdf({
+    required InvoiceEntity invoice,
+    required BusinessEntity business,
+    required InvoiceDisplaySettingsEntity settings,
+    required TaxSettingsEntity taxSettings,
+    CustomerEntity? customer,
+    double previousBalance = 0.0,
+    String paymentMethod = 'Cash',
+  }) async {
+    final pdf = pw.Document();
+    final dateFormatter = DateFormat('dd/MM/yyyy');
+    final timeFormatter = DateFormat('hh:mm a');
+
+    final isGstActive = taxSettings.isGstEnabled && invoice.gstEnabled && settings.showTax;
+    final isCashSale = customer == null;
+
+    final subtotal = invoice.subtotal;
+    final discountTotal = invoice.discountTotal;
+    final taxableAmount = (subtotal - discountTotal).clamp(0.0, double.infinity);
+    final taxTotal = isGstActive ? invoice.taxTotal : 0.0;
+    final extraExpense = invoice.extraExpenseAmount;
+    final grandTotal = invoice.grandTotal;
+    final amountPaid = invoice.paidAmount;
+    final balanceDue = (grandTotal - amountPaid).clamp(0.0, double.infinity);
+
+    // 2-inch thermal paper format (58mm width roll)
+    const rollFormat = PdfPageFormat(
+      58 * PdfPageFormat.mm,
+      double.infinity,
+      marginLeft: 3 * PdfPageFormat.mm,
+      marginRight: 3 * PdfPageFormat.mm,
+      marginTop: 4 * PdfPageFormat.mm,
+      marginBottom: 8 * PdfPageFormat.mm,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: rollFormat,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Business Header
+              pw.Center(
+                child: pw.Text(
+                  business.name.toUpperCase(),
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ),
+              if (settings.showBusinessAddress && business.address.isNotEmpty) ...[
+                pw.SizedBox(height: 2),
+                pw.Center(
+                  child: pw.Text(
+                    business.address,
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+              ],
+              if (settings.showPhone && business.phone.isNotEmpty) ...[
+                pw.SizedBox(height: 1),
+                pw.Center(
+                  child: pw.Text(
+                    'Ph: ${business.phone}',
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+              ],
+              if (settings.showEmail && (business.email ?? '').isNotEmpty) ...[
+                pw.SizedBox(height: 1),
+                pw.Center(
+                  child: pw.Text(
+                    'Email: ${business.email}',
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+              ],
+              if (settings.showGstin && (business.gstin ?? '').isNotEmpty) ...[
+                pw.SizedBox(height: 1),
+                pw.Center(
+                  child: pw.Text(
+                    'GSTIN: ${business.gstin}',
+                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+              ],
+
+              _thermalDashedLine(),
+
+              // Invoice Metadata
+              pw.Center(
+                child: pw.Text(
+                  'TAX INVOICE',
+                  style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+              pw.SizedBox(height: 3),
+              if (settings.showInvoiceNumber)
+                _thermalInfoRow('Invoice No:', '#${invoice.invoiceNumber}'),
+              if (settings.showInvoiceDate)
+                _thermalInfoRow(
+                  'Date:',
+                  '${dateFormatter.format(invoice.issueDate)} ${settings.showInvoiceTime ? timeFormatter.format(invoice.issueDate) : ''}',
+                ),
+              if (settings.showCustomerInfo) ...[
+                _thermalInfoRow('Billed To:', isCashSale ? 'Cash Sale' : customer.name),
+                if (!isCashSale && settings.showCustomerPhone && customer.phone.isNotEmpty)
+                  _thermalInfoRow('Phone:', customer.phone),
+              ],
+
+              _thermalDashedLine(),
+
+              // Item Table Header
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('ITEM DESCRIPTION', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('QTY  AMOUNT', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+              _thermalDashedLine(),
+
+              // Product Items List
+              ...invoice.items.map((item) {
+                final itemTotal = item.quantity * item.unitPrice;
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        item.productName,
+                        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.SizedBox(height: 1),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text(
+                            '${item.quantity} x INR ${item.unitPrice.toStringAsFixed(2)}',
+                            style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
+                          ),
+                          pw.Text(
+                            'INR ${itemTotal.toStringAsFixed(2)}',
+                            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+
+              _thermalDashedLine(),
+
+              // Subtotal & Calculations
+              _thermalSummaryRow('Subtotal', 'INR ${subtotal.toStringAsFixed(2)}'),
+              if (discountTotal > 0) ...[
+                _thermalSummaryRow('Discount', '- INR ${discountTotal.toStringAsFixed(2)}'),
+                _thermalSummaryRow('Taxable Amt', 'INR ${taxableAmount.toStringAsFixed(2)}'),
+              ],
+              if (isGstActive) _thermalSummaryRow('GST / Tax', 'INR ${taxTotal.toStringAsFixed(2)}'),
+              if (extraExpense > 0)
+                _thermalSummaryRow(
+                  invoice.extraExpenseDescription.isNotEmpty
+                      ? 'Extra (${invoice.extraExpenseDescription})'
+                      : 'Extra Expense',
+                  'INR ${extraExpense.toStringAsFixed(2)}',
+                ),
+              if (!isCashSale && settings.showPreviousBalance && previousBalance > 0)
+                _thermalSummaryRow('Prev Balance', 'INR ${previousBalance.toStringAsFixed(2)}'),
+
+              _thermalDashedLine(),
+
+              // Grand Total
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('GRAND TOTAL', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('INR ${grandTotal.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+
+              _thermalDashedLine(),
+
+              // Payment Summary
+              if (settings.showPaymentMethod) _thermalSummaryRow('Payment Mode', paymentMethod),
+              if (settings.showAmountPaid) _thermalSummaryRow('Amount Paid', 'INR ${amountPaid.toStringAsFixed(2)}'),
+              if (settings.showBalanceDue && balanceDue > 0)
+                _thermalSummaryRow('Balance Due', 'INR ${balanceDue.toStringAsFixed(2)}', isBold: true),
+
+              _thermalDashedLine(),
+
+              // Footer Note
+              if (settings.showFooterMessage && settings.footerMessage.isNotEmpty) ...[
+                pw.Center(
+                  child: pw.Text(
+                    settings.footerMessage,
+                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+                pw.SizedBox(height: 3),
+              ],
+              pw.Center(
+                child: pw.Text(
+                  '*** Thank You! Visit Again ***',
+                  style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ),
+              pw.SizedBox(height: 2),
+              pw.Center(
+                child: pw.Text(
+                  'Powered by XenoBiz POS',
+                  style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey600),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ),
+              pw.SizedBox(height: 12),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  static pw.Widget _thermalDashedLine() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Text(
+        '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -',
+        style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+        maxLines: 1,
+        overflow: pw.TextOverflow.clip,
+      ),
+    );
+  }
+
+  static pw.Widget _thermalInfoRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800)),
+          pw.Text(value, style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _thermalSummaryRow(String label, String value, {bool isBold = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: 7.5,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 7.5,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Future<void> print2InchThermalInvoice({
+    required InvoiceEntity invoice,
+    required BusinessEntity business,
+    required InvoiceDisplaySettingsEntity settings,
+    required TaxSettingsEntity taxSettings,
+    CustomerEntity? customer,
+    double previousBalance = 0.0,
+    String paymentMethod = 'Cash',
+  }) async {
+    final pdfBytes = await generate2InchThermalPdf(
+      invoice: invoice,
+      business: business,
+      settings: settings,
+      taxSettings: taxSettings,
+      customer: customer,
+      previousBalance: previousBalance,
+      paymentMethod: paymentMethod,
+    );
+
+    const rollFormat = PdfPageFormat(
+      58 * PdfPageFormat.mm,
+      double.infinity,
+      marginLeft: 3 * PdfPageFormat.mm,
+      marginRight: 3 * PdfPageFormat.mm,
+      marginTop: 4 * PdfPageFormat.mm,
+      marginBottom: 8 * PdfPageFormat.mm,
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdfBytes,
+      name: 'Receipt_${invoice.invoiceNumber}',
+      format: rollFormat,
+      usePrinterSettings: false,
     );
   }
 }

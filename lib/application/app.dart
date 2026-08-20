@@ -39,6 +39,7 @@ class XenoBizApp extends StatelessWidget {
             create: (_) => InvoiceBloc(
               invoiceRepository: getIt(),
               createInvoiceUseCase: getIt(),
+              updateInvoiceUseCase: getIt(),
               recordPaymentUseCase: getIt(),
             ),
           ),

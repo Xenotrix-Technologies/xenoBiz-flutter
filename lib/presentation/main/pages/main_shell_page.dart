@@ -19,11 +19,19 @@ class MainShellPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: XenoBottomNavigationBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: _onTap,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && navigationShell.currentIndex != 0) {
+          _onTap(0);
+        }
+      },
+      child: Scaffold(
+        body: navigationShell,
+        bottomNavigationBar: XenoBottomNavigationBar(
+          currentIndex: navigationShell.currentIndex,
+          onTap: _onTap,
+        ),
       ),
     );
   }
