@@ -721,22 +721,28 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
 
                     if (_selectedCustomer != null)
                       AppCard(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                        backgroundColor: AppColors.deepNavy,
                         border: Border.all(
                             color: AppColors.primary.withValues(alpha: 0.3)),
-                        backgroundColor: AppColors.blueTint,
                         child: Row(
                           children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: AppColors.primary,
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryContainer
+                                    .withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(
+                                    AppSizes.radiusMedium),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              alignment: Alignment.center,
                               child: Text(
                                 _getInitials(_selectedCustomer!.name),
                                 style: const TextStyle(
                                   color: Colors.white,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w800,
-                                  fontSize: 13,
                                 ),
                               ),
                             ),
@@ -748,32 +754,73 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                   Text(
                                     _selectedCustomer!.name,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 14,
-                                      color: AppColors.onSurface,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
+                                  const SizedBox(height: 2),
                                   Text(
                                     _selectedCustomer!.phone.isNotEmpty
                                         ? _selectedCustomer!.phone
                                         : 'Contact account',
                                     style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.outline,
+                                      color: Colors.white70,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded,
-                                  color: AppColors.outline, size: 20),
-                              onPressed: () {
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _selectedCustomer!.outstandingBalance > 0
+                                      ? 'PREVIOUS BALANCE'
+                                      : 'STATUS',
+                                  style: const TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _selectedCustomer!.outstandingBalance > 0
+                                      ? '₹${_selectedCustomer!.outstandingBalance.toStringAsFixed(0)}'
+                                      : 'No Due',
+                                  style: TextStyle(
+                                    color: _selectedCustomer!.outstandingBalance > 0
+                                        ? AppColors.warning
+                                        : AppColors.success,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () {
                                 ref
                                     .read(createInvoiceFormProvider.notifier)
                                     .selectCustomer(null);
                                 _customerSearchCtrl.clear();
+                                _searchFocusNode.requestFocus();
                               },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close,
+                                    color: Colors.white70, size: 16),
+                              ),
                             ),
                           ],
                         ),
