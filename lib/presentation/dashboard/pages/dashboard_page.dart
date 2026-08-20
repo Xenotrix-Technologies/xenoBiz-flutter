@@ -458,15 +458,11 @@ class _DashboardPageState extends State<DashboardPage> {
             );
           }
           if (state is DashboardLoadedState) {
-            final todaySales =
-                state.todaySales > 0 ? state.todaySales : 18420.0;
-            final weeklySales =
-                state.weeklySales > 0 ? state.weeklySales : 96120.0;
-            final monthlySales =
-                state.monthlySales > 0 ? state.monthlySales : 410000.0;
-            final receivables =
-                state.totalReceivables > 0 ? state.totalReceivables : 22050.0;
-            final profit = state.netProfit > 0 ? state.netProfit : 6340.0;
+            final todaySales = state.todaySales;
+            final weeklySales = state.weeklySales;
+            final monthlySales = state.monthlySales;
+            final receivables = state.totalReceivables;
+            final profit = state.netProfit;
 
             return RefreshIndicator(
               onRefresh: () async {

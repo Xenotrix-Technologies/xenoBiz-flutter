@@ -447,15 +447,7 @@ class CrmService {
         }
       }
 
-      if (leads.isEmpty) {
-        stageMap[LeadStage.newLead] = 24;
-        stageMap[LeadStage.contacted] = 18;
-        stageMap[LeadStage.proposalSent] = 8;
-        stageMap[LeadStage.negotiating] = 5;
-        stageMap[LeadStage.won] = 3;
-      }
-
-      final double conversionRate = leads.isNotEmpty ? (wonLeadsCount / leads.length) * 100.0 : 12.0;
+      final double conversionRate = leads.isNotEmpty ? (wonLeadsCount / leads.length) * 100.0 : 0.0;
 
       final recentLeadsList = List<LeadEntity>.from(leads);
       recentLeadsList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -502,14 +494,9 @@ class CrmService {
         }
       }
 
-      if (totalOutstanding > 0 && (totalOverdueVal == 0 && totalDueVal == 0)) {
-        totalDueVal = totalOutstanding * 0.55;
-        totalOverdueVal = totalOutstanding * 0.45;
-      }
-
       final double salesChangePct = previousPeriodSalesVal > 0
           ? ((currentPeriodSalesVal - previousPeriodSalesVal) / previousPeriodSalesVal) * 100.0
-          : 12.5;
+          : 0.0;
 
       final points7D = _generateSalesPoints(invoices, 7, now);
       final points30D = _generateSalesPoints(invoices, 30, now);
@@ -518,13 +505,13 @@ class CrmService {
 
       final collectionPct = (totalPaidVal + totalOutstanding) > 0
           ? (totalPaidVal / (totalPaidVal + totalOutstanding)) * 100.0
-          : 72.6;
+          : 0.0;
 
       // 4. Follow-ups summary
-      int fuToday = 0;
-      int fuOverdue = 0;
-      int fuUpcoming = 0;
       int fuCompletedToday = 0;
+      int fuOverdue = 0;
+      int fuToday = 0;
+      int fuUpcoming = 0;
 
       for (var f in followUps) {
         if (f.isCompleted) {
@@ -612,93 +599,42 @@ class CrmService {
 
       recentFeed.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-      // Standard sample activity entries if live feed is empty
-      if (recentFeed.isEmpty) {
-        recentFeed.addAll([
-          CustomerTimelineEvent(
-            id: 'demo_1',
-            customerId: 'c1',
-            title: 'Payment Received',
-            description: 'Rahul Traders • ₹4,500',
-            eventType: 'PAYMENT',
-            amount: 4500,
-            timestamp: DateTime.now().subtract(const Duration(minutes: 12)),
-          ),
-          CustomerTimelineEvent(
-            id: 'demo_2',
-            customerId: 'l1',
-            title: 'New Lead Added',
-            description: 'ABC Enterprises • ₹18,500',
-            eventType: 'LEAD',
-            amount: 18500,
-            timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-          ),
-          CustomerTimelineEvent(
-            id: 'demo_3',
-            customerId: 'c2',
-            title: 'Follow-up Completed',
-            description: 'Order confirmation with Anita Nair',
-            eventType: 'FOLLOW_UP',
-            timestamp: DateTime.now().subtract(const Duration(hours: 4)),
-          ),
-          CustomerTimelineEvent(
-            id: 'demo_4',
-            customerId: 'i1',
-            title: 'Invoice #INV-1002 Generated',
-            description: 'XYZ Store • ₹12,000',
-            eventType: 'INVOICE',
-            amount: 12000,
-            timestamp: DateTime.now().subtract(const Duration(days: 1)),
-          ),
-          CustomerTimelineEvent(
-            id: 'demo_5',
-            customerId: 'c3',
-            title: 'Customer Profile Updated',
-            description: 'Kumar Traders',
-            eventType: 'ACCOUNT',
-            timestamp: DateTime.now().subtract(const Duration(days: 2)),
-          ),
-        ]);
-      }
-
-      final totalL = leads.isNotEmpty ? leads.length : stageMap.values.fold(0, (sum, v) => sum + v);
-
       return CrmDashboardMetrics(
         totalCustomers: customers.length,
         newCustomersThisMonth: newCustMonth,
-        totalLeads: totalL,
-        newLeadsThisMonth: newLeadsMonth > 0 ? newLeadsMonth : 5,
-        totalOutstandingAmount: totalOutstanding > 0 ? totalOutstanding : 24500.0,
+        totalLeads: leads.length,
+        newLeadsThisMonth: newLeadsMonth,
+        totalOutstandingAmount: totalOutstanding,
         leadConversionRate: conversionRate,
-        activeCustomers: activeCustCount > 0 ? activeCustCount : customers.length,
+        activeCustomers: activeCustCount,
         outstandingCustomersCount: outstandingCount,
         dueFollowUpsCount: fuToday + fuOverdue,
-        totalSales: totalSalesVal > 0 ? totalSalesVal : 124500.0,
-        currentPeriodSales: currentPeriodSalesVal > 0 ? currentPeriodSalesVal : 124500.0,
-        previousPeriodSales: previousPeriodSalesVal > 0 ? previousPeriodSalesVal : 110000.0,
+        totalSales: totalSalesVal,
+        currentPeriodSales: currentPeriodSalesVal,
+        previousPeriodSales: previousPeriodSalesVal,
         salesPercentageChange: salesChangePct,
         salesPoints7Days: points7D,
         salesPoints30Days: points30D,
         salesPoints3Months: points3M,
         salesPoints1Year: points1Y,
-        paidAmount: totalPaidVal > 0 ? totalPaidVal : 65000.0,
-        dueAmount: totalDueVal > 0 ? totalDueVal : 12500.0,
-        overdueAmount: totalOverdueVal > 0 ? totalOverdueVal : 12000.0,
+        paidAmount: totalPaidVal,
+        dueAmount: totalDueVal,
+        overdueAmount: totalOverdueVal,
         leadStageCounts: stageMap,
         customerGrowthPercentage: custGrowthPct,
         customerGrowthPoints: custGrowthPoints,
-        collectedThisMonth: collectedThisMonthVal > 0 ? collectedThisMonthVal : 65000.0,
-        pendingCollection: totalOutstanding > 0 ? totalOutstanding : 24500.0,
+        collectedThisMonth: collectedThisMonthVal,
+        pendingCollection: totalOutstanding,
         collectionPercentage: collectionPct,
-        newCustomersToday: newCustToday > 0 ? newCustToday : 3,
-        newLeadsToday: newLeadsTodayCount > 0 ? newLeadsTodayCount : 5,
-        followUpsCompletedToday: fuCompletedToday > 0 ? fuCompletedToday : 8,
-        followUpsPendingToday: fuToday > 0 ? fuToday : 4,
-        paymentsReceivedTodayAmount: paymentsReceivedTodayVal > 0 ? paymentsReceivedTodayVal : 18000.0,
-        invoicesCreatedToday: invoicesCreatedTodayCount > 0 ? invoicesCreatedTodayCount : 3,
-        followUpsTodayCount: fuToday > 0 ? fuToday : 7,
-        followUpsOverdueCount: fuOverdue > 0 ? fuOverdue : 2,
-        followUpsUpcomingCount: fuUpcoming > 0 ? fuUpcoming : 5,
+        newCustomersToday: newCustToday,
+        newLeadsToday: newLeadsTodayCount,
+        followUpsCompletedToday: fuCompletedToday,
+        followUpsPendingToday: fuToday,
+        paymentsReceivedTodayAmount: paymentsReceivedTodayVal,
+        invoicesCreatedToday: invoicesCreatedTodayCount,
+        followUpsTodayCount: fuToday,
+        followUpsOverdueCount: fuOverdue,
+        followUpsUpcomingCount: fuUpcoming,
         recentActivity: recentFeed.take(10).toList(),
         recentLeads: recentLeadsList.take(5).toList(),
       );
