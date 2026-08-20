@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 
 import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/bloc/customer_bloc.dart';
@@ -25,18 +24,39 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   bool _isBackingUp = false;
   bool _isRestoring = false;
   Map<String, dynamic>? _lastBackupInfo;
+  String _currentBackupLocation = '';
 
   @override
   void initState() {
     super.initState();
     _backupService = BackupRestoreService(getIt<HiveService>());
-    _loadLastBackupInfo();
+    _loadInitialData();
   }
 
-  void _loadLastBackupInfo() {
-    setState(() {
-      _lastBackupInfo = _backupService.getLastBackupInfo();
-    });
+  Future<void> _loadInitialData() async {
+    final location = await _backupService.getBackupLocationPath();
+    final info = _backupService.getLastBackupInfo();
+    if (mounted) {
+      setState(() {
+        _currentBackupLocation = location;
+        _lastBackupInfo = info;
+      });
+    }
+  }
+
+  Future<void> _handleChangeLocation() async {
+    final selected = await _backupService.pickBackupDirectory();
+    if (selected != null && mounted) {
+      setState(() {
+        _currentBackupLocation = selected;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Backup location updated: $selected'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   Future<void> _handleCreateBackup() async {
@@ -49,8 +69,8 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
       if (!mounted) return;
 
       if (result.success && result.file != null) {
-        _loadLastBackupInfo();
-        _showBackupSuccessDialog(result);
+        _loadInitialData();
+        _showBackupCreatedDialog(result);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -72,7 +92,9 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
     }
   }
 
-  void _showBackupSuccessDialog(BackupResult result) {
+  void _showBackupCreatedDialog(BackupResult result) {
+    final fileName = result.file!.path.split('/').last.split('\\').last;
+
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -89,12 +111,13 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Your business data has been successfully compiled into a secure backup file.',
+              'Your business data has been prepared successfully.',
               style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
             ),
             const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(12),
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.blueTint,
                 borderRadius: BorderRadius.circular(12),
@@ -103,11 +126,11 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('File: ${result.file!.path.split('/').last.split('\\').last}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  Text('File: $fileName', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
                   const SizedBox(height: 4),
-                  Text('Size: ${result.fileSizeFormatted}', style: const TextStyle(fontSize: 12, color: AppColors.darkBlueText)),
+                  Text('Backup size: ${result.fileSizeFormatted}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkBlueText)),
                   const SizedBox(height: 2),
-                  Text('Total Records: ${result.totalRecords}', style: const TextStyle(fontSize: 12, color: AppColors.darkBlueText)),
+                  Text('Total Records: ${result.totalRecords}', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                 ],
               ),
             ),
@@ -118,6 +141,21 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
             onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Close'),
           ),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primaryBlue,
+              side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              if (result.file != null) {
+                await _backupService.shareBackupFile(result.file!);
+              }
+            },
+            icon: const Icon(Icons.share_rounded, size: 18),
+            label: const Text('Share Backup'),
+          ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
@@ -126,91 +164,64 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
             ),
             onPressed: () async {
               Navigator.pop(dialogCtx);
-              if (result.file != null) {
-                final bytes = await result.file!.readAsBytes();
-                await Printing.sharePdf(
-                  bytes: bytes,
-                  filename: result.file!.path.split('/').last.split('\\').last,
+              final saved = await _backupService.saveBackupToDevice(backupFile: result.file);
+              if (!mounted) return;
+              if (saved != null) {
+                _loadInitialData();
+                _showBackupSavedSnackBar(saved.path);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to save backup to storage location.'),
+                    backgroundColor: AppColors.danger,
+                  ),
                 );
               }
             },
-            icon: const Icon(Icons.ios_share, size: 18),
-            label: const Text('Share / Save File'),
+            icon: const Icon(Icons.sd_storage_rounded, size: 18),
+            label: const Text('Save to Device'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showBackupSavedSnackBar(String savedPath) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Backup saved successfully', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
+            const SizedBox(height: 2),
+            Text(savedPath, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 4),
       ),
     );
   }
 
   Future<void> _handleChooseBackupFile() async {
-    final textController = TextEditingController();
-
-    // Show dialog allowing user to select or paste backup file JSON
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Choose Backup File', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Paste or load the content of your .json backup file below to validate and restore:',
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              maxLines: 6,
-              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                hintText: '{"app": "XenoBiz POS", "version": "1.0.0", ...}',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.all(12),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              final content = textController.text.trim();
-              Navigator.pop(dialogCtx);
-              if (content.isNotEmpty) {
-                _validateAndConfirmRestore(content);
-              }
-            },
-            child: const Text('Validate Backup'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _validateAndConfirmRestore(String jsonString) {
-    final validation = _backupService.validateBackupPayload(jsonString);
+    final validation = await _backupService.pickBackupFileAndValidate();
+    if (validation == null) return;
 
     if (!validation.isValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(validation.message),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(validation.message),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
       return;
     }
 
-    // Show confirmation dialog with warnings and summary counts
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (confirmCtx) => AlertDialog(
@@ -227,7 +238,7 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '⚠️ Restoring this backup will replace your current local data with records from the backup file.',
+              '⚠️ Restoring this backup will replace your current local data with records from the selected file.',
               style: TextStyle(fontSize: 13, color: AppColors.darkBlueText, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
@@ -241,7 +252,11 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Backup Date: ${validation.createdAtFormatted}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  if (validation.selectedFile != null)
+                    Text('File: ${validation.selectedFile!.path.split('/').last.split('\\').last}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text('Backup Date: ${validation.createdAtFormatted}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   ...validation.summaryCounts.entries.take(5).map((e) {
                     final cleanName = e.key.replaceAll('_box', '').toUpperCase();
@@ -289,7 +304,6 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
       if (!mounted) return;
 
       if (result.success) {
-        // Trigger refreshes across app BLOCs
         context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
         context.read<ProductBloc>().add(const FetchProductsEvent());
         context.read<CustomerBloc>().add(const FetchCustomersEvent());
@@ -400,7 +414,85 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
                 ),
                 const SizedBox(height: 20),
 
-                // 2. BACKUP CARD
+                // 2. BACKUP LOCATION CARD
+                AppCard(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.deepNavy.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.folder_open_rounded, color: AppColors.deepNavy, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Backup Location',
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Configured storage folder for automatic backups.',
+                                  style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.folder_special_rounded, size: 18, color: AppColors.primaryBlue),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _currentBackupLocation.isEmpty ? 'Loading location...' : _currentBackupLocation,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primaryBlue,
+                            side: const BorderSide(color: AppColors.primaryBlue, width: 1.2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _handleChangeLocation,
+                          icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+                          label: const Text('Change Location', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 3. BACKUP DATA CARD
                 AppCard(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -491,7 +583,7 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
                 ),
                 const SizedBox(height: 20),
 
-                // 3. RESTORE CARD
+                // 4. RESTORE CARD
                 AppCard(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -547,7 +639,7 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
                 ),
                 const SizedBox(height: 20),
 
-                // 4. DATA INCLUDED SUMMARY
+                // 5. DATA INCLUDED SUMMARY
                 AppCard(
                   padding: const EdgeInsets.all(18),
                   child: Column(

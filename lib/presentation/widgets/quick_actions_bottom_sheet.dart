@@ -132,11 +132,11 @@ class QuickActionsBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Wide full-width button: Add Follow-up
+          // Wide full-width button: Add Lead
           InkWell(
             onTap: () {
               Navigator.pop(context);
-              context.push(RouteNames.followUps);
+              context.push(RouteNames.addLead);
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(
@@ -148,10 +148,10 @@ class QuickActionsBottomSheet extends StatelessWidget {
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.access_time_rounded, size: 24, color: darkText),
+                  Icon(Icons.person_search_rounded, size: 24, color: darkText),
                   SizedBox(width: 14),
                   Text(
-                    'Add Follow-up',
+                    'Add Lead',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,

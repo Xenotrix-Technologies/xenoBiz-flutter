@@ -171,6 +171,12 @@ class MoreMenuPage extends StatelessWidget {
             _MenuGrid(
               items: [
                 const _MenuItem(
+                  icon: Icons.dashboard_customize_outlined,
+                  title: 'CRM Dashboard',
+                  route: RouteNames.crmDashboard,
+                  color: AppColors.primaryBlue,
+                ),
+                const _MenuItem(
                   icon: Icons.leaderboard_outlined,
                   title: 'Lead Pipeline',
                   route: RouteNames.leadPipeline,
@@ -181,6 +187,12 @@ class MoreMenuPage extends StatelessWidget {
                   title: 'Follow-ups',
                   route: RouteNames.followUps,
                   color: AppColors.warning,
+                ),
+                const _MenuItem(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Outstanding',
+                  route: RouteNames.crmOutstanding,
+                  color: AppColors.danger,
                 ),
               ],
             ),
