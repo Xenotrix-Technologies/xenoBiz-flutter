@@ -22,71 +22,7 @@ import '../../widgets/ui_state_widgets.dart';
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
-  @override
-  State<DashboardPage> createState() => _DashboardPageState();
-}
-
-class _DashboardPageState extends State<DashboardPage> {
-  @override
-  void initState() {
-    super.initState();
-    context.read<DashboardBloc>().add(FetchDashboardDataEvent());
-  }
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 12) {
-      return 'Good morning';
-    } else if (hour >= 12 && hour < 17) {
-      return 'Good afternoon';
-    } else {
-      return 'Good evening';
-    }
-  }
-
-  String _getBusinessName(BuildContext context) {
-    try {
-      final authState = context.watch<AuthBloc>().state;
-      if (authState is AuthenticatedState &&
-          authState.business != null &&
-          authState.business!.name.trim().isNotEmpty) {
-        return authState.business!.name.trim();
-      }
-    } catch (_) {}
-
-    try {
-      final hive = getIt<HiveService>();
-      final bizBox = hive.getBox(HiveService.boxBusiness);
-      final cached = bizBox.get('name')?.toString();
-      if (cached != null && cached.trim().isNotEmpty) {
-        return cached.trim();
-      }
-    } catch (_) {}
-
-    return '';
-  }
-
-  String _formatAmount(double amount) {
-    if (amount <= 0) return '0';
-    final str = amount.toStringAsFixed(0);
-    return str.replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
-    );
-  }
-
-  String _formatLakhsOrAmount(double amount) {
-    if (amount >= 100000) {
-      final lakhs = amount / 100000;
-      if (lakhs == lakhs.roundToDouble()) {
-        return '${lakhs.toInt()}L';
-      }
-      return '${lakhs.toStringAsFixed(1)}L';
-    }
-    return _formatAmount(amount);
-  }
-
-  Future<void> _showCloseShopDialog(BuildContext context) async {
+  static Future<void> showCloseShopDialog(BuildContext context) async {
     return showDialog<void>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -142,63 +78,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Future<void> _showExitConfirmationDialog(BuildContext context) async {
-    return showDialog<void>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: const [
-            Icon(Icons.exit_to_app_rounded, color: AppColors.primaryBlue, size: 26),
-            SizedBox(width: 10),
-            Text(
-              'Exit Application',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'Are you sure you want to exit Xenobiz?',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkBlueText),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Your business backup will be saved automatically before exiting.',
-              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(dialogCtx);
-              _performAutoBackupAndExit(
-                context,
-                isCloseShop: false,
-              );
-            },
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('Yes, Exit', style: TextStyle(fontWeight: FontWeight.w800)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _performAutoBackupAndExit(
+  static Future<void> _performAutoBackupAndExit(
     BuildContext context, {
     required bool isCloseShop,
   }) async {
@@ -258,7 +138,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  Future<void> _showBackupFailedDialog(
+  static Future<void> _showBackupFailedDialog(
     BuildContext context, {
     required bool isCloseShop,
   }) async {
@@ -323,12 +203,76 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<DashboardBloc>().add(FetchDashboardDataEvent());
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Good morning';
+    } else if (hour >= 12 && hour < 17) {
+      return 'Good afternoon';
+    } else {
+      return 'Good evening';
+    }
+  }
+
+  String _getBusinessName(BuildContext context) {
+    try {
+      final authState = context.watch<AuthBloc>().state;
+      if (authState is AuthenticatedState &&
+          authState.business != null &&
+          authState.business!.name.trim().isNotEmpty) {
+        return authState.business!.name.trim();
+      }
+    } catch (_) {}
+
+    try {
+      final hive = getIt<HiveService>();
+      final bizBox = hive.getBox(HiveService.boxBusiness);
+      final cached = bizBox.get('name')?.toString();
+      if (cached != null && cached.trim().isNotEmpty) {
+        return cached.trim();
+      }
+    } catch (_) {}
+
+    return '';
+  }
+
+  String _formatAmount(double amount) {
+    if (amount <= 0) return '0';
+    final str = amount.toStringAsFixed(0);
+    return str.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+  }
+
+  String _formatLakhsOrAmount(double amount) {
+    if (amount >= 100000) {
+      final lakhs = amount / 100000;
+      if (lakhs == lakhs.roundToDouble()) {
+        return '${lakhs.toInt()}L';
+      }
+      return '${lakhs.toStringAsFixed(1)}L';
+    }
+    return _formatAmount(amount);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
-          _showExitConfirmationDialog(context);
+          DashboardPage.showCloseShopDialog(context);
         }
       },
       child: Scaffold(
@@ -371,7 +315,7 @@ class _DashboardPageState extends State<DashboardPage> {
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: InkWell(
-                onTap: () => _showCloseShopDialog(context),
+                onTap: () => DashboardPage.showCloseShopDialog(context),
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

@@ -599,7 +599,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           Navigator.pop(context);
         }
       },
-      child: Scaffold(
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Scaffold(
         backgroundColor: AppColors.background,
         body: SafeArea(
           child: SingleChildScrollView(
@@ -843,6 +846,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                             TextField(
                               controller: _customerSearchCtrl,
                               focusNode: _searchFocusNode,
+                              onTapOutside: (_) => _searchFocusNode.unfocus(),
                               onChanged: (_) {
                                 setState(() {});
                               },
@@ -1536,6 +1540,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                             child: TextField(
                               controller: _discountCtrl,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                               decoration: InputDecoration(
                                 labelText: 'Discount',
                                 hintText: '0.00',
@@ -1573,6 +1578,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                             child: TextField(
                               controller: _extraAmtCtrl,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                               decoration: const InputDecoration(
                                 labelText: 'Extra Amount',
                                 hintText: '0.00',
@@ -1591,6 +1597,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                             flex: 3,
                             child: TextField(
                               controller: _extraDescCtrl,
+                              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                               decoration: const InputDecoration(
                                 labelText: 'Expense Note',
                                 hintText: 'e.g. Delivery Charge',
@@ -1676,7 +1683,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

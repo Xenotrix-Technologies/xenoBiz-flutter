@@ -54,6 +54,7 @@ class AppTextField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           onChanged: onChanged,
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           maxLines: maxLines,
           inputFormatters: inputFormatters,
           style: const TextStyle(
