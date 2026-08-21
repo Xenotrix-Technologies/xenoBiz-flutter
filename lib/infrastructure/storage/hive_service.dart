@@ -22,6 +22,7 @@ class HiveService {
   static const String boxCategories = 'categories_box';
   static const String boxCrmNotes = 'crm_notes_box';
   static const String boxCrmFollowUps = 'crm_followups_box';
+  static const String boxCrmSettings = 'crm_settings_box';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -46,6 +47,7 @@ class HiveService {
     await Hive.openBox(boxCategories);
     await Hive.openBox(boxCrmNotes);
     await Hive.openBox(boxCrmFollowUps);
+    await Hive.openBox(boxCrmSettings);
 
     _migrateLegacyCustomers();
   }
