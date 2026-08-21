@@ -3,6 +3,7 @@ import '../../domain/entities/crm_customer_entity.dart';
 import '../../domain/entities/crm_entities.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/lead_entity.dart';
+import '../../domain/entities/payment_entity.dart';
 import '../../domain/repositories/crm_customer_repository.dart';
 import '../../domain/repositories/lead_repository.dart';
 import '../storage/hive_service.dart';
@@ -44,53 +45,29 @@ class CrmDashboardMetrics {
   final int newCustomersThisMonth;
   final int totalLeads;
   final int newLeadsThisMonth;
-  final double totalOutstandingAmount;
   final double leadConversionRate;
   final int activeCustomers;
-  final int outstandingCustomersCount;
   final int dueFollowUpsCount;
 
-  // 1. Sales Overview (Leads Pipeline Value)
-  final double totalSales;
-  final double currentPeriodSales;
-  final double previousPeriodSales;
-  final double salesPercentageChange;
-  final List<SalesChartPoint> salesPoints7Days;
-  final List<SalesChartPoint> salesPoints30Days;
-  final List<SalesChartPoint> salesPoints3Months;
-  final List<SalesChartPoint> salesPoints1Year;
-
-  // 2. Outstanding & Collections
-  final double paidAmount;
-  final double dueAmount;
-  final double overdueAmount;
-
-  // 3. Lead Pipeline Breakdown
+  // Lead Pipeline Breakdown
   final Map<LeadStage, int> leadStageCounts;
 
-  // 4. Customer Growth Chart
+  // Customer Growth Chart
   final double customerGrowthPercentage;
   final List<CustomerGrowthPoint> customerGrowthPoints;
 
-  // 5. Payment Collection
-  final double collectedThisMonth;
-  final double pendingCollection;
-  final double collectionPercentage;
-
-  // 6. Today Activity Summary
+  // Today Activity Summary
   final int newCustomersToday;
   final int newLeadsToday;
   final int followUpsCompletedToday;
   final int followUpsPendingToday;
-  final double paymentsReceivedTodayAmount;
-  final int invoicesCreatedToday;
 
-  // 7. Today's Follow-ups Summary
+  // Today's Follow-ups Summary
   final int followUpsTodayCount;
   final int followUpsOverdueCount;
   final int followUpsUpcomingCount;
 
-  // 8 & 9. Activity & Feed Lists
+  // Activity & Feed Lists
   final List<CustomerTimelineEvent> recentActivity;
   final List<LeadEntity> recentLeads;
 
@@ -99,34 +76,16 @@ class CrmDashboardMetrics {
     this.newCustomersThisMonth = 0,
     this.totalLeads = 0,
     this.newLeadsThisMonth = 0,
-    this.totalOutstandingAmount = 0.0,
     this.leadConversionRate = 0.0,
     this.activeCustomers = 0,
-    this.outstandingCustomersCount = 0,
     this.dueFollowUpsCount = 0,
-    this.totalSales = 0.0,
-    this.currentPeriodSales = 0.0,
-    this.previousPeriodSales = 0.0,
-    this.salesPercentageChange = 0.0,
-    this.salesPoints7Days = const [],
-    this.salesPoints30Days = const [],
-    this.salesPoints3Months = const [],
-    this.salesPoints1Year = const [],
-    this.paidAmount = 0.0,
-    this.dueAmount = 0.0,
-    this.overdueAmount = 0.0,
     this.leadStageCounts = const {},
     this.customerGrowthPercentage = 0.0,
     this.customerGrowthPoints = const [],
-    this.collectedThisMonth = 0.0,
-    this.pendingCollection = 0.0,
-    this.collectionPercentage = 0.0,
     this.newCustomersToday = 0,
     this.newLeadsToday = 0,
     this.followUpsCompletedToday = 0,
     this.followUpsPendingToday = 0,
-    this.paymentsReceivedTodayAmount = 0.0,
-    this.invoicesCreatedToday = 0,
     this.followUpsTodayCount = 0,
     this.followUpsOverdueCount = 0,
     this.followUpsUpcomingCount = 0,
@@ -183,6 +142,57 @@ class CrmService {
     try {
       final box = hiveService.getBox(HiveService.boxCrmNotes);
       await box.delete(noteId);
+    } catch (_) {}
+  }
+
+  // ==========================================
+  // CRM PAYMENTS MANAGEMENT
+  // ==========================================
+
+  List<PaymentEntity> getPaymentsForCustomer(String customerId) {
+    try {
+      final box = hiveService.getBox(HiveService.boxPayments);
+      final List<PaymentEntity> list = [];
+      for (var key in box.keys) {
+        final val = box.get(key);
+        if (val is Map) {
+          final p = PaymentEntity(
+            id: val['id']?.toString() ?? key.toString(),
+            invoiceId: val['invoiceId']?.toString() ?? '',
+            customerId: val['customerId']?.toString() ?? '',
+            customerName: val['customerName']?.toString() ?? '',
+            amount: (val['amount'] as num?)?.toDouble() ?? 0.0,
+            paymentMode: val['paymentMode']?.toString() ?? 'CASH',
+            referenceNumber: val['referenceNumber']?.toString() ?? '',
+            paymentDate: DateTime.tryParse(val['paymentDate']?.toString() ?? '') ?? DateTime.now(),
+            notes: val['notes']?.toString() ?? '',
+          );
+          if (p.customerId == customerId) {
+            list.add(p);
+          }
+        }
+      }
+      list.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> saveCustomerPayment(PaymentEntity payment) async {
+    try {
+      final box = hiveService.getBox(HiveService.boxPayments);
+      await box.put(payment.id, {
+        'id': payment.id,
+        'invoiceId': payment.invoiceId,
+        'customerId': payment.customerId,
+        'customerName': payment.customerName,
+        'amount': payment.amount,
+        'paymentMode': payment.paymentMode,
+        'referenceNumber': payment.referenceNumber,
+        'paymentDate': payment.paymentDate.toIso8601String(),
+        'notes': payment.notes,
+      });
     } catch (_) {}
   }
 

@@ -246,22 +246,6 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
 
                             const SizedBox(height: 16),
 
-                            // 5. Lead Value Range
-                            _buildFilterGroupTitle('LEAD VALUE (ESTIMATED)'),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ChoiceChip(label: const Text('Any'), selected: tempValueRange == 'all', onSelected: (_) => setModalState(() => tempValueRange = 'all')),
-                                ChoiceChip(label: const Text('Under ₹10,000'), selected: tempValueRange == 'under10k', onSelected: (_) => setModalState(() => tempValueRange = 'under10k')),
-                                ChoiceChip(label: const Text('₹10,000–₹50,000'), selected: tempValueRange == '10kTo50k', onSelected: (_) => setModalState(() => tempValueRange = '10kTo50k')),
-                                ChoiceChip(label: const Text('₹50,000–₹1,00,000'), selected: tempValueRange == '50kTo100k', onSelected: (_) => setModalState(() => tempValueRange = '50kTo100k')),
-                                ChoiceChip(label: const Text('Above ₹1,00,000'), selected: tempValueRange == 'above100k', onSelected: (_) => setModalState(() => tempValueRange = 'above100k')),
-                              ],
-                            ),
-
-                            const SizedBox(height: 16),
-
                             // 6. Created Date Range
                             _buildFilterGroupTitle('CREATED DATE'),
                             Wrap(
@@ -372,8 +356,6 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
                 _buildSortOptionTile('Date Created — Newest First (Default)', LeadSortOption.dateNewest, ctx),
                 _buildSortOptionTile('Date Created — Oldest First', LeadSortOption.dateOldest, ctx),
                 _buildSortOptionTile('Recently Updated', LeadSortOption.recentlyUpdated, ctx),
-                _buildSortOptionTile('Lead Value — Highest First', LeadSortOption.valueHighest, ctx),
-                _buildSortOptionTile('Lead Value — Lowest First', LeadSortOption.valueLowest, ctx),
                 _buildSortOptionTile('Name — A to Z', LeadSortOption.nameAZ, ctx),
                 _buildSortOptionTile('Name — Z to A', LeadSortOption.nameZA, ctx),
                 _buildSortOptionTile('Follow-up Date — Soonest', LeadSortOption.followUpSoonest, ctx),
@@ -751,15 +733,6 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
             children: [
               Row(
                 children: [
-                  const Text('Val: ', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                  Text(
-                    '₹${lead.estimatedValue.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.success),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
                   Container(
                     width: 8,
                     height: 8,
@@ -770,12 +743,11 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
                     lead.priority.name.toUpperCase(),
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: priorityColor),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${lead.createdAt.day}/${lead.createdAt.month}/${lead.createdAt.year}',
-                    style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                  ),
                 ],
+              ),
+              Text(
+                'Created: ${lead.createdAt.day}/${lead.createdAt.month}/${lead.createdAt.year}',
+                style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
               ),
             ],
           ),

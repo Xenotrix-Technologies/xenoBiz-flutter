@@ -3,15 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/bloc/crm_bloc.dart';
+import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
+import '../../../domain/entities/crm_customer_entity.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/lead_entity.dart';
+import '../../../domain/entities/payment_entity.dart';
+import '../../../domain/repositories/crm_customer_repository.dart';
 import '../../../infrastructure/services/crm_service.dart';
+import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
 import '../../leads/widgets/add_lead_action_sheet.dart';
-
 
 class CrmDashboardPage extends StatefulWidget {
   const CrmDashboardPage({super.key});
@@ -20,10 +24,9 @@ class CrmDashboardPage extends StatefulWidget {
   State<CrmDashboardPage> createState() => _CrmDashboardPageState();
 }
 
-enum SalesPeriod { days7, days30, months3, year1 }
-
-class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerProviderStateMixin {
-  SalesPeriod _selectedSalesPeriod = SalesPeriod.days30;
+class _CrmDashboardPageState extends State<CrmDashboardPage>
+    with SingleTickerProviderStateMixin {
+  // FAB Speed Dial animation
 
   // FAB Speed Dial animation
   late AnimationController _fabAnimationController;
@@ -96,23 +99,159 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
     AddLeadActionSheet.show(context);
   }
 
-
-  void _navigateToCreateInvoice() {
-    _closeFab();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Create Invoice is coming soon.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _navigateToRecordPayment() {
     _closeFab();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Record Payment is coming soon.'),
-        behavior: SnackBarBehavior.floating,
+    _showRecordPaymentDialog();
+  }
+
+  void _showRecordPaymentDialog() async {
+    final crmCustomers = await getIt<CrmCustomerRepository>().getCrmCustomers();
+    if (!mounted) return;
+
+    if (crmCustomers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'No CRM customers found. Convert a lead to CRM customer first!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    CrmCustomerEntity selectedCustomer = crmCustomers.first;
+    final amountCtrl = TextEditingController();
+    final refCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    String paymentMode = 'CASH';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Record Customer Payment',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Select CRM Customer *',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<CrmCustomerEntity>(
+                  initialValue: selectedCustomer,
+                  decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+                  items: crmCustomers
+                      .map((c) =>
+                          DropdownMenuItem(value: c, child: Text(c.name)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null)
+                      setDialogState(() => selectedCustomer = val);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'Amount (₹) *',
+                      hintText: 'e.g. 5000',
+                      border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                const Text('Payment Mode',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: paymentMode,
+                  decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+                  items: ['CASH', 'UPI', 'BANK_TRANSFER', 'CARD', 'CHEQUE']
+                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => paymentMode = val);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: refCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Reference / Txn ID',
+                      hintText: 'Optional transaction ID',
+                      border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  decoration: const InputDecoration(
+                      labelText: 'Payment Remarks',
+                      hintText: 'Optional notes',
+                      border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue),
+              onPressed: () async {
+                final amt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+                if (amt <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please enter a valid amount.')));
+                  return;
+                }
+                final payment = PaymentEntity(
+                  id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
+                  invoiceId: '',
+                  customerId: selectedCustomer.id,
+                  customerName: selectedCustomer.name,
+                  amount: amt,
+                  paymentMode: paymentMode,
+                  referenceNumber: refCtrl.text.trim(),
+                  paymentDate: DateTime.now(),
+                  notes: notesCtrl.text.trim(),
+                );
+                await CrmService(
+                  hiveService: getIt<HiveService>(),
+                  crmCustomerRepository: getIt<CrmCustomerRepository>(),
+                ).saveCustomerPayment(payment);
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text(
+                            'Payment of ₹${amt.toStringAsFixed(0)} recorded for ${selectedCustomer.name}!'),
+                        backgroundColor: AppColors.success),
+                  );
+                  _refreshData();
+                }
+              },
+              child: const Text('Save Payment',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -140,28 +279,35 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.refresh_rounded, color: AppColors.primaryBlue),
-                  title: const Text('Refresh Dashboard Data', style: TextStyle(fontWeight: FontWeight.w700)),
+                  leading: const Icon(Icons.refresh_rounded,
+                      color: AppColors.primaryBlue),
+                  title: const Text('Refresh Dashboard Data',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _refreshData();
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.settings_outlined, color: AppColors.deepNavy),
-                  title: const Text('CRM Settings', style: TextStyle(fontWeight: FontWeight.w700)),
+                  leading: const Icon(Icons.settings_outlined,
+                      color: AppColors.deepNavy),
+                  title: const Text('CRM Settings',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
                   onTap: () {
                     Navigator.pop(ctx);
                     context.push(RouteNames.crmSettings);
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.file_download_outlined, color: AppColors.success),
-                  title: const Text('Export CRM Summary Report', style: TextStyle(fontWeight: FontWeight.w700)),
+                  leading: const Icon(Icons.file_download_outlined,
+                      color: AppColors.success),
+                  title: const Text('Export CRM Summary Report',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
                   onTap: () {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Generating CRM Report PDF...')),
+                      const SnackBar(
+                          content: Text('Generating CRM Report PDF...')),
                     );
                   },
                 ),
@@ -173,7 +319,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
     );
   }
 
-  void _showNotificationsSheet(BuildContext context, List<CustomerTimelineEvent> recentActivity) {
+  void _showNotificationsSheet(
+      BuildContext context, List<CustomerTimelineEvent> recentActivity) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -209,7 +356,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.notifications_rounded, color: AppColors.primaryBlue, size: 22),
+                          const Icon(Icons.notifications_rounded,
+                              color: AppColors.primaryBlue, size: 22),
                           const SizedBox(width: 8),
                           const Text(
                             'Activity Notifications',
@@ -221,9 +369,11 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                              color:
+                                  AppColors.primaryBlue.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -239,7 +389,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w700)),
+                        child: const Text('Close',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
@@ -247,12 +398,15 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                   Expanded(
                     child: recentActivity.isEmpty
                         ? const Center(
-                            child: Text('No activity notifications yet.', style: TextStyle(color: AppColors.secondaryText)),
+                            child: Text('No activity notifications yet.',
+                                style:
+                                    TextStyle(color: AppColors.secondaryText)),
                           )
                         : ListView.separated(
                             controller: scrollController,
                             itemCount: recentActivity.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               final item = recentActivity[index];
                               return _buildNotificationTileItem(item);
@@ -365,7 +519,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                 border: Border.all(color: Colors.grey.shade200),
               ),
               child: IconButton(
-                icon: const Icon(Icons.chevron_left_rounded, color: AppColors.darkBlueText, size: 22),
+                icon: const Icon(Icons.chevron_left_rounded,
+                    color: AppColors.darkBlueText, size: 22),
                 padding: EdgeInsets.zero,
                 onPressed: () {
                   if (Navigator.of(context).canPop()) {
@@ -406,7 +561,9 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                       ),
                       onPressed: () {
                         final curState = context.read<CrmBloc>().state;
-                        final act = curState is CrmLoadedState ? curState.metrics.recentActivity : <CustomerTimelineEvent>[];
+                        final act = curState is CrmLoadedState
+                            ? curState.metrics.recentActivity
+                            : <CustomerTimelineEvent>[];
                         _showNotificationsSheet(context, act);
                       },
                     ),
@@ -435,7 +592,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                   border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.more_horiz_rounded, color: AppColors.darkBlueText, size: 20),
+                  icon: const Icon(Icons.more_horiz_rounded,
+                      color: AppColors.darkBlueText, size: 20),
                   onPressed: _showMoreOptionsMenu,
                 ),
               ),
@@ -456,19 +614,22 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
               );
             }
 
-            final metrics = state is CrmLoadedState ? state.metrics : const CrmDashboardMetrics();
+            final metrics = state is CrmLoadedState
+                ? state.metrics
+                : const CrmDashboardMetrics();
 
             return RefreshIndicator(
               onRefresh: () async => _refreshData(),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 8),
 
-                    // 1. SUMMARY STATISTICS CARDS (2x3 Grid)
+                    // 1. SUMMARY STATISTICS CARDS
                     Row(
                       children: [
                         Expanded(
@@ -476,7 +637,7 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                             value: '${metrics.totalCustomers}',
                             label: 'Total customers',
                             valueColor: AppColors.darkBlueText,
-                            onTap: () => context.push(RouteNames.customers),
+                            onTap: () => context.go(RouteNames.crmOutstanding),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -485,7 +646,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                             value: '${metrics.newCustomersThisMonth}',
                             label: 'New customers this month',
                             valueColor: AppColors.success,
-                            onTap: () => context.push(RouteNames.customers),
                           ),
                         ),
                       ],
@@ -498,7 +658,7 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                             value: '${metrics.totalLeads}',
                             label: 'Total leads',
                             valueColor: AppColors.primaryBlue,
-                            onTap: () => context.push(RouteNames.leadPipeline),
+                            onTap: () => context.go(RouteNames.leadPipeline),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -507,65 +667,35 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                             value: '${metrics.newLeadsThisMonth}',
                             label: 'New leads this month',
                             valueColor: const Color(0xFF8B5CF6),
-                            onTap: () => context.push(RouteNames.leadPipeline),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CrmStatCard(
-                            value: _formatAmount(metrics.totalOutstandingAmount),
-                            label: 'Outstanding',
-                            valueColor: const Color(0xFFD97706),
-                            onTap: () => context.push(RouteNames.crmOutstanding),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _CrmStatCard(
-                            value: '${metrics.leadConversionRate.toStringAsFixed(metrics.leadConversionRate % 1 == 0 ? 0 : 1)}%',
-                            label: 'Lead conversion rate',
-                            valueColor: const Color(0xFF059669),
-                            onTap: () => context.push(RouteNames.leadPipeline),
-                          ),
-                        ),
-                      ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: _CrmStatCard(
+                        value:
+                            '${metrics.leadConversionRate.toStringAsFixed(metrics.leadConversionRate % 1 == 0 ? 0 : 1)}%',
+                        label: 'Lead conversion rate',
+                        valueColor: const Color(0xFF059669),
+                      ),
                     ),
 
                     const SizedBox(height: 24),
 
-                    // 2. SALES OVERVIEW CHART (#1)
-                    _buildSalesOverviewCard(metrics),
-
-                    const SizedBox(height: 20),
-
-                    // 3. OUTSTANDING OVERVIEW CHART (#2)
-                    _buildOutstandingOverviewCard(metrics),
-
-                    const SizedBox(height: 20),
-
-                    // 4. LEAD PIPELINE OVERVIEW (#3)
+                    // 1. LEAD PIPELINE OVERVIEW
                     _buildLeadPipelineCard(metrics),
 
                     const SizedBox(height: 20),
 
-                    // 5. CUSTOMER GROWTH CHART (#4)
+                    // 2. CUSTOMER GROWTH CHART
                     _buildCustomerGrowthCard(metrics),
 
                     const SizedBox(height: 20),
 
-                    // 6. PAYMENT COLLECTION TREND (#5)
-                    _buildPaymentCollectionCard(metrics),
-
-                    const SizedBox(height: 20),
-
-                    // 7. CRM ACTIVITY SUMMARY (#6)
+                    // 3. CRM ACTIVITY SUMMARY
                     _buildCrmActivitySummaryCard(metrics),
-
-
 
                     // 10. RECENT LEADS (#14 Requirement!)
                     _buildRecentLeadsSection(metrics.recentLeads),
@@ -590,351 +720,10 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
   // WIDGET BUILDING METHODS FOR CHARTS & INSIGHTS
   // ==========================================
 
-  Widget _buildSalesOverviewCard(CrmDashboardMetrics metrics) {
-    List<SalesChartPoint> points;
-    switch (_selectedSalesPeriod) {
-      case SalesPeriod.days7:
-        points = metrics.salesPoints7Days;
-        break;
-      case SalesPeriod.days30:
-        points = metrics.salesPoints30Days;
-        break;
-      case SalesPeriod.months3:
-        points = metrics.salesPoints3Months;
-        break;
-      case SalesPeriod.year1:
-        points = metrics.salesPoints1Year;
-        break;
-    }
-    if (points.isEmpty) {
-      points = metrics.salesPoints30Days;
-    }
-
-    final double totalSalesDisplay = metrics.currentPeriodSales > 0 ? metrics.currentPeriodSales : metrics.totalSales;
-    final double pctChange = metrics.salesPercentageChange;
-    final bool isPositive = pctChange >= 0;
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Sales Overview',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
-                ),
-              ),
-              // Period Selector Segmented Pills
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    _buildPeriodPill('7D', SalesPeriod.days7),
-                    _buildPeriodPill('30D', SalesPeriod.days30),
-                    _buildPeriodPill('3M', SalesPeriod.months3),
-                    _buildPeriodPill('1Y', SalesPeriod.year1),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                _formatAmount(totalSalesDisplay),
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.darkBlueText,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: (isPositive ? AppColors.success : Colors.red).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                      size: 14,
-                      color: isPositive ? AppColors.success : Colors.red,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${isPositive ? "+" : ""}${pctChange.toStringAsFixed(1)}% vs prev',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: isPositive ? AppColors.success : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          // Line Chart Visualization
-          SizedBox(
-            height: 160,
-            child: points.isEmpty
-                ? const Center(child: Text('No sales data available yet', style: TextStyle(color: AppColors.secondaryText)))
-                : LineChart(
-                    LineChartData(
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        getDrawingHorizontalLine: (value) => FlLine(
-                          color: Colors.grey.shade200,
-                          strokeWidth: 1,
-                          dashArray: [4, 4],
-                        ),
-                      ),
-                      titlesData: FlTitlesData(
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 22,
-                            interval: 1,
-                            getTitlesWidget: (value, meta) {
-                              final idx = value.toInt();
-                              if (idx >= 0 && idx < points.length) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    points[idx].label,
-                                    style: const TextStyle(fontSize: 10, color: AppColors.secondaryText, fontWeight: FontWeight.w600),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                          ),
-                        ),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      lineTouchData: LineTouchData(
-                        enabled: true,
-                        touchTooltipData: LineTouchTooltipData(
-                          getTooltipColor: (_) => AppColors.deepNavy,
-                          getTooltipItems: (touchedSpots) {
-                            return touchedSpots.map((spot) {
-                              final idx = spot.x.toInt();
-                              final label = idx >= 0 && idx < points.length ? points[idx].label : '';
-                              return LineTooltipItem(
-                                '$label\n₹${spot.y.toStringAsFixed(0)}',
-                                const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11),
-                              );
-                            }).toList();
-                          },
-                        ),
-                      ),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: points.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.amount)).toList(),
-                          isCurved: true,
-                          color: AppColors.primaryBlue,
-                          barWidth: 3,
-                          isStrokeCapRound: true,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primaryBlue.withValues(alpha: 0.28),
-                                AppColors.primaryBlue.withValues(alpha: 0.0),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPeriodPill(String text, SalesPeriod period) {
-    final isSelected = _selectedSalesPeriod == period;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedSalesPeriod = period;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryBlue : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected ? Colors.white : AppColors.secondaryText,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOutstandingOverviewCard(CrmDashboardMetrics metrics) {
-    final paid = metrics.paidAmount;
-    final due = metrics.dueAmount;
-    final overdue = metrics.overdueAmount;
-    final totalOutstanding = metrics.totalOutstandingAmount;
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Outstanding Overview',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.darkBlueText,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              // Circular Donut Chart
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    PieChart(
-                      PieChartData(
-                        sectionsSpace: 3,
-                        centerSpaceRadius: 36,
-                        startDegreeOffset: -90,
-                        sections: [
-                          PieChartSectionData(
-                            value: paid > 0 ? paid : 65000,
-                            color: const Color(0xFF10B981),
-                            radius: 16,
-                            showTitle: false,
-                          ),
-                          PieChartSectionData(
-                            value: due > 0 ? due : 12500,
-                            color: AppColors.primaryBlue,
-                            radius: 16,
-                            showTitle: false,
-                          ),
-                          PieChartSectionData(
-                            value: overdue > 0 ? overdue : 12000,
-                            color: const Color(0xFFEF4444),
-                            radius: 16,
-                            showTitle: false,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _formatAmount(totalOutstanding),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.darkBlueText,
-                          ),
-                        ),
-                        const Text(
-                          'Outstanding',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 20),
-              // Breakdown Legend
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildLegendRow('Paid', _formatAmount(paid), const Color(0xFF10B981)),
-                    const SizedBox(height: 8),
-                    _buildLegendRow('Due', _formatAmount(due), AppColors.primaryBlue),
-                    const SizedBox(height: 8),
-                    _buildLegendRow('Overdue', _formatAmount(overdue), const Color(0xFFEF4444)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendRow(String label, String value, Color color) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.darkBlueText),
-            ),
-          ],
-        ),
-        Text(
-          value,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color),
-        ),
-      ],
-    );
-  }
-
   Widget _buildLeadPipelineCard(CrmDashboardMetrics metrics) {
     final stageCounts = metrics.leadStageCounts;
-    final int maxCount = stageCounts.values.fold(0, (max, v) => v > max ? v : max);
+    final int maxCount =
+        stageCounts.values.fold(0, (max, v) => v > max ? v : max);
     final safeMax = maxCount > 0 ? maxCount : 1;
 
     return AppCard(
@@ -954,7 +743,7 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                 ),
               ),
               GestureDetector(
-                onTap: () => context.push(RouteNames.leadPipeline),
+                onTap: () => context.go(RouteNames.leadPipeline),
                 child: const Text(
                   'View Pipeline →',
                   style: TextStyle(
@@ -967,21 +756,36 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
             ],
           ),
           const SizedBox(height: 14),
-          _buildPipelineBarRow('New', stageCounts[LeadStage.newLead] ?? 24, safeMax, AppColors.primaryBlue),
+          _buildPipelineBarRow('New', stageCounts[LeadStage.newLead] ?? 24,
+              safeMax, AppColors.primaryBlue),
           const SizedBox(height: 8),
-          _buildPipelineBarRow('Contacted', stageCounts[LeadStage.contacted] ?? 18, safeMax, const Color(0xFF06B6D4)),
+          _buildPipelineBarRow(
+              'Contacted',
+              stageCounts[LeadStage.contacted] ?? 18,
+              safeMax,
+              const Color(0xFF06B6D4)),
           const SizedBox(height: 8),
-          _buildPipelineBarRow('Proposal', stageCounts[LeadStage.proposalSent] ?? 8, safeMax, const Color(0xFF8B5CF6)),
+          _buildPipelineBarRow(
+              'Proposal',
+              stageCounts[LeadStage.proposalSent] ?? 8,
+              safeMax,
+              const Color(0xFF8B5CF6)),
           const SizedBox(height: 8),
-          _buildPipelineBarRow('Negotiation', stageCounts[LeadStage.negotiating] ?? 5, safeMax, const Color(0xFFF59E0B)),
+          _buildPipelineBarRow(
+              'Negotiation',
+              stageCounts[LeadStage.negotiating] ?? 5,
+              safeMax,
+              const Color(0xFFF59E0B)),
           const SizedBox(height: 8),
-          _buildPipelineBarRow('Won', stageCounts[LeadStage.won] ?? 3, safeMax, const Color(0xFF10B981)),
+          _buildPipelineBarRow('Won', stageCounts[LeadStage.won] ?? 3, safeMax,
+              const Color(0xFF10B981)),
         ],
       ),
     );
   }
 
-  Widget _buildPipelineBarRow(String label, int count, int maxCount, Color color) {
+  Widget _buildPipelineBarRow(
+      String label, int count, int maxCount, Color color) {
     final double pct = (count / maxCount).clamp(0.08, 1.0);
     return Row(
       children: [
@@ -989,7 +793,10 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
           width: 85,
           child: Text(
             label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.darkBlueText),
           ),
         ),
         Expanded(
@@ -1021,7 +828,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
           child: Text(
             '$count',
             textAlign: TextAlign.end,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color),
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w900, color: color),
           ),
         ),
       ],
@@ -1056,7 +864,10 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                 ),
                 child: Text(
                   '+${growthPct.toStringAsFixed(1)}% this month',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.success),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.success),
                 ),
               ),
             ],
@@ -1068,9 +879,12 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
               LineChartData(
                 gridData: const FlGridData(show: false),
                 titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -1083,7 +897,10 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
                               points[idx].label,
-                              style: const TextStyle(fontSize: 10, color: AppColors.secondaryText, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.secondaryText,
+                                  fontWeight: FontWeight.w600),
                             ),
                           );
                         }
@@ -1095,7 +912,12 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: points.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.count.toDouble())).toList(),
+                    spots: points
+                        .asMap()
+                        .entries
+                        .map((e) =>
+                            FlSpot(e.key.toDouble(), e.value.count.toDouble()))
+                        .toList(),
                     isCurved: true,
                     color: const Color(0xFF10B981),
                     barWidth: 3,
@@ -1111,74 +933,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPaymentCollectionCard(CrmDashboardMetrics metrics) {
-    final collected = metrics.collectedThisMonth;
-    final pending = metrics.pendingCollection;
-    final overdue = metrics.overdueAmount;
-    final rate = metrics.collectionPercentage;
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Payment Collection',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
-                ),
-              ),
-              Text(
-                '${rate.toStringAsFixed(1)}% Collected',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primaryBlue,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Dual Progress Bar: Expected vs Collected
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: (rate / 100).clamp(0.05, 1.0),
-              minHeight: 10,
-              backgroundColor: Colors.amber.shade100,
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildCollectionMetricItem('Collected', _formatAmount(collected), const Color(0xFF10B981)),
-              _buildCollectionMetricItem('Pending', _formatAmount(pending), AppColors.primaryBlue),
-              _buildCollectionMetricItem('Overdue', _formatAmount(overdue), const Color(0xFFEF4444)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCollectionMetricItem(String label, String val, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        Text(val, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color)),
-      ],
     );
   }
 
@@ -1205,12 +959,23 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             children: [
-              _buildActivityTile('+${metrics.newCustomersToday}', 'New Customers', Icons.person_add_rounded, AppColors.primaryBlue),
-              _buildActivityTile('+${metrics.newLeadsToday}', 'New Leads', Icons.person_search_rounded, const Color(0xFF8B5CF6)),
-              _buildActivityTile('✓ ${metrics.followUpsCompletedToday}', 'Follow-ups Done', Icons.check_circle_outline_rounded, const Color(0xFF10B981)),
-              _buildActivityTile('${metrics.followUpsPendingToday}', 'Follow-ups Pending', Icons.event_available_rounded, const Color(0xFFF59E0B)),
-              _buildActivityTile(_formatAmount(metrics.paymentsReceivedTodayAmount), 'Payments Recvd', Icons.payments_rounded, const Color(0xFF059669)),
-              _buildActivityTile('${metrics.invoicesCreatedToday}', 'Invoices Created', Icons.receipt_long_rounded, AppColors.deepNavy),
+              _buildActivityTile(
+                  '+${metrics.newCustomersToday}',
+                  'New Customers',
+                  Icons.person_add_rounded,
+                  AppColors.primaryBlue),
+              _buildActivityTile('+${metrics.newLeadsToday}', 'New Leads',
+                  Icons.person_search_rounded, const Color(0xFF8B5CF6)),
+              _buildActivityTile(
+                  '✓ ${metrics.followUpsCompletedToday}',
+                  'Follow-ups Done',
+                  Icons.check_circle_outline_rounded,
+                  const Color(0xFF10B981)),
+              _buildActivityTile(
+                  '${metrics.followUpsPendingToday}',
+                  'Follow-ups Pending',
+                  Icons.event_available_rounded,
+                  const Color(0xFFF59E0B)),
             ],
           ),
         ],
@@ -1218,7 +983,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
     );
   }
 
-  Widget _buildActivityTile(String val, String label, IconData icon, Color color) {
+  Widget _buildActivityTile(
+      String val, String label, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -1234,8 +1000,19 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(val, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color, height: 1.1)),
-                Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.secondaryText), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(val,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: color,
+                        height: 1.1)),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.secondaryText),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -1243,8 +1020,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
       ),
     );
   }
-
-
 
   // ==========================================
   // REQUIREMENT #14: RECENT LEADS SECTION
@@ -1270,7 +1045,7 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
               ),
             ),
             GestureDetector(
-              onTap: () => context.push(RouteNames.leadPipeline),
+              onTap: () => context.go(RouteNames.crmOutstanding),
               child: const Text(
                 'View all',
                 style: TextStyle(
@@ -1317,7 +1092,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
-            child: Icon(Icons.person_search_rounded, color: stageColor, size: 20),
+            child:
+                Icon(Icons.person_search_rounded, color: stageColor, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1336,32 +1112,31 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: stageColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         stageLabel,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: stageColor),
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: stageColor),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       _formatRelativeTime(lead.createdAt),
-                      style: const TextStyle(fontSize: 11, color: AppColors.secondaryText, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.secondaryText,
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
               ],
-            ),
-          ),
-          Text(
-            _formatAmount(lead.estimatedValue),
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: AppColors.darkBlueText,
             ),
           ),
         ],
@@ -1491,7 +1266,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
         AppCard(
           padding: const EdgeInsets.all(16),
           child: Column(
-            children: feed.take(6).map((item) => _buildTimelineItem(item)).toList(),
+            children:
+                feed.take(6).map((item) => _buildTimelineItem(item)).toList(),
           ),
         ),
       ],
@@ -1575,10 +1351,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
     );
   }
 
-
-
-
-
   Widget _buildExpandableFab() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1589,12 +1361,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
             label: 'Add Lead',
             icon: Icons.person_search_rounded,
             onTap: _navigateToAddLead,
-          ),
-          const SizedBox(height: 10),
-          _buildFabMenuItem(
-            label: 'Create Invoice',
-            icon: Icons.receipt_long_rounded,
-            onTap: _navigateToCreateInvoice,
           ),
           const SizedBox(height: 10),
           _buildFabMenuItem(
@@ -1613,7 +1379,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
           onPressed: _toggleFab,
           child: RotationTransition(
             turns: Tween(begin: 0.0, end: 0.125).animate(_expandAnimation),
-            child: Icon(_isFabOpen ? Icons.close_rounded : Icons.add_rounded, size: 28),
+            child: Icon(_isFabOpen ? Icons.close_rounded : Icons.add_rounded,
+                size: 28),
           ),
         ),
       ],
@@ -1662,7 +1429,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.3)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.1),
@@ -1684,13 +1452,13 @@ class _CrmStatCard extends StatelessWidget {
   final String value;
   final String label;
   final Color valueColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _CrmStatCard({
     required this.value,
     required this.label,
     required this.valueColor,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
@@ -1730,5 +1498,3 @@ class _CrmStatCard extends StatelessWidget {
     );
   }
 }
-
-

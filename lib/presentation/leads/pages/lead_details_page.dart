@@ -520,7 +520,6 @@ class _LeadDetailsPageState extends State<LeadDetailsPage> {
                       if (lead.address.isNotEmpty) _buildDetailRow(Icons.location_on_rounded, 'Address', lead.address),
                       _buildDetailRow(Icons.campaign_rounded, 'Lead Source', lead.source),
                       _buildDetailRow(Icons.flag_rounded, 'Priority', lead.priority.name.toUpperCase(), valueColor: _getPriorityColor(lead.priority)),
-                      _buildDetailRow(Icons.currency_rupee_rounded, 'Expected Value', '₹${lead.estimatedValue.toStringAsFixed(0)}', valueColor: AppColors.success),
                       if (lead.expectedClosingDate != null)
                         _buildDetailRow(Icons.event_available_rounded, 'Expected Closing', '${lead.expectedClosingDate!.day}/${lead.expectedClosingDate!.month}/${lead.expectedClosingDate!.year}'),
                       _buildDetailRow(Icons.person_outline_rounded, 'Assigned Staff', lead.assignedStaff),

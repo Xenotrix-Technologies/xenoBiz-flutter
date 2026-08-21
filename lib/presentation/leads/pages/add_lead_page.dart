@@ -24,7 +24,6 @@ class _AddLeadPageState extends State<AddLeadPage> {
   late TextEditingController _emailCtrl;
   late TextEditingController _companyNameCtrl;
   late TextEditingController _addressCtrl;
-  late TextEditingController _estimatedValueCtrl;
   late TextEditingController _assignedStaffCtrl;
   late TextEditingController _notesCtrl;
 
@@ -63,10 +62,6 @@ class _AddLeadPageState extends State<AddLeadPage> {
     _emailCtrl = TextEditingController(text: l?.email ?? '');
     _companyNameCtrl = TextEditingController(text: l?.companyName ?? '');
     _addressCtrl = TextEditingController(text: l?.address ?? '');
-    _estimatedValueCtrl = TextEditingController(
-        text: l != null && l.estimatedValue > 0
-            ? l.estimatedValue.toStringAsFixed(0)
-            : '');
     _assignedStaffCtrl =
         TextEditingController(text: l?.assignedStaff ?? 'Self');
     _notesCtrl = TextEditingController(text: l?.notes ?? '');
@@ -85,7 +80,6 @@ class _AddLeadPageState extends State<AddLeadPage> {
     _emailCtrl.dispose();
     _companyNameCtrl.dispose();
     _addressCtrl.dispose();
-    _estimatedValueCtrl.dispose();
     _assignedStaffCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
@@ -166,7 +160,7 @@ class _AddLeadPageState extends State<AddLeadPage> {
       source: _selectedSource,
       stage: _selectedStage,
       priority: _selectedPriority,
-      estimatedValue: double.tryParse(_estimatedValueCtrl.text.trim()) ?? 0.0,
+      estimatedValue: 0.0,
       expectedClosingDate: _expectedClosingDate,
       assignedStaff: _assignedStaffCtrl.text.trim().isNotEmpty
           ? _assignedStaffCtrl.text.trim()
@@ -382,11 +376,11 @@ class _AddLeadPageState extends State<AddLeadPage> {
 
               const SizedBox(height: 20),
 
-              // SECTION 3: SALES & ESTIMATED DEAL DETAILS
+              // SECTION 3: EXPECTED CLOSING DATE
               const Padding(
                 padding: EdgeInsets.only(left: 4, bottom: 8),
                 child: Text(
-                  'SALES OPPORTUNITY',
+                  'EXPECTED CLOSING',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -400,14 +394,6 @@ class _AddLeadPageState extends State<AddLeadPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppTextField(
-                      label: 'Estimated Deal Value (₹)',
-                      controller: _estimatedValueCtrl,
-                      keyboardType: TextInputType.number,
-                      hint: 'e.g. 50000',
-                    ),
-                    const SizedBox(height: 14),
-
                     const Text('Expected Closing Date',
                         style: TextStyle(
                             fontSize: 12,

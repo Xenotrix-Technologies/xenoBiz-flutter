@@ -25,14 +25,12 @@ class _QuickAddLeadDialogState extends State<QuickAddLeadDialog> {
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
   final TextEditingController _companyCtrl = TextEditingController();
-  final TextEditingController _valueCtrl = TextEditingController();
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _companyCtrl.dispose();
-    _valueCtrl.dispose();
     super.dispose();
   }
 
@@ -42,7 +40,6 @@ class _QuickAddLeadDialogState extends State<QuickAddLeadDialog> {
     final name = _nameCtrl.text.trim();
     final phone = _phoneCtrl.text.trim();
     final company = _companyCtrl.text.trim();
-    final value = double.tryParse(_valueCtrl.text.trim()) ?? 0.0;
 
     final leadId = 'lead_${DateTime.now().millisecondsSinceEpoch}';
     final title = company.isNotEmpty ? '$company Deal' : '$name Inquiry';
@@ -57,7 +54,7 @@ class _QuickAddLeadDialogState extends State<QuickAddLeadDialog> {
       source: 'Quick Action',
       stage: LeadStage.newLead,
       priority: LeadPriority.medium,
-      estimatedValue: value,
+      estimatedValue: 0.0,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -148,13 +145,6 @@ class _QuickAddLeadDialogState extends State<QuickAddLeadDialog> {
                 label: 'Company Name (Optional)',
                 controller: _companyCtrl,
                 hint: 'e.g. Pinnacle Ltd',
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                label: 'Estimated Deal Value (₹)',
-                controller: _valueCtrl,
-                keyboardType: TextInputType.number,
-                hint: 'e.g. 50000',
               ),
             ],
           ),

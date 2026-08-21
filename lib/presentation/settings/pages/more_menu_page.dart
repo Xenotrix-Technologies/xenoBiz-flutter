@@ -189,10 +189,10 @@ class MoreMenuPage extends StatelessWidget {
                   color: AppColors.warning,
                 ),
                 const _MenuItem(
-                  icon: Icons.account_balance_wallet_outlined,
-                  title: 'Outstanding',
+                  icon: Icons.people_rounded,
+                  title: 'Customers',
                   route: RouteNames.crmOutstanding,
-                  color: AppColors.danger,
+                  color: AppColors.primaryBlue,
                 ),
               ],
             ),
