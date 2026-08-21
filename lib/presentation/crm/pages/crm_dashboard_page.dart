@@ -79,10 +79,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage>
     context.read<CrmBloc>().add(const FetchCrmDataEvent());
   }
 
-  String _formatAmount(double amt) {
-    return '₹${amt.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}';
-  }
-
   String _formatRelativeTime(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
