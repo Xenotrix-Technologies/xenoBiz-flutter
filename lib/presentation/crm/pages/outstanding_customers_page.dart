@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../application/di/injection.dart';
-import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
-import '../../../domain/entities/customer_entity.dart';
-import '../../../domain/entities/invoice_entity.dart';
-import '../../../domain/repositories/customer_repository.dart';
-import '../../../domain/repositories/invoice_repository.dart';
+import '../../../domain/entities/crm_customer_entity.dart';
+import '../../../domain/repositories/crm_customer_repository.dart';
 import '../../../infrastructure/services/crm_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
@@ -20,62 +15,42 @@ class OutstandingCustomersPage extends StatefulWidget {
 }
 
 class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
-  List<CustomerEntity> _outstandingCustomers = [];
-  Map<String, List<InvoiceEntity>> _customerInvoiceMap = {};
+  List<CrmCustomerEntity> _crmCustomers = [];
   bool _isLoading = true;
-  double _totalOutstandingSum = 0.0;
-  double _totalOverdueSum = 0.0;
-  double _dueThisWeekSum = 0.0;
+  int _activeCount = 0;
+  int _leadCount = 0;
+  int _contactedCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadOutstandingData();
+    _loadCrmCustomerData();
   }
 
-  Future<void> _loadOutstandingData() async {
+  Future<void> _loadCrmCustomerData() async {
     setState(() => _isLoading = true);
 
     try {
-      final custRepo = getIt<CustomerRepository>();
-      final invRepo = getIt<InvoiceRepository>();
-      final customers = await custRepo.getCustomers();
-      final allInvoices = await invRepo.getInvoices();
+      final repo = getIt<CrmCustomerRepository>();
+      final customers = await repo.getCrmCustomers();
 
-      final filteredCust = customers.where((c) => c.outstandingBalance > 0).toList();
-      double totalSum = 0.0;
-      double overdueSum = 0.0;
-      double dueWeekSum = 0.0;
-      final Map<String, List<InvoiceEntity>> invMap = {};
-      final now = DateTime.now();
+      int active = 0;
+      int leads = 0;
+      int contacted = 0;
 
-      for (var c in filteredCust) {
-        totalSum += c.outstandingBalance;
-        final invoices = allInvoices.where((i) => i.customerId == c.id || i.customerName == c.name).toList();
-        invoices.sort((a, b) => b.issueDate.compareTo(a.issueDate));
-        invMap[c.id] = invoices;
-
-        for (var inv in invoices) {
-          if (inv.status != InvoiceStatus.paid) {
-            final days = now.difference(inv.dueDate).inDays;
-            if (days > 0) {
-              overdueSum += (inv.grandTotal - inv.paidAmount);
-            } else if (days >= -7) {
-              dueWeekSum += (inv.grandTotal - inv.paidAmount);
-            }
-          }
-        }
+      for (var c in customers) {
+        final st = c.status.toLowerCase();
+        if (st == 'active') active++;
+        if (st == 'lead') leads++;
+        if (st == 'contacted') contacted++;
       }
-
-      filteredCust.sort((a, b) => b.outstandingBalance.compareTo(a.outstandingBalance));
 
       if (mounted) {
         setState(() {
-          _outstandingCustomers = filteredCust;
-          _customerInvoiceMap = invMap;
-          _totalOutstandingSum = totalSum;
-          _totalOverdueSum = overdueSum > 0 ? overdueSum : totalSum * 0.45;
-          _dueThisWeekSum = dueWeekSum > 0 ? dueWeekSum : totalSum * 0.25;
+          _crmCustomers = customers;
+          _activeCount = active;
+          _leadCount = leads;
+          _contactedCount = contacted;
           _isLoading = false;
         });
       }
@@ -84,17 +59,13 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
     }
   }
 
-  String _formatAmount(double amt) {
-    return '₹${amt.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
-          'Outstanding & Collections',
+          'CRM Customers & Contacts',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         backgroundColor: AppColors.primaryBlue,
@@ -103,40 +74,40 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadOutstandingData,
+            onPressed: _loadCrmCustomerData,
           ),
         ],
       ),
       body: _isLoading
-          ? const LoadingState(message: 'Calculating outstanding balances...')
+          ? const LoadingState(message: 'Loading CRM customer accounts...')
           : RefreshIndicator(
-              onRefresh: _loadOutstandingData,
+              onRefresh: _loadCrmCustomerData,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. OUTSTANDING SUMMARY METRICS GRID
+                    // 1. CRM CUSTOMER SUMMARY METRICS GRID
                     Row(
                       children: [
                         Expanded(
                           child: _SummaryCard(
-                            title: 'TOTAL OUTSTANDING',
-                            value: _formatAmount(_totalOutstandingSum),
-                            subtitle: '${_outstandingCustomers.length} Customers pending',
-                            color: AppColors.danger,
-                            icon: Icons.account_balance_wallet_outlined,
+                            title: 'TOTAL CRM CUSTOMERS',
+                            value: '${_crmCustomers.length}',
+                            subtitle: 'Registered CRM records',
+                            color: AppColors.primaryBlue,
+                            icon: Icons.people_outline_rounded,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: _SummaryCard(
-                            title: 'OVERDUE BALANCE',
-                            value: _formatAmount(_totalOverdueSum),
-                            subtitle: 'Requires immediate action',
-                            color: const Color(0xFFDC2626),
-                            icon: Icons.error_outline_rounded,
+                            title: 'ACTIVE CUSTOMERS',
+                            value: '$_activeCount',
+                            subtitle: 'Active engagement',
+                            color: AppColors.success,
+                            icon: Icons.check_circle_outline_rounded,
                           ),
                         ),
                       ],
@@ -146,21 +117,21 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
                       children: [
                         Expanded(
                           child: _SummaryCard(
-                            title: 'DUE THIS WEEK',
-                            value: _formatAmount(_dueThisWeekSum),
-                            subtitle: 'Upcoming collection target',
+                            title: 'CONTACTED',
+                            value: '$_contactedCount',
+                            subtitle: 'In communication',
                             color: const Color(0xFFD97706),
-                            icon: Icons.calendar_today_rounded,
+                            icon: Icons.phone_in_talk_rounded,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: _SummaryCard(
-                            title: 'PENDING ACCOUNTS',
-                            value: '${_outstandingCustomers.length}',
-                            subtitle: 'Active pending invoices',
-                            color: AppColors.primaryBlue,
-                            icon: Icons.people_outline_rounded,
+                            title: 'LEADS',
+                            value: '$_leadCount',
+                            subtitle: 'Potential prospects',
+                            color: const Color(0xFF8B5CF6),
+                            icon: Icons.person_search_rounded,
                           ),
                         ),
                       ],
@@ -168,7 +139,7 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
                     const SizedBox(height: 24),
 
                     const Text(
-                      'OUTSTANDING CUSTOMERS & INVOICES',
+                      'CRM CUSTOMER DIRECTORY',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
@@ -178,32 +149,20 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
                     ),
                     const SizedBox(height: 10),
 
-                    if (_outstandingCustomers.isEmpty)
+                    if (_crmCustomers.isEmpty)
                       const EmptyState(
-                        title: 'No Outstanding Balances',
-                        message: 'All customer accounts are settled.',
-                        icon: Icons.check_circle_outline_rounded,
+                        title: 'No CRM Customers Yet',
+                        message: 'Add customers in CRM to manage relationships and follow-ups.',
+                        icon: Icons.people_outline_rounded,
                       )
                     else
-                      ...List.generate(_outstandingCustomers.length, (idx) {
-                        final c = _outstandingCustomers[idx];
-                        final invoices = _customerInvoiceMap[c.id] ?? [];
-                        final latestInv = invoices.isNotEmpty ? invoices.first : null;
-                        final totalPaid = invoices.fold(0.0, (sum, i) => sum + i.paidAmount);
-                        final dueString = latestInv != null
-                            ? DateFormat('dd MMM yyyy').format(latestInv.dueDate)
-                            : 'Pending';
+                      ...List.generate(_crmCustomers.length, (idx) {
+                        final c = _crmCustomers[idx];
 
-                        // Status badge logic
-                        String statusLabel = 'OVERDUE';
-                        Color statusColor = AppColors.danger;
-                        if (totalPaid > 0 && c.outstandingBalance > 0) {
-                          statusLabel = 'PARTIALLY PAID';
-                          statusColor = const Color(0xFFD97706);
-                        } else if (c.outstandingBalance <= 0) {
-                          statusLabel = 'PAID';
-                          statusColor = AppColors.success;
-                        }
+                        Color statusColor = AppColors.primaryBlue;
+                        if (c.status.toLowerCase() == 'active') statusColor = AppColors.success;
+                        if (c.status.toLowerCase() == 'lead') statusColor = const Color(0xFF8B5CF6);
+                        if (c.status.toLowerCase() == 'contacted') statusColor = const Color(0xFFD97706);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 14),
@@ -233,7 +192,7 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            latestInv != null ? 'Invoice #${latestInv.invoiceNumber}' : 'Account Balance',
+                                            c.companyName.isNotEmpty ? c.companyName : 'Source: ${c.source}',
                                             style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
                                           ),
                                         ],
@@ -247,93 +206,62 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
                                         border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                                       ),
                                       child: Text(
-                                        statusLabel,
+                                        c.status.toUpperCase(),
                                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: statusColor),
                                       ),
                                     ),
                                   ],
                                 ),
+                                if (c.notes.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.pageBackground,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      c.notes,
+                                      style: const TextStyle(fontSize: 12, color: AppColors.darkBlueText),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 14),
                                 const Divider(height: 1),
                                 const SizedBox(height: 12),
 
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Due Amount', style: TextStyle(fontSize: 11, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          _formatAmount(c.outstandingBalance),
-                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: statusColor),
-                                        ),
-                                      ],
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        const Text('Due Date', style: TextStyle(fontSize: 11, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          dueString,
-                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-
-                                // Action Buttons Requirement #4
+                                // Action Buttons
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
                                   children: [
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primaryBlue,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    if (c.phone.isNotEmpty)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primaryBlue,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        onPressed: () => CrmService.makePhoneCall(c.phone),
+                                        icon: const Icon(Icons.phone_rounded, size: 16),
+                                        label: const Text('Call', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
                                       ),
-                                      onPressed: () => context.push(RouteNames.invoices),
-                                      icon: const Icon(Icons.payments_rounded, size: 16),
-                                      label: const Text('Record Payment', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                                    ),
-                                    OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFF128C7E),
-                                        side: const BorderSide(color: Color(0xFF25D366)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    if (c.phone.isNotEmpty)
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFF128C7E),
+                                          side: const BorderSide(color: Color(0xFF25D366)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        onPressed: () => CrmService.openWhatsApp(c.phone, text: 'Hello ${c.name}, following up from XenoBiz CRM.'),
+                                        icon: const Icon(Icons.send_rounded, size: 16),
+                                        label: const Text('WhatsApp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
                                       ),
-                                      onPressed: () {
-                                        if (c.phone.isNotEmpty) {
-                                          CrmService.openWhatsApp(
-                                            c.phone,
-                                            text: 'Dear ${c.name}, kindly note your pending payment of ${_formatAmount(c.outstandingBalance)} due to XenoBiz Store. Please settle at your earliest convenience.',
-                                          );
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Customer phone number not available.')),
-                                          );
-                                        }
-                                      },
-                                      icon: const Icon(Icons.send_rounded, size: 16),
-                                      label: const Text('Send Reminder', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                                    ),
-                                    IconButton.filledTonal(
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: AppColors.pageBackground,
-                                        foregroundColor: AppColors.darkBlueText,
-                                      ),
-                                      onPressed: () => context.push(RouteNames.customerDetails, extra: c),
-                                      icon: const Icon(Icons.person_outline_rounded, size: 18),
-                                      tooltip: 'View Customer Profile',
-                                    ),
                                   ],
                                 ),
                               ],

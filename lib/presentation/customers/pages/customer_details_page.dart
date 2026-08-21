@@ -12,6 +12,7 @@ import '../../../domain/entities/crm_entities.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
+import '../../../domain/repositories/billing_customer_repository.dart';
 import '../../../domain/repositories/invoice_repository.dart';
 import '../../../infrastructure/pdf/pdf_statement_service.dart';
 import '../../../infrastructure/services/crm_service.dart';
@@ -74,7 +75,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
 
       final notes = _crmService.getNotesForCustomer(_customer.id);
       final followUps = _crmService.getFollowUps(customerId: _customer.id);
-      final timeline = await _crmService.getCustomerTimeline(_customer.id, customer: _customer);
+      final timeline = await getIt<BillingCustomerRepository>().getCustomerTimeline(_customer.id);
 
       if (mounted) {
         setState(() {

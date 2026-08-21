@@ -1,20 +1,19 @@
 import 'package:url_launcher/url_launcher.dart';
+import '../../domain/entities/crm_customer_entity.dart';
 import '../../domain/entities/crm_entities.dart';
 import '../../domain/entities/customer_entity.dart';
-import '../../domain/entities/invoice_entity.dart';
 import '../../domain/entities/lead_entity.dart';
-import '../../domain/repositories/customer_repository.dart';
-import '../../domain/repositories/invoice_repository.dart';
+import '../../domain/repositories/crm_customer_repository.dart';
 import '../../domain/repositories/lead_repository.dart';
 import '../storage/hive_service.dart';
 
 class CrmSearchResult {
-  final List<CustomerEntity> customers;
-  final List<InvoiceEntity> invoices;
+  final List<CrmCustomerEntity> crmCustomers;
+  final List<LeadEntity> leads;
 
   const CrmSearchResult({
-    this.customers = const [],
-    this.invoices = const [],
+    this.crmCustomers = const [],
+    this.leads = const [],
   });
 }
 
@@ -51,7 +50,7 @@ class CrmDashboardMetrics {
   final int outstandingCustomersCount;
   final int dueFollowUpsCount;
 
-  // 1. Sales Overview
+  // 1. Sales Overview (Leads Pipeline Value)
   final double totalSales;
   final double currentPeriodSales;
   final double previousPeriodSales;
@@ -140,14 +139,12 @@ class CrmDashboardMetrics {
 
 class CrmService {
   final HiveService hiveService;
-  final CustomerRepository customerRepository;
-  final InvoiceRepository invoiceRepository;
+  final CrmCustomerRepository crmCustomerRepository;
   final LeadRepository? leadRepository;
 
   CrmService({
     required this.hiveService,
-    required this.customerRepository,
-    required this.invoiceRepository,
+    required this.crmCustomerRepository,
     this.leadRepository,
   });
 
@@ -240,70 +237,35 @@ class CrmService {
   }
 
   // ==========================================
-  // 3. CUSTOMER ACTIVITY TIMELINE
+  // 3. CRM CUSTOMER ACTIVITY TIMELINE
   // ==========================================
 
-  Future<List<CustomerTimelineEvent>> getCustomerTimeline(String customerId, {CustomerEntity? customer}) async {
+  Future<List<CustomerTimelineEvent>> getCrmCustomerTimeline(String crmCustomerId, {CrmCustomerEntity? customer}) async {
     final List<CustomerTimelineEvent> timeline = [];
     try {
-      CustomerEntity? cust = customer;
-      if (cust == null) {
-        final customers = await customerRepository.getCustomers();
-        cust = customers.firstWhere((c) => c.id == customerId, orElse: () => CustomerEntity(id: customerId, name: 'Customer', phone: '', email: '', address: '', createdAt: DateTime.now()));
-      }
+      CrmCustomerEntity? cust = customer;
+      cust ??= await crmCustomerRepository.getCrmCustomer(crmCustomerId);
 
-      // 1. Account Created
+      // 1. CRM Profile Registered
       timeline.add(
         CustomerTimelineEvent(
           id: 'create_${cust.id}',
           customerId: cust.id,
-          title: 'Customer Profile Created',
-          description: 'Account profile registered for ${cust.name}.',
+          title: 'CRM Profile Registered',
+          description: 'Profile created for ${cust.name}. Source: ${cust.source}',
           eventType: 'ACCOUNT',
           timestamp: cust.createdAt,
         ),
       );
 
-      // 2. Invoices & Payments
-      final invoices = await invoiceRepository.getInvoices();
-      final custInvoices = invoices.where((i) => i.customerId == cust!.id || i.customerName == cust.name).toList();
-
-      for (var inv in custInvoices) {
-        timeline.add(
-          CustomerTimelineEvent(
-            id: 'inv_${inv.id}',
-            customerId: cust.id,
-            title: 'Invoice #${inv.invoiceNumber} Generated',
-            description: 'Total: ₹${inv.grandTotal.toStringAsFixed(0)} • Status: ${inv.status.name.toUpperCase()}',
-            eventType: 'INVOICE',
-            amount: inv.grandTotal,
-            timestamp: inv.issueDate,
-          ),
-        );
-
-        if (inv.paidAmount > 0) {
-          timeline.add(
-            CustomerTimelineEvent(
-              id: 'pay_${inv.id}',
-              customerId: cust.id,
-              title: 'Payment Received for #${inv.invoiceNumber}',
-              description: 'Received: ₹${inv.paidAmount.toStringAsFixed(0)}',
-              eventType: 'PAYMENT',
-              amount: inv.paidAmount,
-              timestamp: inv.issueDate,
-            ),
-          );
-        }
-      }
-
-      // 3. Notes
+      // 2. CRM Notes
       final notes = getNotesForCustomer(cust.id);
       for (var n in notes) {
         timeline.add(
           CustomerTimelineEvent(
             id: 'note_${n.id}',
             customerId: cust.id,
-            title: 'Note Added',
+            title: 'CRM Note Added',
             description: n.text,
             eventType: 'NOTE',
             timestamp: n.updatedAt,
@@ -311,7 +273,7 @@ class CrmService {
         );
       }
 
-      // 4. Follow-ups
+      // 3. CRM Follow-ups
       final followUps = getFollowUps(customerId: cust.id);
       for (var f in followUps) {
         timeline.add(
@@ -340,23 +302,18 @@ class CrmService {
     if (q.isEmpty) return const CrmSearchResult();
 
     try {
-      final allCustomers = await customerRepository.getCustomers();
-      final matchedCustomers = allCustomers.where((c) {
-        return c.name.toLowerCase().contains(q) ||
-            c.phone.toLowerCase().contains(q) ||
-            c.email.toLowerCase().contains(q) ||
-            c.id.toLowerCase().contains(q);
-      }).toList();
-
-      final allInvoices = await invoiceRepository.getInvoices();
-      final matchedInvoices = allInvoices.where((i) {
-        return i.invoiceNumber.toLowerCase().contains(q) ||
-            i.customerName.toLowerCase().contains(q);
+      final crmCustomers = await crmCustomerRepository.getCrmCustomers(query: q);
+      final allLeads = leadRepository != null ? await leadRepository!.getLeads() : <LeadEntity>[];
+      final matchedLeads = allLeads.where((l) {
+        return l.contactName.toLowerCase().contains(q) ||
+            l.title.toLowerCase().contains(q) ||
+            l.companyName.toLowerCase().contains(q) ||
+            l.phone.toLowerCase().contains(q);
       }).toList();
 
       return CrmSearchResult(
-        customers: matchedCustomers,
-        invoices: matchedInvoices,
+        crmCustomers: crmCustomers,
+        leads: matchedLeads,
       );
     } catch (_) {
       return const CrmSearchResult();
@@ -369,8 +326,7 @@ class CrmService {
 
   Future<CrmDashboardMetrics> getCrmDashboardMetrics() async {
     try {
-      final customers = await customerRepository.getCustomers();
-      final invoices = await invoiceRepository.getInvoices();
+      final crmCustomers = await crmCustomerRepository.getCrmCustomers();
       final leads = leadRepository != null ? await leadRepository!.getLeads() : <LeadEntity>[];
       final followUps = getFollowUps();
       final now = DateTime.now();
@@ -380,10 +336,8 @@ class CrmService {
       int newCustMonth = 0;
       int newCustToday = 0;
       int activeCustCount = 0;
-      int outstandingCount = 0;
-      double totalOutstanding = 0.0;
 
-      for (var c in customers) {
+      for (var c in crmCustomers) {
         if (c.createdAt.year == now.year && c.createdAt.month == now.month) {
           newCustMonth++;
         }
@@ -391,14 +345,7 @@ class CrmService {
         if (cDate.isAtSameMomentAs(today)) {
           newCustToday++;
         }
-
-        if (c.outstandingBalance > 0) {
-          outstandingCount++;
-          totalOutstanding += c.outstandingBalance;
-        }
-
-        final custInvoices = invoices.where((i) => i.customerId == c.id || i.customerName == c.name).toList();
-        if (custInvoices.any((i) => now.difference(i.issueDate).inDays <= 60)) {
+        if (c.status.toLowerCase() == 'active') {
           activeCustCount++;
         }
       }
@@ -409,16 +356,16 @@ class CrmService {
       for (int i = 5; i >= 0; i--) {
         final monthDt = DateTime(now.year, now.month - i, 1);
         final monthEnd = DateTime(now.year, now.month - i + 1, 0, 23, 59, 59);
-        final countAtMonth = customers.where((c) => c.createdAt.isBefore(monthEnd)).length;
+        final countAtMonth = crmCustomers.where((c) => c.createdAt.isBefore(monthEnd)).length;
         final mLabel = monthAbbrs[(monthDt.month - 1) % 12];
-        custGrowthPoints.add(CustomerGrowthPoint(label: mLabel, count: countAtMonth > 0 ? countAtMonth : ((6 - i) * 4 + 10)));
+        custGrowthPoints.add(CustomerGrowthPoint(label: mLabel, count: countAtMonth));
       }
 
       final double custGrowthPct = custGrowthPoints.length >= 2 && custGrowthPoints[custGrowthPoints.length - 2].count > 0
           ? ((custGrowthPoints.last.count - custGrowthPoints[custGrowthPoints.length - 2].count) /
                   custGrowthPoints[custGrowthPoints.length - 2].count) *
               100.0
-          : 14.5;
+          : 0.0;
 
       // 2. Leads & Lead Pipeline
       int newLeadsMonth = 0;
@@ -452,62 +399,7 @@ class CrmService {
       final recentLeadsList = List<LeadEntity>.from(leads);
       recentLeadsList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      // 3. Sales & Collections
-      double totalSalesVal = 0.0;
-      double currentPeriodSalesVal = 0.0;
-      double previousPeriodSalesVal = 0.0;
-      double totalPaidVal = 0.0;
-      double totalOverdueVal = 0.0;
-      double totalDueVal = 0.0;
-      double collectedThisMonthVal = 0.0;
-      double paymentsReceivedTodayVal = 0.0;
-      int invoicesCreatedTodayCount = 0;
-
-      for (var inv in invoices) {
-        totalSalesVal += inv.grandTotal;
-        totalPaidVal += inv.paidAmount;
-
-        final invDate = DateTime(inv.issueDate.year, inv.issueDate.month, inv.issueDate.day);
-        if (invDate.isAtSameMomentAs(today)) {
-          invoicesCreatedTodayCount++;
-          paymentsReceivedTodayVal += inv.paidAmount;
-        }
-
-        if (inv.issueDate.year == now.year && inv.issueDate.month == now.month) {
-          collectedThisMonthVal += inv.paidAmount;
-        }
-
-        final daysAgo = now.difference(inv.issueDate).inDays;
-        if (daysAgo <= 30) {
-          currentPeriodSalesVal += inv.grandTotal;
-        } else if (daysAgo <= 60) {
-          previousPeriodSalesVal += inv.grandTotal;
-        }
-
-        final unpaid = inv.grandTotal - inv.paidAmount;
-        if (unpaid > 0) {
-          if (inv.dueDate.isBefore(today)) {
-            totalOverdueVal += unpaid;
-          } else {
-            totalDueVal += unpaid;
-          }
-        }
-      }
-
-      final double salesChangePct = previousPeriodSalesVal > 0
-          ? ((currentPeriodSalesVal - previousPeriodSalesVal) / previousPeriodSalesVal) * 100.0
-          : 0.0;
-
-      final points7D = _generateSalesPoints(invoices, 7, now);
-      final points30D = _generateSalesPoints(invoices, 30, now);
-      final points3M = _generateSalesPoints(invoices, 90, now);
-      final points1Y = _generateSalesPoints(invoices, 365, now);
-
-      final collectionPct = (totalPaidVal + totalOutstanding) > 0
-          ? (totalPaidVal / (totalPaidVal + totalOutstanding)) * 100.0
-          : 0.0;
-
-      // 4. Follow-ups summary
+      // 3. Follow-ups summary
       int fuCompletedToday = 0;
       int fuOverdue = 0;
       int fuToday = 0;
@@ -526,34 +418,8 @@ class CrmService {
         }
       }
 
-      // 5. Recent Activity Feed
+      // 4. Recent Activity Feed
       final List<CustomerTimelineEvent> recentFeed = [];
-      for (var inv in invoices) {
-        recentFeed.add(
-          CustomerTimelineEvent(
-            id: 'feed_inv_${inv.id}',
-            customerId: inv.customerId,
-            title: 'Invoice #${inv.invoiceNumber} Generated',
-            description: '${inv.customerName} • ₹${inv.grandTotal.toStringAsFixed(0)}',
-            eventType: 'INVOICE',
-            amount: inv.grandTotal,
-            timestamp: inv.issueDate,
-          ),
-        );
-        if (inv.paidAmount > 0) {
-          recentFeed.add(
-            CustomerTimelineEvent(
-              id: 'feed_pay_${inv.id}',
-              customerId: inv.customerId,
-              title: 'Payment Received',
-              description: '${inv.customerName} • ₹${inv.paidAmount.toStringAsFixed(0)}',
-              eventType: 'PAYMENT',
-              amount: inv.paidAmount,
-              timestamp: inv.issueDate,
-            ),
-          );
-        }
-      }
 
       for (var l in leads) {
         recentFeed.add(
@@ -584,12 +450,12 @@ class CrmService {
         }
       }
 
-      for (var c in customers) {
+      for (var c in crmCustomers) {
         recentFeed.add(
           CustomerTimelineEvent(
             id: 'feed_cust_${c.id}',
             customerId: c.id,
-            title: 'New Customer Registered',
+            title: 'New CRM Customer Registered',
             description: '${c.name} added to CRM',
             eventType: 'ACCOUNT',
             timestamp: c.createdAt,
@@ -600,38 +466,20 @@ class CrmService {
       recentFeed.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
       return CrmDashboardMetrics(
-        totalCustomers: customers.length,
+        totalCustomers: crmCustomers.length,
         newCustomersThisMonth: newCustMonth,
         totalLeads: leads.length,
         newLeadsThisMonth: newLeadsMonth,
-        totalOutstandingAmount: totalOutstanding,
         leadConversionRate: conversionRate,
         activeCustomers: activeCustCount,
-        outstandingCustomersCount: outstandingCount,
         dueFollowUpsCount: fuToday + fuOverdue,
-        totalSales: totalSalesVal,
-        currentPeriodSales: currentPeriodSalesVal,
-        previousPeriodSales: previousPeriodSalesVal,
-        salesPercentageChange: salesChangePct,
-        salesPoints7Days: points7D,
-        salesPoints30Days: points30D,
-        salesPoints3Months: points3M,
-        salesPoints1Year: points1Y,
-        paidAmount: totalPaidVal,
-        dueAmount: totalDueVal,
-        overdueAmount: totalOverdueVal,
         leadStageCounts: stageMap,
         customerGrowthPercentage: custGrowthPct,
         customerGrowthPoints: custGrowthPoints,
-        collectedThisMonth: collectedThisMonthVal,
-        pendingCollection: totalOutstanding,
-        collectionPercentage: collectionPct,
         newCustomersToday: newCustToday,
         newLeadsToday: newLeadsTodayCount,
         followUpsCompletedToday: fuCompletedToday,
         followUpsPendingToday: fuToday,
-        paymentsReceivedTodayAmount: paymentsReceivedTodayVal,
-        invoicesCreatedToday: invoicesCreatedTodayCount,
         followUpsTodayCount: fuToday,
         followUpsOverdueCount: fuOverdue,
         followUpsUpcomingCount: fuUpcoming,
@@ -641,32 +489,6 @@ class CrmService {
     } catch (_) {
       return const CrmDashboardMetrics();
     }
-  }
-
-  static List<SalesChartPoint> _generateSalesPoints(List<InvoiceEntity> invoices, int days, DateTime now) {
-    final List<SalesChartPoint> points = [];
-    final int intervals = 6;
-    final int step = (days / intervals).round().clamp(1, 60);
-
-    const monthAbbrs = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const weekAbbrs = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    for (int i = intervals - 1; i >= 0; i--) {
-      final dt = now.subtract(Duration(days: i * step));
-      final label = days <= 7
-          ? weekAbbrs[(dt.weekday - 1) % 7]
-          : (days <= 30 ? '${dt.day}' : monthAbbrs[(dt.month - 1) % 12]);
-
-      final periodInvoices = invoices.where((inv) {
-        final diff = now.difference(inv.issueDate).inDays;
-        return diff >= i * step && diff < (i + 1) * step;
-      });
-
-      final sum = periodInvoices.fold(0.0, (s, inv) => s + inv.grandTotal);
-      final fallbackAmt = (30.0 + (i * 18) % 45 + (i % 2 == 0 ? 35 : 15)) * 1000.0;
-      points.add(SalesChartPoint(label: label, amount: sum > 0 ? sum : fallbackAmt, date: dt));
-    }
-    return points;
   }
 
   // ==========================================
@@ -687,7 +509,6 @@ class CrmService {
     String cleanDigits = phone.replaceAll(RegExp(r'[^\d]'), '');
     if (cleanDigits.isEmpty) return false;
 
-    // Default to India country code 91 if 10 digits
     if (cleanDigits.length == 10) {
       cleanDigits = '91$cleanDigits';
     }

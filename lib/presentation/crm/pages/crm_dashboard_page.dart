@@ -10,6 +10,7 @@ import '../../../domain/entities/lead_entity.dart';
 import '../../../infrastructure/services/crm_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../widgets/add_crm_customer_dialog.dart';
 
 class CrmDashboardPage extends StatefulWidget {
   const CrmDashboardPage({super.key});
@@ -89,9 +90,18 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
-  void _navigateToAddCustomer() {
+  void _navigateToAddCustomer() async {
     _closeFab();
-    context.push(RouteNames.createMaster, extra: 1);
+    final newCustomer = await showAddCrmCustomerDialog(context);
+    if (newCustomer != null && mounted) {
+      _refreshData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CRM Customer "${newCustomer.name}" added successfully!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _navigateToAddLead() {
