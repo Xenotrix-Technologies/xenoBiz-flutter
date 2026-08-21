@@ -291,7 +291,7 @@ class _CrmDashboardPageState extends State<CrmDashboardPage>
                       style: TextStyle(fontWeight: FontWeight.w700)),
                   onTap: () {
                     Navigator.pop(ctx);
-                    context.push(RouteNames.crmSettings);
+                    context.go(RouteNames.crmSettings);
                   },
                 ),
                 ListTile(
@@ -669,7 +669,8 @@ class _CrmDashboardPageState extends State<CrmDashboardPage>
                     ),
                     const SizedBox(height: 12),
                     AppCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
