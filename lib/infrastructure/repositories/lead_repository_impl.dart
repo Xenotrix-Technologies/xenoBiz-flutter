@@ -354,6 +354,18 @@ class LeadRepositoryImpl implements LeadRepository {
     throw Exception('Lead not found');
   }
 
+  @override
+  Future<void> deleteLead(String id) async {
+    final box = hiveService.getBox(HiveService.boxLeads);
+    await box.delete(id);
+  }
+
+  @override
+  Future<void> deleteLeads(List<String> ids) async {
+    final box = hiveService.getBox(HiveService.boxLeads);
+    await box.deleteAll(ids);
+  }
+
   Future<void> _checkAndConvertWonLead(LeadEntity lead) async {
     if (lead.stage != LeadStage.won || crmCustomerRepository == null) return;
 

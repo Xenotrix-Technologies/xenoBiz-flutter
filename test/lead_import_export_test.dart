@@ -66,6 +66,16 @@ class MockLeadRepository implements LeadRepository {
 
   @override
   Future<void> toggleTaskCompletion(String taskId) async {}
+
+  @override
+  Future<void> deleteLead(String id) async {
+    leads.removeWhere((l) => l.id == id);
+  }
+
+  @override
+  Future<void> deleteLeads(List<String> ids) async {
+    leads.removeWhere((l) => ids.contains(l.id));
+  }
 }
 
 void main() {

@@ -668,13 +668,29 @@ class _CrmDashboardPageState extends State<CrmDashboardPage>
                       ],
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: _CrmStatCard(
-                        value:
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Lead conversion rate',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
+                          Text(
                             '${metrics.leadConversionRate.toStringAsFixed(metrics.leadConversionRate % 1 == 0 ? 0 : 1)}%',
-                        label: 'Lead conversion rate',
-                        valueColor: const Color(0xFF059669),
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF059669),
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 

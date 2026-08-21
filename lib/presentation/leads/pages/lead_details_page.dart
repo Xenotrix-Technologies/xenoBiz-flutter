@@ -332,8 +332,50 @@ class _LeadDetailsPageState extends State<LeadDetailsPage> {
     );
   }
 
+  void _showDeleteLeadDialog(LeadEntity currentLead) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Lead', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(
+          'Are you sure you want to delete "${currentLead.contactName}"? This action cannot be undone.',
+          style: const TextStyle(fontSize: 13, color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.read<LeadBloc>().add(DeleteLeadEvent(currentLead.id));
+              if (mounted) {
+                context.pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Lead deleted successfully'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loadedState = context.watch<LeadBloc>().state is LeadsLoadedState
+        ? context.watch<LeadBloc>().state as LeadsLoadedState
+        : null;
+    final currentLead = loadedState?.selectedLead ?? widget.lead;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -342,6 +384,14 @@ class _LeadDetailsPageState extends State<LeadDetailsPage> {
         foregroundColor: AppColors.darkBlueText,
         elevation: 0,
         scrolledUnderElevation: 0,
+        actions: [
+          if (currentLead != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+              tooltip: 'Delete Lead',
+              onPressed: () => _showDeleteLeadDialog(currentLead),
+            ),
+        ],
       ),
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {

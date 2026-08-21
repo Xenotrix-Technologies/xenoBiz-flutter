@@ -108,6 +108,24 @@ class ToggleLeadFollowUpEvent extends LeadEvent {
   List<Object?> get props => [leadId, followUpId];
 }
 
+class DeleteLeadEvent extends LeadEvent {
+  final String leadId;
+
+  const DeleteLeadEvent(this.leadId);
+
+  @override
+  List<Object?> get props => [leadId];
+}
+
+class DeleteLeadsEvent extends LeadEvent {
+  final List<String> leadIds;
+
+  const DeleteLeadsEvent(this.leadIds);
+
+  @override
+  List<Object?> get props => [leadIds];
+}
+
 // ==================== STATES ====================
 abstract class LeadState extends Equatable {
   const LeadState();
@@ -197,6 +215,8 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
     on<DeleteLeadNoteEvent>(_onDeleteLeadNote);
     on<AddLeadFollowUpEvent>(_onAddLeadFollowUp);
     on<ToggleLeadFollowUpEvent>(_onToggleLeadFollowUp);
+    on<DeleteLeadEvent>(_onDeleteLead);
+    on<DeleteLeadsEvent>(_onDeleteLeads);
   }
 
   Future<void> _onFetchLeads(FetchLeadsEvent event, Emitter<LeadState> emit) async {
@@ -325,6 +345,24 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
     try {
       await leadRepository.toggleFollowUpCompletion(event.followUpId);
       add(FetchLeadDetailsEvent(event.leadId));
+    } catch (e) {
+      emit(LeadErrorState(e.toString()));
+    }
+  }
+
+  Future<void> _onDeleteLead(DeleteLeadEvent event, Emitter<LeadState> emit) async {
+    try {
+      await leadRepository.deleteLead(event.leadId);
+      add(const FetchLeadsEvent());
+    } catch (e) {
+      emit(LeadErrorState(e.toString()));
+    }
+  }
+
+  Future<void> _onDeleteLeads(DeleteLeadsEvent event, Emitter<LeadState> emit) async {
+    try {
+      await leadRepository.deleteLeads(event.leadIds);
+      add(const FetchLeadsEvent());
     } catch (e) {
       emit(LeadErrorState(e.toString()));
     }
