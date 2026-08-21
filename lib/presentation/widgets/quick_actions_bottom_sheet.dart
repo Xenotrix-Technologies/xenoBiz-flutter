@@ -4,6 +4,7 @@ import '../../application/routing/route_names.dart';
 import '../../const/colors.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../invoices/pages/return_voucher_screen.dart';
+import '../leads/widgets/quick_add_lead_dialog.dart';
 
 class QuickActionsBottomSheet extends StatelessWidget {
   const QuickActionsBottomSheet({super.key});
@@ -140,7 +141,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
           InkWell(
             onTap: () {
               Navigator.pop(context);
-              context.push(RouteNames.addLead);
+              showQuickAddLeadDialog(context);
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(

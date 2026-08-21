@@ -5,8 +5,13 @@ import '../../../application/bloc/lead_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/lead_entity.dart';
+import '../../../application/di/injection.dart';
+import '../../../domain/repositories/lead_repository.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../widgets/add_lead_action_sheet.dart';
+import '../widgets/export_leads_modal.dart';
+
 
 class LeadPipelinePage extends StatefulWidget {
   const LeadPipelinePage({super.key});
@@ -458,6 +463,36 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
             icon: const Icon(Icons.sort_rounded, color: AppColors.darkBlueText),
             onPressed: _showSortOptionsSheet,
           ),
+          IconButton(
+            icon: const Icon(Icons.file_upload_outlined, color: AppColors.darkBlueText),
+            tooltip: 'Export Leads',
+            onPressed: () async {
+              final leadState = context.read<LeadBloc>().state;
+              final filteredLeads = leadState is LeadsLoadedState ? leadState.leads : <LeadEntity>[];
+              final allLeads = await getIt<LeadRepository>().getLeads();
+
+              List<String> summaryParts = [];
+              if (_currentFilter.stages.isNotEmpty) {
+                summaryParts.add('Stages: ${_currentFilter.stages.map((s) => _getStageName(s)).join(", ")}');
+              }
+              if (_currentFilter.priorities.isNotEmpty) {
+                summaryParts.add('Priorities: ${_currentFilter.priorities.map((p) => p.name).join(", ")}');
+              }
+              if (_searchController.text.trim().isNotEmpty) {
+                summaryParts.add('Query: "${_searchController.text.trim()}"');
+              }
+              final filterSummary = summaryParts.isEmpty ? 'All Leads' : summaryParts.join(' | ');
+
+              if (context.mounted) {
+                ExportLeadsModal.show(
+                  context: context,
+                  allLeads: allLeads,
+                  filteredLeads: filteredLeads,
+                  filterSummary: filterSummary,
+                );
+              }
+            },
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -466,9 +501,10 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('Add Lead', style: TextStyle(fontWeight: FontWeight.w800)),
         onPressed: () {
-          context.push(RouteNames.addLead);
+          AddLeadActionSheet.show(context);
         },
       ),
+
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           if (state is LeadLoadingState) {

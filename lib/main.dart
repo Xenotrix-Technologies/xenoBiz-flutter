@@ -25,3 +25,4 @@ Future<void> _requestStartupPermissions() async {
     ].request();
   } catch (_) {}
 }
+

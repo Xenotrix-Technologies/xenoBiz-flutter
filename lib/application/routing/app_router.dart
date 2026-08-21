@@ -28,6 +28,8 @@ import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
 import '../../presentation/leads/pages/add_lead_page.dart';
+import '../../presentation/leads/pages/import_leads_page.dart';
+
 import '../../presentation/crm/pages/crm_dashboard_page.dart';
 import '../../presentation/crm/pages/crm_shell_page.dart';
 import '../../presentation/crm/pages/crm_settings_page.dart';
@@ -458,6 +460,11 @@ class AppRouter {
           return AddLeadPage(lead: lead);
         },
       ),
+      GoRoute(
+        path: RouteNames.importLeads,
+        builder: (context, state) => const ImportLeadsPage(),
+      ),
+
       GoRoute(
         path: RouteNames.leadDetails,
         builder: (context, state) {

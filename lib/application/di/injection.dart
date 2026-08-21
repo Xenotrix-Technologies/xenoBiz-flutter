@@ -21,6 +21,9 @@ import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
 import '../../infrastructure/services/crm_service.dart';
+import '../../infrastructure/services/lead_export_service.dart';
+import '../../infrastructure/services/lead_import_service.dart';
+
 import '../../domain/repositories/billing_customer_repository.dart';
 import '../../domain/repositories/crm_customer_repository.dart';
 import '../../infrastructure/repositories/billing_customer_repository_impl.dart';
@@ -111,6 +114,7 @@ Future<void> configureDependencies() async {
       hiveService: getIt(),
       networkChecker: getIt(),
       syncRepository: getIt(),
+      crmCustomerRepository: getIt(),
     ),
   );
 
@@ -145,6 +149,14 @@ Future<void> configureDependencies() async {
       crmCustomerRepository: getIt(),
       leadRepository: getIt(),
     ),
+  );
+
+  getIt.registerLazySingleton<LeadExportService>(
+    () => LeadExportService(),
+  );
+
+  getIt.registerLazySingleton<LeadImportService>(
+    () => LeadImportService(leadRepository: getIt()),
   );
 
   getIt.registerFactory<CrmBloc>(

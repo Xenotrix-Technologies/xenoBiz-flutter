@@ -32,7 +32,9 @@ abstract class RouteNames {
   static const String crmOutstanding = '/crm-outstanding';
   static const String leadPipeline = '/lead-pipeline';
   static const String addLead = '/add-lead';
+  static const String importLeads = '/import-leads';
   static const String leadDetails = '/lead-details';
+
   static const String followUps = '/follow-ups';
   static const String crmSettings = '/crm-settings';
 

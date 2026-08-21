@@ -10,7 +10,8 @@ import '../../../domain/entities/lead_entity.dart';
 import '../../../infrastructure/services/crm_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
-import '../widgets/add_crm_customer_dialog.dart';
+import '../../leads/widgets/add_lead_action_sheet.dart';
+
 
 class CrmDashboardPage extends StatefulWidget {
   const CrmDashboardPage({super.key});
@@ -90,24 +91,11 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
-  void _navigateToAddCustomer() async {
-    _closeFab();
-    final newCustomer = await showAddCrmCustomerDialog(context);
-    if (newCustomer != null && mounted) {
-      _refreshData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('CRM Customer "${newCustomer.name}" added successfully!'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
   void _navigateToAddLead() {
     _closeFab();
-    context.push(RouteNames.addLead);
+    AddLeadActionSheet.show(context);
   }
+
 
   void _navigateToCreateInvoice() {
     _closeFab();
@@ -1597,12 +1585,6 @@ class _CrmDashboardPageState extends State<CrmDashboardPage> with SingleTickerPr
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (_isFabOpen) ...[
-          _buildFabMenuItem(
-            label: 'Add Customer',
-            icon: Icons.person_add_rounded,
-            onTap: _navigateToAddCustomer,
-          ),
-          const SizedBox(height: 10),
           _buildFabMenuItem(
             label: 'Add Lead',
             icon: Icons.person_search_rounded,

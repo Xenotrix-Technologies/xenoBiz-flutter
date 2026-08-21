@@ -122,6 +122,16 @@ class _LeadDetailsPageState extends State<LeadDetailsPage> {
             leadId: currentLead.id,
             stage: stage,
           ));
+
+      if (stage == LeadStage.won) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Lead marked as WON! Automatically converted to CRM Customer.'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
