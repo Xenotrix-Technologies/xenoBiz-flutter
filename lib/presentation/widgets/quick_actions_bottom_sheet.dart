@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../application/routing/route_names.dart';
 import '../../const/colors.dart';
+import '../../domain/entities/invoice_entity.dart';
 import '../invoices/pages/return_voucher_screen.dart';
+import '../leads/widgets/quick_add_lead_dialog.dart';
 
 class QuickActionsBottomSheet extends StatelessWidget {
   const QuickActionsBottomSheet({super.key});
@@ -75,7 +77,10 @@ class QuickActionsBottomSheet extends StatelessWidget {
                 bgColor: creamBg,
                 onTap: () {
                   Navigator.pop(context);
-                  context.push(RouteNames.createPurchaseOrder);
+                  context.push(
+                    RouteNames.createInvoice,
+                    extra: {'invoiceType': InvoiceType.purchase},
+                  );
                 },
               ),
               _QuickActionGridItem(
@@ -136,7 +141,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
           InkWell(
             onTap: () {
               Navigator.pop(context);
-              context.push(RouteNames.addLead);
+              showQuickAddLeadDialog(context);
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(

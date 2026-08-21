@@ -1,12 +1,3 @@
-import '../entities/customer_entity.dart';
+import 'billing_customer_repository.dart';
 
-abstract class CustomerRepository {
-  Future<List<CustomerEntity>> getCustomers({String? query});
-  Future<CustomerEntity> getCustomer(String id);
-  Future<CustomerEntity> createCustomer(CustomerEntity customer);
-  Future<CustomerEntity> updateCustomer(CustomerEntity customer);
-  Future<void> deleteCustomer(String id);
-  Future<List<CustomerTimelineEvent>> getCustomerTimeline(String customerId);
-
-  Future<void> addTimelineEvent(CustomerTimelineEvent event);
-}
+typedef CustomerRepository = BillingCustomerRepository;

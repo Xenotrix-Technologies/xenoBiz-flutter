@@ -5,8 +5,13 @@ import '../../../application/bloc/lead_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/lead_entity.dart';
+import '../../../application/di/injection.dart';
+import '../../../domain/repositories/lead_repository.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../widgets/add_lead_action_sheet.dart';
+import '../widgets/export_leads_modal.dart';
+
 
 class LeadPipelinePage extends StatefulWidget {
   const LeadPipelinePage({super.key});
@@ -18,11 +23,80 @@ class LeadPipelinePage extends StatefulWidget {
 class _LeadPipelinePageState extends State<LeadPipelinePage> {
   final TextEditingController _searchController = TextEditingController();
   bool _showSearchBar = false;
+  bool _isSelectionMode = false;
+  final Set<String> _selectedLeadIds = {};
 
   LeadFilter _currentFilter = const LeadFilter();
   LeadSortOption _currentSort = LeadSortOption.dateNewest; // Default requirement #5
 
   final List<LeadStage> _allStages = LeadStage.values;
+
+  void _toggleLeadSelection(String leadId) {
+    setState(() {
+      if (_selectedLeadIds.contains(leadId)) {
+        _selectedLeadIds.remove(leadId);
+        if (_selectedLeadIds.isEmpty) {
+          _isSelectionMode = false;
+        }
+      } else {
+        _selectedLeadIds.add(leadId);
+      }
+    });
+  }
+
+  void _selectAllLeads(List<LeadEntity> leads) {
+    setState(() {
+      if (_selectedLeadIds.length == leads.length) {
+        _selectedLeadIds.clear();
+        _isSelectionMode = false;
+      } else {
+        _selectedLeadIds.clear();
+        _selectedLeadIds.addAll(leads.map((l) => l.id));
+      }
+    });
+  }
+
+  void _confirmDeleteSelectedLeads() {
+    final count = _selectedLeadIds.length;
+    if (count == 0) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Leads', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(
+          'Are you sure you want to delete $count lead(s)? This action cannot be undone.',
+          style: const TextStyle(fontSize: 13, color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () {
+              final idsToDelete = _selectedLeadIds.toList();
+              context.read<LeadBloc>().add(DeleteLeadsEvent(idsToDelete));
+              setState(() {
+                _selectedLeadIds.clear();
+                _isSelectionMode = false;
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$count lead(s) deleted successfully'),
+                  backgroundColor: AppColors.danger,
+                ),
+              );
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -241,22 +315,6 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
 
                             const SizedBox(height: 16),
 
-                            // 5. Lead Value Range
-                            _buildFilterGroupTitle('LEAD VALUE (ESTIMATED)'),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ChoiceChip(label: const Text('Any'), selected: tempValueRange == 'all', onSelected: (_) => setModalState(() => tempValueRange = 'all')),
-                                ChoiceChip(label: const Text('Under ₹10,000'), selected: tempValueRange == 'under10k', onSelected: (_) => setModalState(() => tempValueRange = 'under10k')),
-                                ChoiceChip(label: const Text('₹10,000–₹50,000'), selected: tempValueRange == '10kTo50k', onSelected: (_) => setModalState(() => tempValueRange = '10kTo50k')),
-                                ChoiceChip(label: const Text('₹50,000–₹1,00,000'), selected: tempValueRange == '50kTo100k', onSelected: (_) => setModalState(() => tempValueRange = '50kTo100k')),
-                                ChoiceChip(label: const Text('Above ₹1,00,000'), selected: tempValueRange == 'above100k', onSelected: (_) => setModalState(() => tempValueRange = 'above100k')),
-                              ],
-                            ),
-
-                            const SizedBox(height: 16),
-
                             // 6. Created Date Range
                             _buildFilterGroupTitle('CREATED DATE'),
                             Wrap(
@@ -367,8 +425,6 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
                 _buildSortOptionTile('Date Created — Newest First (Default)', LeadSortOption.dateNewest, ctx),
                 _buildSortOptionTile('Date Created — Oldest First', LeadSortOption.dateOldest, ctx),
                 _buildSortOptionTile('Recently Updated', LeadSortOption.recentlyUpdated, ctx),
-                _buildSortOptionTile('Lead Value — Highest First', LeadSortOption.valueHighest, ctx),
-                _buildSortOptionTile('Lead Value — Lowest First', LeadSortOption.valueLowest, ctx),
                 _buildSortOptionTile('Name — A to Z', LeadSortOption.nameAZ, ctx),
                 _buildSortOptionTile('Name — Z to A', LeadSortOption.nameZA, ctx),
                 _buildSortOptionTile('Follow-up Date — Soonest', LeadSortOption.followUpSoonest, ctx),
@@ -413,62 +469,136 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
   @override
   Widget build(BuildContext context) {
     final filterCount = _currentFilter.activeFilterCount;
+    final leadState = context.watch<LeadBloc>().state;
+    final leadsList = leadState is LeadsLoadedState ? leadState.leads : <LeadEntity>[];
+    final isAllSelected = leadsList.isNotEmpty && _selectedLeadIds.length == leadsList.length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Leads & Pipeline', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.darkBlueText,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(_showSearchBar ? Icons.close_rounded : Icons.search_rounded, color: AppColors.darkBlueText),
-            onPressed: () {
-              setState(() {
-                _showSearchBar = !_showSearchBar;
-                if (!_showSearchBar) {
-                  _searchController.clear();
-                  _loadLeads();
-                }
-              });
-            },
-          ),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.filter_list_rounded, color: AppColors.darkBlueText),
-                onPressed: _showAdvancedFilterSheet,
+      appBar: _isSelectionMode
+          ? AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.darkBlueText,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.close_rounded, color: AppColors.darkBlueText),
+                onPressed: () {
+                  setState(() {
+                    _isSelectionMode = false;
+                    _selectedLeadIds.clear();
+                  });
+                },
               ),
-              if (filterCount > 0)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(color: AppColors.primaryBlue, shape: BoxShape.circle),
-                    child: Text('$filterCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+              title: Text(
+                '${_selectedLeadIds.length} Selected',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+              ),
+              actions: [
+                TextButton.icon(
+                  icon: Icon(
+                    isAllSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+                    size: 18,
+                    color: AppColors.primaryBlue,
                   ),
+                  label: Text(
+                    isAllSelected ? 'Deselect All' : 'Select All',
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primaryBlue, fontSize: 13),
+                  ),
+                  onPressed: () => _selectAllLeads(leadsList),
                 ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.sort_rounded, color: AppColors.darkBlueText),
-            onPressed: _showSortOptionsSheet,
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Lead', style: TextStyle(fontWeight: FontWeight.w800)),
-        onPressed: () {
-          context.push(RouteNames.addLead);
-        },
-      ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                  tooltip: 'Delete Selected',
+                  onPressed: _selectedLeadIds.isEmpty ? null : _confirmDeleteSelectedLeads,
+                ),
+              ],
+            )
+          : AppBar(
+              title: const Text('Leads & Pipeline', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.darkBlueText,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              actions: [
+                IconButton(
+                  icon: Icon(_showSearchBar ? Icons.close_rounded : Icons.search_rounded, color: AppColors.darkBlueText),
+                  onPressed: () {
+                    setState(() {
+                      _showSearchBar = !_showSearchBar;
+                      if (!_showSearchBar) {
+                        _searchController.clear();
+                        _loadLeads();
+                      }
+                    });
+                  },
+                ),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.filter_list_rounded, color: AppColors.darkBlueText),
+                      onPressed: _showAdvancedFilterSheet,
+                    ),
+                    if (filterCount > 0)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: AppColors.primaryBlue, shape: BoxShape.circle),
+                          child: Text('$filterCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.sort_rounded, color: AppColors.darkBlueText),
+                  onPressed: _showSortOptionsSheet,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.file_upload_outlined, color: AppColors.darkBlueText),
+                  tooltip: 'Export Leads',
+                  onPressed: () async {
+                    final filteredLeads = leadsList;
+                    final allLeads = await getIt<LeadRepository>().getLeads();
+
+                    List<String> summaryParts = [];
+                    if (_currentFilter.stages.isNotEmpty) {
+                      summaryParts.add('Stages: ${_currentFilter.stages.map((s) => _getStageName(s)).join(", ")}');
+                    }
+                    if (_currentFilter.priorities.isNotEmpty) {
+                      summaryParts.add('Priorities: ${_currentFilter.priorities.map((p) => p.name).join(", ")}');
+                    }
+                    if (_searchController.text.trim().isNotEmpty) {
+                      summaryParts.add('Query: "${_searchController.text.trim()}"');
+                    }
+                    final filterSummary = summaryParts.isEmpty ? 'All Leads' : summaryParts.join(' | ');
+
+                    if (context.mounted) {
+                      ExportLeadsModal.show(
+                        context: context,
+                        allLeads: allLeads,
+                        filteredLeads: filteredLeads,
+                        filterSummary: filterSummary,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+      floatingActionButton: _isSelectionMode
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Lead', style: TextStyle(fontWeight: FontWeight.w800)),
+              onPressed: () {
+                AddLeadActionSheet.show(context);
+              },
+            ),
+
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           if (state is LeadLoadingState) {
@@ -651,11 +781,28 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
   Widget _buildLeadCard(LeadEntity lead) {
     final stageColor = _getStageColor(lead.stage);
     final priorityColor = _getPriorityColor(lead.priority);
+    final isSelected = _selectedLeadIds.contains(lead.id);
 
     return AppCard(
       padding: const EdgeInsets.all(14),
+      backgroundColor: isSelected ? AppColors.primaryBlue.withValues(alpha: 0.06) : null,
+      border: isSelected ? Border.all(color: AppColors.primaryBlue, width: 1.5) : null,
       onTap: () {
-        context.push(RouteNames.leadDetails, extra: lead);
+        if (_isSelectionMode) {
+          _toggleLeadSelection(lead.id);
+        } else {
+          context.push(RouteNames.leadDetails, extra: lead);
+        }
+      },
+      onLongPress: () {
+        if (!_isSelectionMode) {
+          setState(() {
+            _isSelectionMode = true;
+            _selectedLeadIds.add(lead.id);
+          });
+        } else {
+          _toggleLeadSelection(lead.id);
+        }
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -663,6 +810,21 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_isSelectionMode) ...[
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: isSelected,
+                      activeColor: AppColors.primaryBlue,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      onChanged: (_) => _toggleLeadSelection(lead.id),
+                    ),
+                  ),
+                ),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,15 +877,6 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
             children: [
               Row(
                 children: [
-                  const Text('Val: ', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                  Text(
-                    '₹${lead.estimatedValue.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.success),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
                   Container(
                     width: 8,
                     height: 8,
@@ -734,12 +887,11 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
                     lead.priority.name.toUpperCase(),
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: priorityColor),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '${lead.createdAt.day}/${lead.createdAt.month}/${lead.createdAt.year}',
-                    style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                  ),
                 ],
+              ),
+              Text(
+                'Created: ${lead.createdAt.day}/${lead.createdAt.month}/${lead.createdAt.year}',
+                style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
               ),
             ],
           ),

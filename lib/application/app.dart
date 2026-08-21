@@ -88,6 +88,11 @@ class XenoBizApp extends StatelessWidget {
               crmService: getIt(),
             )..add(const FetchCrmDataEvent()),
           ),
+          BlocProvider<CrmCustomerBloc>(
+            create: (_) => CrmCustomerBloc(
+              repository: getIt(),
+            )..add(const FetchCrmCustomersEvent()),
+          ),
         ],
 
 

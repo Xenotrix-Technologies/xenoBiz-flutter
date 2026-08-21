@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/crm_entities.dart';
 import '../../infrastructure/services/crm_service.dart';
+import '../../infrastructure/storage/hive_service.dart';
 
 // EVENTS
 abstract class CrmEvent extends Equatable {
@@ -92,21 +94,47 @@ class CrmErrorState extends CrmState {
 // BLOC
 class CrmBloc extends Bloc<CrmEvent, CrmState> {
   final CrmService crmService;
+  StreamSubscription? _leadsSubscription;
+  StreamSubscription? _customersSubscription;
 
   CrmBloc({required this.crmService}) : super(CrmInitialState()) {
     on<FetchCrmDataEvent>(_onFetchCrmData);
     on<ToggleCrmFollowUpEvent>(_onToggleFollowUp);
     on<SearchCrmDataEvent>(_onSearchCrmData);
+
+    // Watch Hive storage boxes for live reactive dashboard updates
+    _leadsSubscription = crmService.hiveService.getBox(HiveService.boxLeads).watch().listen((_) {
+      add(const FetchCrmDataEvent());
+    });
+    _customersSubscription = crmService.hiveService.getBox(HiveService.boxCrmCustomers).watch().listen((_) {
+      add(const FetchCrmDataEvent());
+    });
+  }
+
+  @override
+  Future<void> close() {
+    _leadsSubscription?.cancel();
+    _customersSubscription?.cancel();
+    return super.close();
   }
 
   Future<void> _onFetchCrmData(FetchCrmDataEvent event, Emitter<CrmState> emit) async {
-    emit(CrmLoadingState());
+    if (state is! CrmLoadedState) {
+      emit(CrmLoadingState());
+    }
     try {
       final metrics = await crmService.getCrmDashboardMetrics();
       final followUps = crmService.getFollowUps();
-      emit(CrmLoadedState(metrics: metrics, followUps: followUps));
+      if (state is CrmLoadedState) {
+        final current = state as CrmLoadedState;
+        emit(current.copyWith(metrics: metrics, followUps: followUps));
+      } else {
+        emit(CrmLoadedState(metrics: metrics, followUps: followUps));
+      }
     } catch (e) {
-      emit(CrmErrorState(e.toString()));
+      if (state is! CrmLoadedState) {
+        emit(CrmErrorState(e.toString()));
+      }
     }
   }
 

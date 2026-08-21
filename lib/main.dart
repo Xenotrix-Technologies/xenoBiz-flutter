@@ -21,6 +21,8 @@ Future<void> _requestStartupPermissions() async {
       Permission.camera,
       Permission.storage,
       Permission.photos,
+      Permission.manageExternalStorage,
     ].request();
   } catch (_) {}
 }
+

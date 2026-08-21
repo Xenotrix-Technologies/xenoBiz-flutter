@@ -23,6 +23,9 @@ abstract class LeadRepository {
     String? updatedBy,
   });
 
+  Future<void> deleteLead(String id);
+  Future<void> deleteLeads(List<String> ids);
+
   // Activity timeline
   Future<List<LeadActivityEntity>> getLeadActivities(String leadId);
   Future<void> addLeadActivity(LeadActivityEntity activity);

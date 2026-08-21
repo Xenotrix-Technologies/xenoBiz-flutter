@@ -1,5 +1,7 @@
 import 'package:uuid/uuid.dart';
+import '../../domain/entities/crm_customer_entity.dart';
 import '../../domain/entities/lead_entity.dart';
+import '../../domain/repositories/crm_customer_repository.dart';
 import '../../domain/repositories/lead_repository.dart';
 import '../../domain/repositories/sync_repository.dart';
 import '../network/dio_client.dart';
@@ -11,12 +13,14 @@ class LeadRepositoryImpl implements LeadRepository {
   final HiveService hiveService;
   final NetworkChecker networkChecker;
   final SyncRepository syncRepository;
+  final CrmCustomerRepository? crmCustomerRepository;
 
   LeadRepositoryImpl({
     required this.dioClient,
     required this.hiveService,
     required this.networkChecker,
     required this.syncRepository,
+    this.crmCustomerRepository,
   });
 
   LeadStage _parseStage(String? stageStr) {
@@ -274,6 +278,10 @@ class LeadRepositoryImpl implements LeadRepository {
       await addLeadFollowUp(fup);
     }
 
+    if (localLead.stage == LeadStage.won) {
+      await _checkAndConvertWonLead(localLead);
+    }
+
     return localLead;
   }
 
@@ -292,6 +300,10 @@ class LeadRepositoryImpl implements LeadRepository {
       timestamp: DateTime.now(),
       user: updated.assignedStaff,
     ));
+
+    if (updated.stage == LeadStage.won) {
+      await _checkAndConvertWonLead(updated);
+    }
 
     return updated;
   }
@@ -316,7 +328,7 @@ class LeadRepositoryImpl implements LeadRepository {
 
       await box.put(leadId, _leadToMap(updated, syncStatus: 'synced'));
 
-      // Automatically add stage change activity event (Requirement #13)
+      // Automatically add stage change activity event
       final oldStageName = _stageDisplayName(oldLead.stage);
       final newStageName = _stageDisplayName(stage);
       final desc = stage == LeadStage.lost && lostReason != null && lostReason.isNotEmpty
@@ -333,9 +345,68 @@ class LeadRepositoryImpl implements LeadRepository {
         user: updatedBy ?? 'Admin',
       ));
 
+      if (stage == LeadStage.won) {
+        await _checkAndConvertWonLead(updated);
+      }
+
       return updated;
     }
     throw Exception('Lead not found');
+  }
+
+  @override
+  Future<void> deleteLead(String id) async {
+    final box = hiveService.getBox(HiveService.boxLeads);
+    await box.delete(id);
+  }
+
+  @override
+  Future<void> deleteLeads(List<String> ids) async {
+    final box = hiveService.getBox(HiveService.boxLeads);
+    await box.deleteAll(ids);
+  }
+
+  Future<void> _checkAndConvertWonLead(LeadEntity lead) async {
+    if (lead.stage != LeadStage.won || crmCustomerRepository == null) return;
+
+    try {
+      final crmCustomerId = 'crm_lead_${lead.id}';
+
+      // Check if already converted by ID or Phone to avoid duplicate CRM customer
+      final existingCustomers = await crmCustomerRepository!.getCrmCustomers();
+      final alreadyConverted = existingCustomers.any((c) =>
+          c.id == crmCustomerId ||
+          (c.phone.isNotEmpty && c.phone == lead.phone));
+
+      if (!alreadyConverted) {
+        final crmCust = CrmCustomerEntity(
+          id: crmCustomerId,
+          name: lead.contactName.isNotEmpty ? lead.contactName : lead.title,
+          phone: lead.phone,
+          email: lead.email,
+          address: lead.address,
+          companyName: lead.companyName,
+          source: lead.source,
+          status: 'Active',
+          notes: 'Converted from Lead "${lead.title}". Notes: ${lead.notes}',
+          assignedStaff: lead.assignedStaff,
+          createdAt: DateTime.now(),
+        );
+
+        await crmCustomerRepository!.createCrmCustomer(crmCust);
+
+        await addLeadActivity(LeadActivityEntity(
+          id: 'act_${const Uuid().v4()}',
+          leadId: lead.id,
+          title: 'Converted to CRM Customer',
+          description:
+              'Lead marked as WON and automatically converted to CRM Customer "${crmCust.name}".',
+          eventType: 'CONVERTED',
+          timestamp: DateTime.now(),
+          user: lead.assignedStaff,
+        ));
+      }
+    } catch (_) {}
   }
 
   String _stageDisplayName(LeadStage stage) {

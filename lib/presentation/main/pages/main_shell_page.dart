@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../dashboard/pages/dashboard_page.dart';
 import '../../widgets/xeno_bottom_navigation_bar.dart';
 
 class MainShellPage extends StatelessWidget {
@@ -22,8 +23,12 @@ class MainShellPage extends StatelessWidget {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && navigationShell.currentIndex != 0) {
-          _onTap(0);
+        if (!didPop) {
+          if (navigationShell.currentIndex != 0) {
+            _onTap(0);
+          } else {
+            DashboardPage.showCloseShopDialog(context);
+          }
         }
       },
       child: Scaffold(

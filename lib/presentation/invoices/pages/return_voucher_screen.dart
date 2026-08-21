@@ -6,10 +6,13 @@ import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/expense_entity.dart';
+import '../../../domain/entities/income_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/invoice_return_entity.dart';
+import '../../../domain/repositories/billing_customer_repository.dart';
 import '../../../domain/repositories/customer_repository.dart';
 import '../../../domain/repositories/expense_repository.dart';
+import '../../../domain/repositories/income_repository.dart';
 import '../../../domain/repositories/invoice_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
 import '../../../domain/repositories/returns_repository.dart';
@@ -58,8 +61,8 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
   // Manual items when no original invoice is selected
   List<InvoiceItemEntity> _manualItems = [];
 
-  // Expense Settings (Optional)
-  bool _recordReturnAmountAsExpense = false;
+  // Refund & Expense Settings (Optional)
+  bool _recordReturnRefund = false;
   bool _hasAdditionalExpense = false;
   final TextEditingController _expenseAmountCtrl = TextEditingController();
   final TextEditingController _expenseDescCtrl = TextEditingController();
@@ -212,14 +215,24 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
         _returnQuantities[item.productId] = item.returnedQuantity;
       }
 
-      // Check if return amount expense exists
+      // Check if return refund transaction exists
       try {
-        final retAmtExpId = 'exp_ret_amt_${ret.id}';
-        final retAmtExp = await getIt<ExpenseRepository>().getExpense(retAmtExpId);
-        if (retAmtExp != null && retAmtExp.amount > 0 && mounted) {
-          setState(() {
-            _recordReturnAmountAsExpense = true;
-          });
+        if (isSalesReturn) {
+          final retAmtExpId = 'exp_ret_amt_${ret.id}';
+          final retAmtExp = await getIt<ExpenseRepository>().getExpense(retAmtExpId);
+          if (retAmtExp != null && retAmtExp.amount > 0 && mounted) {
+            setState(() {
+              _recordReturnRefund = true;
+            });
+          }
+        } else {
+          final retAmtIncId = 'inc_ret_amt_${ret.id}';
+          final retAmtInc = await getIt<IncomeRepository>().getIncome(retAmtIncId);
+          if (retAmtInc != null && retAmtInc.amount > 0 && mounted) {
+            setState(() {
+              _recordReturnRefund = true;
+            });
+          }
         }
       } catch (_) {}
 
@@ -347,19 +360,76 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
         await getIt<ReturnsRepository>().createReturn(retEntity);
       }
 
-      // 2. Handle Optional Total Return Amount as Expense
+      // 2. Adjust Party Outstanding / Payable Balance
+      if (_selectedParty != null) {
+        if (isSalesReturn) {
+          try {
+            final customers = await getIt<BillingCustomerRepository>().getCustomers();
+            final custIndex = customers.indexWhere((c) => c.id == _selectedParty!.id);
+            if (custIndex != -1) {
+              final cust = customers[custIndex];
+              final updatedBalance = (cust.outstandingBalance - _totalReturnAmount).clamp(0.0, double.infinity);
+              await getIt<BillingCustomerRepository>().updateCustomer(cust.copyWith(outstandingBalance: updatedBalance));
+            }
+          } catch (_) {}
+        } else {
+          try {
+            final suppliers = await getIt<PurchaseRepository>().getSuppliers();
+            final supIndex = suppliers.indexWhere((s) => s.id == _selectedParty!.id);
+            if (supIndex != -1) {
+              final sup = suppliers[supIndex];
+              final updatedPayable = (sup.payableBalance - _totalReturnAmount).clamp(0.0, double.infinity);
+              await getIt<PurchaseRepository>().updateSupplier(sup.copyWith(payableBalance: updatedPayable));
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 3. Handle Optional Refund Transaction (Purchase Return = Supplier Refund / Income; Sales Return = Customer Refund / Expense)
       final retAmtExpId = 'exp_ret_amt_${retEntity.id}';
-      if (_recordReturnAmountAsExpense && _totalReturnAmount > 0) {
-        final retAmtExpense = ExpenseEntity(
-          id: retAmtExpId,
-          title: '${isSalesReturn ? "Sales" : "Purchase"} Return #${retEntity.returnNumber}',
-          category: isSalesReturn ? 'Sales Return' : 'Purchase Return',
-          amount: _totalReturnAmount,
-          paymentMode: _selectedExpensePaymentMode,
-          expenseDate: DateTime.now(),
-          notes: 'Return amount recorded as expense for #${retEntity.returnNumber}',
-        );
-        await getIt<ExpenseRepository>().createExpense(retAmtExpense);
+      final retAmtIncId = 'inc_ret_amt_${retEntity.id}';
+
+      if (_recordReturnRefund && _totalReturnAmount > 0) {
+        if (isSalesReturn) {
+          final retAmtExpense = ExpenseEntity(
+            id: retAmtExpId,
+            title: 'Customer Refund #${retEntity.returnNumber}',
+            category: 'Customer Refund',
+            amount: _totalReturnAmount,
+            paymentMode: _selectedExpensePaymentMode,
+            expenseDate: DateTime.now(),
+            notes: 'Customer refund for Sales Return #${retEntity.returnNumber}',
+          );
+          await getIt<ExpenseRepository>().createExpense(retAmtExpense);
+        } else {
+          final retAmtIncome = IncomeEntity(
+            id: retAmtIncId,
+            title: 'Supplier Refund #${retEntity.returnNumber}',
+            category: 'Supplier Refund',
+            amount: _totalReturnAmount,
+            paymentMode: _selectedExpensePaymentMode,
+            incomeDate: DateTime.now(),
+            notes: 'Supplier refund received for Purchase Return #${retEntity.returnNumber}',
+            partyId: retEntity.partyId,
+            partyName: retEntity.partyName,
+          );
+          await getIt<IncomeRepository>().createIncome(retAmtIncome);
+
+          // Clean up legacy expense if it previously existed
+          if (isEditMode) {
+            try {
+              await getIt<ExpenseRepository>().createExpense(ExpenseEntity(
+                id: retAmtExpId,
+                title: 'Cancelled Return Expense',
+                category: 'Other',
+                amount: 0.0,
+                paymentMode: 'Cash',
+                expenseDate: DateTime.now(),
+                notes: 'Purchase return refund removed from expenses',
+              ));
+            } catch (_) {}
+          }
+        }
       } else if (isEditMode) {
         try {
           await getIt<ExpenseRepository>().createExpense(ExpenseEntity(
@@ -369,7 +439,7 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
             amount: 0.0,
             paymentMode: 'Cash',
             expenseDate: DateTime.now(),
-            notes: 'Return amount expense removed from #${retEntity.returnNumber}',
+            notes: 'Return refund removed',
           ));
         } catch (_) {}
       }
@@ -977,22 +1047,26 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // OPTION 1: RECORD TOTAL RETURN AMOUNT IN EXPENSE LIST
+          // OPTION 1: RECORD SUPPLIER / CUSTOMER REFUND
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Record Return Amount in Expense List',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+            title: Text(
+              isSalesReturn ? 'Record Customer Refund' : 'Record Supplier Refund',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
             ),
             subtitle: Text(
-              _totalReturnAmount > 0
-                  ? 'Optional: Record ₹${_totalReturnAmount.toStringAsFixed(2)} in Expenses'
-                  : 'Optional: Record total return amount in Expenses',
+              isSalesReturn
+                  ? (_totalReturnAmount > 0
+                      ? 'Optional: Record ₹${_totalReturnAmount.toStringAsFixed(2)} refunded to customer'
+                      : 'Optional: Record the amount refunded or credited to the customer')
+                  : (_totalReturnAmount > 0
+                      ? 'Optional: Record ₹${_totalReturnAmount.toStringAsFixed(2)} received from supplier'
+                      : 'Optional: Record the amount received or credited by the supplier'),
               style: const TextStyle(fontSize: 12, color: AppColors.outline),
             ),
-            value: _recordReturnAmountAsExpense,
+            value: _recordReturnRefund,
             activeThumbColor: AppColors.primary,
-            onChanged: (val) => setState(() => _recordReturnAmountAsExpense = val),
+            onChanged: (val) => setState(() => _recordReturnRefund = val),
           ),
 
           const Divider(height: 16),
@@ -1005,7 +1079,7 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
             ),
             subtitle: const Text(
-              'Optional: Add extra transport or pickup charges',
+              'Optional: Add transport, pickup, or other return-related charges',
               style: TextStyle(fontSize: 12, color: AppColors.outline),
             ),
             value: _hasAdditionalExpense,
