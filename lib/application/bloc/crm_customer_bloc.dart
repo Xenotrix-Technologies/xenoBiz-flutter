@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/crm_customer_entity.dart';
@@ -18,13 +19,6 @@ class FetchCrmCustomersEvent extends CrmCustomerEvent {
   List<Object?> get props => [query];
 }
 
-class CreateCrmCustomerEvent extends CrmCustomerEvent {
-  final CrmCustomerEntity customer;
-  const CreateCrmCustomerEvent(this.customer);
-
-  @override
-  List<Object?> get props => [customer];
-}
 
 class UpdateCrmCustomerEvent extends CrmCustomerEvent {
   final CrmCustomerEntity customer;
@@ -42,6 +36,10 @@ class DeleteCrmCustomerEvent extends CrmCustomerEvent {
   List<Object?> get props => [id];
 }
 
+class _OnCrmBoxChangedEvent extends CrmCustomerEvent {
+  const _OnCrmBoxChangedEvent();
+}
+
 // States
 abstract class CrmCustomerState extends Equatable {
   const CrmCustomerState();
@@ -55,10 +53,15 @@ class CrmCustomerLoadingState extends CrmCustomerState {}
 
 class CrmCustomersLoadedState extends CrmCustomerState {
   final List<CrmCustomerEntity> customers;
-  const CrmCustomersLoadedState(this.customers);
+  final String query;
+
+  const CrmCustomersLoadedState(
+    this.customers, {
+    this.query = '',
+  });
 
   @override
-  List<Object?> get props => [customers];
+  List<Object?> get props => [customers, query];
 }
 
 class CrmCustomerErrorState extends CrmCustomerState {
@@ -72,44 +75,58 @@ class CrmCustomerErrorState extends CrmCustomerState {
 // Bloc
 class CrmCustomerBloc extends Bloc<CrmCustomerEvent, CrmCustomerState> {
   final CrmCustomerRepository repository;
+  StreamSubscription<List<CrmCustomerEntity>>? _boxSubscription;
+  String _activeQuery = '';
 
   CrmCustomerBloc({required this.repository}) : super(CrmCustomerInitialState()) {
     on<FetchCrmCustomersEvent>(_onFetchCrmCustomers);
-    on<CreateCrmCustomerEvent>(_onCreateCrmCustomer);
     on<UpdateCrmCustomerEvent>(_onUpdateCrmCustomer);
     on<DeleteCrmCustomerEvent>(_onDeleteCrmCustomer);
+    on<_OnCrmBoxChangedEvent>(_onBoxChanged);
+
+    // Watch Hive box for reactive updates (e.g., when a Lead is converted to Customer)
+    _boxSubscription = repository.watchCrmCustomers().listen((_) {
+      add(const _OnCrmBoxChangedEvent());
+    });
+  }
+
+  @override
+  Future<void> close() {
+    _boxSubscription?.cancel();
+    return super.close();
   }
 
   Future<void> _onFetchCrmCustomers(
       FetchCrmCustomersEvent event, Emitter<CrmCustomerState> emit) async {
-    emit(CrmCustomerLoadingState());
+    _activeQuery = event.query ?? _activeQuery;
+    if (state is! CrmCustomersLoadedState) {
+      emit(CrmCustomerLoadingState());
+    }
     try {
-      final customers = await repository.getCrmCustomers(query: event.query);
-      emit(CrmCustomersLoadedState(customers));
+      final customers = await repository.getCrmCustomers(query: _activeQuery);
+      emit(CrmCustomersLoadedState(customers, query: _activeQuery));
     } catch (e) {
       emit(CrmCustomerErrorState(e.toString()));
     }
   }
 
-  Future<void> _onCreateCrmCustomer(
-      CreateCrmCustomerEvent event, Emitter<CrmCustomerState> emit) async {
-    emit(CrmCustomerLoadingState());
+  Future<void> _onBoxChanged(
+      _OnCrmBoxChangedEvent event, Emitter<CrmCustomerState> emit) async {
     try {
-      await repository.createCrmCustomer(event.customer);
-      final customers = await repository.getCrmCustomers();
-      emit(CrmCustomersLoadedState(customers));
+      final customers = await repository.getCrmCustomers(query: _activeQuery);
+      emit(CrmCustomersLoadedState(customers, query: _activeQuery));
     } catch (e) {
       emit(CrmCustomerErrorState(e.toString()));
     }
   }
+
 
   Future<void> _onUpdateCrmCustomer(
       UpdateCrmCustomerEvent event, Emitter<CrmCustomerState> emit) async {
-    emit(CrmCustomerLoadingState());
     try {
       await repository.updateCrmCustomer(event.customer);
-      final customers = await repository.getCrmCustomers();
-      emit(CrmCustomersLoadedState(customers));
+      final customers = await repository.getCrmCustomers(query: _activeQuery);
+      emit(CrmCustomersLoadedState(customers, query: _activeQuery));
     } catch (e) {
       emit(CrmCustomerErrorState(e.toString()));
     }
@@ -117,13 +134,13 @@ class CrmCustomerBloc extends Bloc<CrmCustomerEvent, CrmCustomerState> {
 
   Future<void> _onDeleteCrmCustomer(
       DeleteCrmCustomerEvent event, Emitter<CrmCustomerState> emit) async {
-    emit(CrmCustomerLoadingState());
     try {
       await repository.deleteCrmCustomer(event.id);
-      final customers = await repository.getCrmCustomers();
-      emit(CrmCustomersLoadedState(customers));
+      final customers = await repository.getCrmCustomers(query: _activeQuery);
+      emit(CrmCustomersLoadedState(customers, query: _activeQuery));
     } catch (e) {
       emit(CrmCustomerErrorState(e.toString()));
     }
   }
 }
+

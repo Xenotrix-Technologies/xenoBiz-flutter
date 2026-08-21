@@ -38,6 +38,12 @@ class CrmCustomerRepositoryImpl implements CrmCustomerRepository {
   }
 
   @override
+  Stream<List<CrmCustomerEntity>> watchCrmCustomers({String? query}) {
+    final box = hiveService.getBox(HiveService.boxCrmCustomers);
+    return box.watch().asyncMap((_) async => await getCrmCustomers(query: query));
+  }
+
+  @override
   Future<CrmCustomerEntity> getCrmCustomer(String id) async {
     final box = hiveService.getBox(HiveService.boxCrmCustomers);
     final val = box.get(id);

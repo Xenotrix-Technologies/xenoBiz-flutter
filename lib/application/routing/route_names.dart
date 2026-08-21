@@ -30,6 +30,7 @@ abstract class RouteNames {
   static const String crmShell = '/crm';
   static const String crmDashboard = '/crm-dashboard';
   static const String crmOutstanding = '/crm-outstanding';
+  static const String crmCustomerDetails = '/crm-customer-details';
   static const String leadPipeline = '/lead-pipeline';
   static const String addLead = '/add-lead';
   static const String importLeads = '/import-leads';

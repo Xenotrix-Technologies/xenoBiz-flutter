@@ -30,6 +30,8 @@ import '../../presentation/invoices/pages/sales_overview_page.dart';
 import '../../presentation/leads/pages/add_lead_page.dart';
 import '../../presentation/leads/pages/import_leads_page.dart';
 
+import '../../domain/entities/crm_customer_entity.dart';
+import '../../presentation/crm/pages/crm_customer_details_page.dart';
 import '../../presentation/crm/pages/crm_dashboard_page.dart';
 import '../../presentation/crm/pages/crm_shell_page.dart';
 import '../../presentation/crm/pages/crm_settings_page.dart';
@@ -452,6 +454,13 @@ class AppRouter {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: RouteNames.crmCustomerDetails,
+        builder: (context, state) {
+          final cust = state.extra as CrmCustomerEntity;
+          return CrmCustomerDetailsPage(customer: cust);
+        },
       ),
       GoRoute(
         path: RouteNames.addLead,

@@ -89,9 +89,9 @@ class CrmShellPage extends StatelessWidget {
                     onTap: () => _onTap(context, 2),
                   ),
                   _CrmNavItem(
-                    icon: Icons.account_balance_wallet_outlined,
-                    selectedIcon: Icons.account_balance_wallet_rounded,
-                    label: 'Outstanding',
+                    icon: Icons.people_outline_rounded,
+                    selectedIcon: Icons.people_rounded,
+                    label: 'Customers',
                     isSelected: selectedIndex == 3,
                     onTap: () => _onTap(context, 3),
                   ),
