@@ -602,7 +602,7 @@ class _LeadPipelinePageState extends State<LeadPipelinePage> {
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           if (state is LeadLoadingState) {
-            return const LoadingState(message: 'Loading leads & pipeline...');
+            return const LeadPipelineSkeleton();
           }
 
           if (state is LeadErrorState) {

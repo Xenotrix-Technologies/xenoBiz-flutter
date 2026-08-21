@@ -211,7 +211,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
             child: BlocBuilder<CustomerBloc, CustomerState>(
               builder: (context, state) {
                 if (state is CustomerLoadingState || _isLoadingInvoices) {
-                  return const LoadingState(message: 'Loading customer directory...');
+                  return const CustomerListSkeleton();
                 }
 
                 if (state is CustomersLoadedState) {

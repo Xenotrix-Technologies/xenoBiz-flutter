@@ -211,7 +211,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
         ),
       ),
       body: _isLoading
-          ? const LoadingState(message: 'Loading categories...')
+          ? const CustomerListSkeleton()
           : TabBarView(
               controller: _tabController,
               children: [

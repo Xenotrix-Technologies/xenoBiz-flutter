@@ -443,7 +443,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
         ],
       ),
       body: _isLoading
-          ? const LoadingState(message: 'Loading customer profile...')
+          ? const CustomerDetailsSkeleton()
           : NestedScrollView(
               headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
                 SliverToBoxAdapter(

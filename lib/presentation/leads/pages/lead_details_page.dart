@@ -9,6 +9,7 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/lead_entity.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 class LeadDetailsPage extends StatefulWidget {
   final LeadEntity? lead;
@@ -396,7 +397,7 @@ class _LeadDetailsPageState extends State<LeadDetailsPage> {
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           if (state is LeadLoadingState) {
-            return const Center(child: CircularProgressIndicator());
+            return const LeadDetailsSkeleton();
           }
 
           final loadedState = state is LeadsLoadedState ? state : null;

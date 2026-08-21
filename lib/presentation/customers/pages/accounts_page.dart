@@ -573,7 +573,7 @@ class _AccountsPageState extends State<AccountsPage> {
       body: BlocBuilder<AccountsBloc, AccountsState>(
         builder: (context, state) {
           if (state is AccountsLoadingState || state is AccountsInitialState) {
-            return const LoadingState(message: 'Loading accounts...');
+            return const AccountsPageSkeleton();
           }
 
           if (state is AccountsErrorState) {
@@ -897,7 +897,7 @@ class _AccountsPageState extends State<AccountsPage> {
     return BlocBuilder<PurchaseBloc, PurchaseState>(
       builder: (context, pState) {
         if (pState is PurchaseLoadingState) {
-          return const LoadingState(message: 'Loading purchase accounts...');
+          return const AccountsPageSkeleton();
         }
         if (pState is PurchaseLoadedState) {
           if (pState.suppliers.isEmpty) {

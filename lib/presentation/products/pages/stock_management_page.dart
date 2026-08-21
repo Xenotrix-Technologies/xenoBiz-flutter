@@ -752,7 +752,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
       body: BlocBuilder<ProductBloc, ProductState>(
         builder: (context, state) {
           if (state is ProductLoadingState || state is ProductInitialState) {
-            return const LoadingState(message: 'Loading inventory...');
+            return const StockManagementSkeleton();
           }
 
           if (state is ProductErrorState) {

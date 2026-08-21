@@ -6,6 +6,7 @@ import '../../../application/bloc/product_bloc.dart';
 import '../../../application/providers/app_providers.dart';
 import '../../../const/colors.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 class InventoryAnalyticsPage extends ConsumerWidget {
   const InventoryAnalyticsPage({super.key});
@@ -24,6 +25,10 @@ class InventoryAnalyticsPage extends ConsumerWidget {
       ),
       body: BlocBuilder<ProductBloc, ProductState>(
         builder: (context, state) {
+          if (state is ProductLoadingState) {
+            return const AnalyticsPageSkeleton();
+          }
+
           double totalValuation = 0.0;
           int totalItems = 0;
           int lowStockCount = 0;

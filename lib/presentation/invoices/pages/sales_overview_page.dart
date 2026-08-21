@@ -239,7 +239,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
       body: BlocBuilder<SalesOverviewBloc, SalesOverviewState>(
         builder: (context, state) {
           if (state is SalesOverviewLoadingState || state is SalesOverviewInitialState) {
-            return const LoadingState(message: 'Loading sales dashboard...');
+            return const SalesOverviewSkeleton();
           }
 
           if (state is SalesOverviewErrorState) {

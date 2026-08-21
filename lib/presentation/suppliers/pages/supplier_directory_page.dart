@@ -6,6 +6,7 @@ import '../../../application/bloc/purchase_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 class SupplierDirectoryPage extends StatelessWidget {
   const SupplierDirectoryPage({super.key});
@@ -31,7 +32,7 @@ class SupplierDirectoryPage extends StatelessWidget {
       body: BlocBuilder<PurchaseBloc, PurchaseState>(
         builder: (context, state) {
           if (state is PurchaseLoadingState) {
-            return const Center(child: CircularProgressIndicator());
+            return const SupplierDirectorySkeleton();
           }
 
           if (state is PurchaseErrorState) {

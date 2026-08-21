@@ -40,7 +40,7 @@ class _OfflineSyncCenterPageState extends State<OfflineSyncCenterPage> {
           }
         },
         builder: (context, state) {
-          if (state is SyncLoadingState) return const LoadingState(message: 'Checking sync queue...');
+          if (state is SyncLoadingState) return const SettingsFormSkeleton();
           if (state is SyncLoadedState) {
             return SingleChildScrollView(
               padding: const EdgeInsets.all(20),

@@ -244,7 +244,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
       body: BlocBuilder<DailyLedgerBloc, DailyLedgerState>(
         builder: (context, state) {
           if (state is DailyLedgerLoadingState || state is DailyLedgerInitialState) {
-            return const LoadingState(message: 'Loading ledger...');
+            return const DailyLedgerSkeleton();
           }
 
           if (state is DailyLedgerErrorState) {

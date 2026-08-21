@@ -8,6 +8,7 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import '../../../infrastructure/storage/hive_service.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 class BusinessProfilePage extends StatefulWidget {
   const BusinessProfilePage({super.key});
@@ -574,7 +575,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
         scrolledUnderElevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SettingsFormSkeleton()
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20.0),
               child: Form(

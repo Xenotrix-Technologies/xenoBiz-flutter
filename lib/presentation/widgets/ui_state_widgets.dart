@@ -1,14 +1,34 @@
 import 'package:flutter/material.dart';
 import '../../const/colors.dart';
 import 'app_button.dart';
+import 'skeleton/feature_skeletons.dart';
+
+export 'skeleton/shimmer_effect.dart';
+export 'skeleton/skeleton_primitives.dart';
+export 'skeleton/feature_skeletons.dart';
 
 class LoadingState extends StatelessWidget {
   final String message;
+  final Widget? skeleton;
+  final bool showSpinnerOnly;
 
-  const LoadingState({super.key, this.message = 'Loading data...'});
+  const LoadingState({
+    super.key,
+    this.message = 'Loading data...',
+    this.skeleton,
+    this.showSpinnerOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (skeleton != null) {
+      return skeleton!;
+    }
+
+    if (!showSpinnerOnly) {
+      return const CustomerListSkeleton();
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -57,7 +77,7 @@ class EmptyState extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.surfaceContainerLow,
                 shape: BoxShape.circle,
               ),

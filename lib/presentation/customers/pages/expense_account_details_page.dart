@@ -284,7 +284,7 @@ class _ExpenseAccountDetailsPageState extends State<ExpenseAccountDetailsPage> {
         ],
       ),
       body: _isLoading
-          ? const LoadingState(message: 'Loading expense account...')
+          ? const CustomerDetailsSkeleton()
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(

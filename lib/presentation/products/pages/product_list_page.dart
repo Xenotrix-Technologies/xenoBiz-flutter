@@ -79,7 +79,7 @@ class _ProductListPageState extends State<ProductListPage> {
             child: BlocBuilder<ProductBloc, ProductState>(
               builder: (context, state) {
                 if (state is ProductLoadingState) {
-                  return const LoadingState(message: 'Loading inventory catalog...');
+                  return const ProductListSkeleton();
                 }
                 if (state is ProductsLoadedState) {
                   if (state.products.isEmpty) {
