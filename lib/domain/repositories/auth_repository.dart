@@ -12,5 +12,7 @@ abstract class AuthRepository {
   Future<void> updatePassword({required String currentPassword, required String newPassword});
   Future<void> logout();
   Future<bool> isAuthenticated();
+  Future<bool> isTrialOnboardingCompleted();
+  Future<void> setTrialOnboardingCompleted(bool completed);
 }
 

@@ -112,6 +112,8 @@ class UpdatePasswordEvent extends AuthEvent {
   List<Object?> get props => [currentPassword, newPassword];
 }
 
+class CompleteTrialOnboardingEvent extends AuthEvent {}
+
 class LogoutEvent extends AuthEvent {}
 
 // States
@@ -154,6 +156,16 @@ class RegistrationSuccessState extends AuthState {
   List<Object?> get props => [user, business];
 }
 
+class TrialOnboardingRequiredState extends AuthState {
+  final UserEntity user;
+  final BusinessEntity? business;
+
+  const TrialOnboardingRequiredState({required this.user, this.business});
+
+  @override
+  List<Object?> get props => [user, business];
+}
+
 class UnauthenticatedState extends AuthState {}
 
 class AuthErrorState extends AuthState {
@@ -177,6 +189,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<UpdateBusinessProfileEvent>(_onUpdateBusinessProfile);
     on<UpdateUserCredentialsEvent>(_onUpdateUserCredentials);
     on<UpdatePasswordEvent>(_onUpdatePassword);
+    on<CompleteTrialOnboardingEvent>(_onCompleteTrialOnboarding);
     on<LogoutEvent>(_onLogout);
   }
 
@@ -190,7 +203,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           if (business == null) {
             emit(BusinessSetupRequiredState(user));
           } else {
-            emit(AuthenticatedState(user: user, business: business));
+            final onboardingDone = await authRepository.isTrialOnboardingCompleted();
+            if (onboardingDone) {
+              emit(AuthenticatedState(user: user, business: business));
+            } else {
+              emit(TrialOnboardingRequiredState(user: user, business: business));
+            }
           }
           return;
         }
@@ -209,7 +227,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (business == null) {
         emit(BusinessSetupRequiredState(user));
       } else {
+        final onboardingDone = await authRepository.isTrialOnboardingCompleted();
+        if (onboardingDone) {
+          emit(AuthenticatedState(user: user, business: business));
+        } else {
+          emit(TrialOnboardingRequiredState(user: user, business: business));
+        }
+      }
+    } catch (e) {
+      emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onCompleteTrialOnboarding(
+      CompleteTrialOnboardingEvent event, Emitter<AuthState> emit) async {
+    try {
+      await authRepository.setTrialOnboardingCompleted(true);
+      final user = await authRepository.getCurrentUser();
+      final business = await authRepository.getBusinessProfile();
+      if (user != null) {
         emit(AuthenticatedState(user: user, business: business));
+      } else {
+        emit(UnauthenticatedState());
       }
     } catch (e) {
       emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));

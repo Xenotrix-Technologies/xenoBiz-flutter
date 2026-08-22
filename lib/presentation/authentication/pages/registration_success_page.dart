@@ -192,8 +192,8 @@ class RegistrationSuccessPage extends StatelessWidget {
                     // TODO: Replace temporary direct navigation with actual administrator approval / trial status check logic once backend approval workflow is implemented.
                     OutlinedButton.icon(
                       onPressed: () {
-                        // Temporary dev bypass: navigate directly to dashboard
-                        context.go(RouteNames.dashboard);
+                        // Temporary dev bypass: navigate to trial welcome onboarding flow
+                        context.go(RouteNames.trialWelcome);
                       },
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 48),

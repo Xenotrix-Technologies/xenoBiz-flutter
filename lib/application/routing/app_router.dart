@@ -8,9 +8,11 @@ import '../../domain/entities/lead_entity.dart';
 import '../../domain/entities/product_entity.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
+import '../../presentation/authentication/pages/plans_and_pricing_page.dart';
 import '../../presentation/authentication/pages/register_page.dart';
 import '../../presentation/authentication/pages/registration_success_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
+import '../../presentation/authentication/pages/trial_welcome_page.dart';
 import '../../presentation/customers/pages/accounts_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
@@ -146,6 +148,14 @@ class AppRouter {
       GoRoute(
         path: RouteNames.registrationSuccess,
         builder: (context, state) => const RegistrationSuccessPage(),
+      ),
+      GoRoute(
+        path: RouteNames.trialWelcome,
+        builder: (context, state) => const TrialWelcomePage(),
+      ),
+      GoRoute(
+        path: RouteNames.plansAndPricing,
+        builder: (context, state) => const PlansAndPricingPage(),
       ),
 
       // Persistent Shell Navigation for the 5 Main Tabs
