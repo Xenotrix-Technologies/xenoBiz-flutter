@@ -4,12 +4,19 @@ abstract class AppStrings {
   static const String appTagline = 'Executive Precision Business Management';
 
   // Auth & Onboarding
+  static const String brandName = 'XenoBiz';
+  static const String brandTagline = 'Billing & CRM for growing businesses';
   static const String loginTitle = 'Welcome Back';
   static const String loginSubtitle = 'Sign in to access your business dashboard';
-  static const String emailOrPhoneLabel = 'Email or Mobile Number';
+  static const String emailOrPhoneLabel = 'Username or Email';
   static const String passwordLabel = 'Password';
-  static const String loginButton = 'Sign In';
+  static const String loginButton = 'Log In';
+  static const String registerButton = 'Register New Account';
   static const String registerPrompt = "Don't have an account? Register";
+  static const String needHelpLoggingIn = 'Need help logging in?';
+  static const String needHelpSigningIn = 'Need help signing in?';
+  static const String forgotPassword = 'Forgot password?';
+  static const String rememberMe = 'Remember me';
   static const String onboardingTitle = 'Business Setup';
   static const String onboardingSubtitle = 'Tell us about your business to get started';
   static const String businessNameLabel = 'Business / Store Name';

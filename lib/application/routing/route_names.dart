@@ -1,7 +1,11 @@
 abstract class RouteNames {
   static const String splash = '/';
   static const String login = '/login';
+  static const String register = '/register';
   static const String onboarding = '/onboarding';
+  static const String registrationSuccess = '/registration-success';
+  static const String trialWelcome = '/trial-welcome';
+  static const String plansAndPricing = '/plans-and-pricing';
   static const String dashboard = '/dashboard';
   static const String subscription = '/subscription';
 

@@ -471,4 +471,16 @@ class AuthRepositoryImpl implements AuthRepository {
     final token = await secureStorage.getAccessToken();
     return token != null && token.isNotEmpty;
   }
+
+  @override
+  Future<bool> isTrialOnboardingCompleted() async {
+    final boxAuth = hiveService.getBox(HiveService.boxAuth);
+    return boxAuth.get('trialOnboardingCompleted') == true;
+  }
+
+  @override
+  Future<void> setTrialOnboardingCompleted(bool completed) async {
+    final boxAuth = hiveService.getBox(HiveService.boxAuth);
+    await boxAuth.put('trialOnboardingCompleted', completed);
+  }
 }

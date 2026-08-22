@@ -391,8 +391,7 @@ class _DashboardPageState extends State<DashboardPage> {
       body: BlocBuilder<DashboardBloc, DashboardState>(
         builder: (context, state) {
           if (state is DashboardLoadingState) {
-            return const LoadingState(
-                message: 'Loading financial dashboard...');
+            return const DashboardSkeleton();
           }
           if (state is DashboardErrorState) {
             return ErrorState(

@@ -77,7 +77,7 @@ class _ReturnsListPageState extends State<ReturnsListPage> {
         ),
       ),
       body: _isLoading
-          ? const LoadingState(message: 'Loading returns...')
+          ? const ReturnsListSkeleton()
           : _returns.isEmpty
               ? EmptyState(
                   title: 'No Returns Recorded',

@@ -80,6 +80,18 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<ProductBloc, ProductState>(
       builder: (context, state) {
+        if (state is ProductLoadingState) {
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              title: const Text('Product Details'),
+              backgroundColor: AppColors.deepNavy,
+              foregroundColor: Colors.white,
+            ),
+            body: const ProductDetailsSkeleton(),
+          );
+        }
+
         ProductEntity? product = _currentProduct;
 
         if (state is ProductsLoadedState && product != null) {

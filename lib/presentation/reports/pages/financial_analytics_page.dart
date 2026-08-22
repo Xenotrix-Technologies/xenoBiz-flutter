@@ -7,6 +7,7 @@ import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/providers/app_providers.dart';
 import '../../../const/colors.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 class FinancialAnalyticsPage extends ConsumerWidget {
   const FinancialAnalyticsPage({super.key});
@@ -25,6 +26,10 @@ class FinancialAnalyticsPage extends ConsumerWidget {
       ),
       body: BlocBuilder<ExpenseBloc, ExpenseState>(
         builder: (context, expState) {
+          if (expState is ExpenseLoadingState) {
+            return const AnalyticsPageSkeleton();
+          }
+
           double totalExpenses = 0.0;
           if (expState is ExpenseLoadedState) {
             totalExpenses = expState.totalExpenseAmount;
@@ -32,6 +37,9 @@ class FinancialAnalyticsPage extends ConsumerWidget {
 
           return BlocBuilder<InvoiceBloc, InvoiceState>(
             builder: (context, invState) {
+              if (invState is InvoiceLoadingState) {
+                return const AnalyticsPageSkeleton();
+              }
               double totalRevenue = 0.0;
               if (invState is InvoicesLoadedState) {
                 totalRevenue = invState.invoices.fold(0.0, (sum, inv) => sum + inv.grandTotal);

@@ -31,7 +31,7 @@ class _CustomerTimelinePageState extends State<CustomerTimelinePage> {
       body: BlocBuilder<CustomerBloc, CustomerState>(
         builder: (context, state) {
           if (state is CustomerLoadingState) {
-            return const LoadingState(message: 'Fetching timeline activity...');
+            return const FollowupsPageSkeleton();
           }
           if (state is CustomerTimelineLoadedState) {
             return SingleChildScrollView(

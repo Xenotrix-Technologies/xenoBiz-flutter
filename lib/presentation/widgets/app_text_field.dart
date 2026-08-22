@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../const/colors.dart';
-
 import '../../const/sizes.dart';
 
 class AppTextField extends StatelessWidget {
@@ -12,10 +11,16 @@ class AppTextField extends StatelessWidget {
   final bool obscureText;
   final TextInputType keyboardType;
   final IconData? prefixIcon;
+  final Widget? prefix;
   final Widget? suffixIcon;
   final ValueChanged<String>? onChanged;
   final int maxLines;
   final List<TextInputFormatter>? inputFormatters;
+  final bool isRequired;
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
+  final AutovalidateMode? autovalidateMode;
 
   const AppTextField({
     super.key,
@@ -26,27 +31,60 @@ class AppTextField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.prefixIcon,
+    this.prefix,
     this.suffixIcon,
     this.onChanged,
     this.maxLines = 1,
     this.inputFormatters,
+    this.isRequired = false,
+    this.focusNode,
+    this.textInputAction,
+    this.onFieldSubmitted,
+    this.autovalidateMode,
   });
 
   @override
   Widget build(BuildContext context) {
+    Widget? effectivePrefix = prefix;
+    if (effectivePrefix == null && prefixIcon != null) {
+      effectivePrefix = Icon(prefixIcon, size: AppSizes.iconSmall, color: AppColors.outline);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.onSurface,
-            letterSpacing: 0.2,
+        if (isRequired)
+          RichText(
+            text: TextSpan(
+              text: label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurface,
+                letterSpacing: 0.2,
+              ),
+              children: const [
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurface,
+              letterSpacing: 0.2,
+            ),
           ),
-        ),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -54,6 +92,10 @@ class AppTextField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           onChanged: onChanged,
+          focusNode: focusNode,
+          textInputAction: textInputAction,
+          onFieldSubmitted: onFieldSubmitted,
+          autovalidateMode: autovalidateMode,
           onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           maxLines: maxLines,
           inputFormatters: inputFormatters,
@@ -70,9 +112,7 @@ class AppTextField extends StatelessWidget {
             filled: true,
             fillColor: AppColors.surfaceCard,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            prefixIcon: prefixIcon != null
-                ? Icon(prefixIcon, size: AppSizes.iconSmall, color: AppColors.outline)
-                : null,
+            prefixIcon: effectivePrefix,
             suffixIcon: suffixIcon,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.radiusSmall),

@@ -13,6 +13,7 @@ import '../../widgets/app_button.dart';
 
 import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 class InvoiceDetailsPage extends StatelessWidget {
   const InvoiceDetailsPage({super.key});
@@ -84,9 +85,14 @@ class InvoiceDetailsPage extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
+      body: BlocBuilder<InvoiceBloc, InvoiceState>(
+        builder: (context, state) {
+          if (state is InvoiceLoadingState) {
+            return const InvoiceDetailsSkeleton();
+          }
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
           children: [
             AppCard(
               child: Column(
@@ -162,8 +168,10 @@ class InvoiceDetailsPage extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 }
 

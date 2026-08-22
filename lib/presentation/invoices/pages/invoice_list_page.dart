@@ -107,7 +107,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             child: BlocBuilder<InvoiceBloc, InvoiceState>(
               builder: (context, state) {
                 if (state is InvoiceLoadingState) {
-                  return const LoadingState(message: 'Loading invoices...');
+                  return const InvoiceListSkeleton();
                 }
                 if (state is InvoicesLoadedState) {
                   var filtered = state.invoices;

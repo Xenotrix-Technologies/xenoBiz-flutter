@@ -139,7 +139,7 @@ class _OutstandingCustomersPageState extends State<OutstandingCustomersPage> {
       body: BlocBuilder<CrmCustomerBloc, CrmCustomerState>(
         builder: (context, state) {
           if (state is CrmCustomerLoadingState) {
-            return const LoadingState(message: 'Loading customers...');
+            return const OutstandingCustomersSkeleton();
           }
 
           if (state is CrmCustomerErrorState) {

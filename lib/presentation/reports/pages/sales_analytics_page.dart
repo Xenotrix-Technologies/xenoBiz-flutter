@@ -139,7 +139,7 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
       body: BlocBuilder<InvoiceBloc, InvoiceState>(
         builder: (context, state) {
           if (state is InvoiceLoadingState) {
-            return const LoadingState(message: 'Calculating sales analytics...');
+            return const AnalyticsPageSkeleton();
           }
 
           if (state is InvoiceErrorState) {

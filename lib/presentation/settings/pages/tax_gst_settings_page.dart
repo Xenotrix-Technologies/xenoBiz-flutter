@@ -7,6 +7,7 @@ import '../../../const/sizes.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/ui_state_widgets.dart';
 
 
 const List<String> _indianStates = [
@@ -296,7 +297,7 @@ class _TaxGstSettingsPageState extends State<TaxGstSettingsPage> {
       body: BlocBuilder<TaxSettingsBloc, TaxSettingsState>(
         builder: (context, state) {
           if (state is TaxSettingsLoadingState) {
-            return const Center(child: CircularProgressIndicator());
+            return const SettingsFormSkeleton();
           }
 
           TaxSettingsEntity settings = const TaxSettingsEntity();
@@ -665,11 +666,7 @@ class _TaxGstSettingsPageState extends State<TaxGstSettingsPage> {
                           BlocBuilder<ProductBloc, ProductState>(
                             builder: (context, pState) {
                               if (pState is ProductLoadingState) {
-                                return const Center(
-                                    child: Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child: CircularProgressIndicator(),
-                                ));
+                                return const CustomerListSkeleton(itemCount: 3);
                               }
                               if (pState is ProductsLoadedState) {
                                 if (pState.products.isEmpty) {

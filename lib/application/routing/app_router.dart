@@ -8,7 +8,11 @@ import '../../domain/entities/lead_entity.dart';
 import '../../domain/entities/product_entity.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
+import '../../presentation/authentication/pages/plans_and_pricing_page.dart';
+import '../../presentation/authentication/pages/register_page.dart';
+import '../../presentation/authentication/pages/registration_success_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
+import '../../presentation/authentication/pages/trial_welcome_page.dart';
 import '../../presentation/customers/pages/accounts_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
 import '../../presentation/customers/pages/customer_timeline_page.dart';
@@ -41,7 +45,6 @@ import '../../presentation/leads/pages/lead_details_page.dart';
 import '../../presentation/leads/pages/lead_pipeline_page.dart';
 import '../../presentation/main/pages/main_shell_page.dart';
 import '../../presentation/main/pages/create_master_page.dart';
-import '../../presentation/onboarding/pages/business_onboarding_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
 import '../../presentation/products/pages/product_list_page.dart';
 import '../../presentation/products/pages/stock_adjustment_page.dart';
@@ -134,8 +137,20 @@ class AppRouter {
         builder: (context, state) => const LoginPage(),
       ),
       GoRoute(
-        path: RouteNames.onboarding,
-        builder: (context, state) => const BusinessOnboardingPage(),
+        path: RouteNames.register,
+        builder: (context, state) => const RegisterPage(),
+      ),
+      GoRoute(
+        path: RouteNames.registrationSuccess,
+        builder: (context, state) => const RegistrationSuccessPage(),
+      ),
+      GoRoute(
+        path: RouteNames.trialWelcome,
+        builder: (context, state) => const TrialWelcomePage(),
+      ),
+      GoRoute(
+        path: RouteNames.plansAndPricing,
+        builder: (context, state) => const PlansAndPricingPage(),
       ),
 
       // Persistent Shell Navigation for the 5 Main Tabs

@@ -600,7 +600,7 @@ class _CrmDashboardPageState extends State<CrmDashboardPage>
         body: BlocBuilder<CrmBloc, CrmState>(
           builder: (context, state) {
             if (state is CrmLoadingState) {
-              return const LoadingState(message: 'Loading CRM metrics...');
+              return const CrmDashboardSkeleton();
             }
 
             if (state is CrmErrorState) {

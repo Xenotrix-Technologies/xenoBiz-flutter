@@ -224,7 +224,7 @@ class _FollowUpsPageState extends State<FollowUpsPage> with SingleTickerProvider
         label: const Text('New Follow-up', style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: _isLoading
-          ? const LoadingState(message: 'Loading follow-up tasks...')
+          ? const FollowupsPageSkeleton()
           : TabBarView(
               controller: _tabController,
               children: [

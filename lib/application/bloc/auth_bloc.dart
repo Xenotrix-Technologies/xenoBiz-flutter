@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/business_entity.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../infrastructure/network/network_checker.dart';
 
 // Events
 abstract class AuthEvent extends Equatable {
@@ -28,16 +29,42 @@ class RegisterSubmittedEvent extends AuthEvent {
   final String email;
   final String phone;
   final String password;
+  final String? shopName;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? pinCode;
+  final String? gstin;
+  final String? businessType;
 
   const RegisterSubmittedEvent({
     required this.name,
     required this.email,
     required this.phone,
     required this.password,
+    this.shopName,
+    this.address,
+    this.city,
+    this.state,
+    this.pinCode,
+    this.gstin,
+    this.businessType,
   });
 
   @override
-  List<Object?> get props => [name, email, phone, password];
+  List<Object?> get props => [
+        name,
+        email,
+        phone,
+        password,
+        shopName,
+        address,
+        city,
+        state,
+        pinCode,
+        gstin,
+        businessType,
+      ];
 }
 
 class BusinessSetupSubmittedEvent extends AuthEvent {
@@ -86,6 +113,8 @@ class UpdatePasswordEvent extends AuthEvent {
   List<Object?> get props => [currentPassword, newPassword];
 }
 
+class CompleteTrialOnboardingEvent extends AuthEvent {}
+
 class LogoutEvent extends AuthEvent {}
 
 // States
@@ -109,13 +138,26 @@ class AuthenticatedState extends AuthState {
   List<Object?> get props => [user, business];
 }
 
-class BusinessSetupRequiredState extends AuthState {
-  final UserEntity user;
 
-  const BusinessSetupRequiredState(this.user);
+
+class RegistrationSuccessState extends AuthState {
+  final UserEntity user;
+  final BusinessEntity? business;
+
+  const RegistrationSuccessState({required this.user, this.business});
 
   @override
-  List<Object?> get props => [user];
+  List<Object?> get props => [user, business];
+}
+
+class TrialOnboardingRequiredState extends AuthState {
+  final UserEntity user;
+  final BusinessEntity? business;
+
+  const TrialOnboardingRequiredState({required this.user, this.business});
+
+  @override
+  List<Object?> get props => [user, business];
 }
 
 class UnauthenticatedState extends AuthState {}
@@ -141,6 +183,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<UpdateBusinessProfileEvent>(_onUpdateBusinessProfile);
     on<UpdateUserCredentialsEvent>(_onUpdateUserCredentials);
     on<UpdatePasswordEvent>(_onUpdatePassword);
+    on<CompleteTrialOnboardingEvent>(_onCompleteTrialOnboarding);
     on<LogoutEvent>(_onLogout);
   }
 
@@ -151,10 +194,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final user = await authRepository.getCurrentUser();
         final business = await authRepository.getBusinessProfile();
         if (user != null) {
-          if (business == null) {
-            emit(BusinessSetupRequiredState(user));
-          } else {
+          final onboardingDone = await authRepository.isTrialOnboardingCompleted();
+          if (onboardingDone) {
             emit(AuthenticatedState(user: user, business: business));
+          } else {
+            emit(TrialOnboardingRequiredState(user: user, business: business));
           }
           return;
         }
@@ -166,14 +210,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLoginSubmitted(LoginSubmittedEvent event, Emitter<AuthState> emit) async {
+    final isConnected = await NetworkChecker().isConnected;
+    if (!isConnected) {
+      emit(AuthErrorState('No internet connection'));
+      return;
+    }
     emit(AuthLoadingState());
     try {
       final user = await authRepository.login(event.emailOrPhone, event.password);
       final business = await authRepository.getBusinessProfile();
-      if (business == null) {
-        emit(BusinessSetupRequiredState(user));
-      } else {
+      final onboardingDone = await authRepository.isTrialOnboardingCompleted();
+      if (onboardingDone) {
         emit(AuthenticatedState(user: user, business: business));
+      } else {
+        emit(TrialOnboardingRequiredState(user: user, business: business));
+      }
+    } catch (e) {
+      emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onCompleteTrialOnboarding(
+      CompleteTrialOnboardingEvent event, Emitter<AuthState> emit) async {
+    try {
+      await authRepository.setTrialOnboardingCompleted(true);
+      final user = await authRepository.getCurrentUser();
+      final business = await authRepository.getBusinessProfile();
+      if (user != null) {
+        emit(AuthenticatedState(user: user, business: business));
+      } else {
+        emit(UnauthenticatedState());
       }
     } catch (e) {
       emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
@@ -181,10 +247,39 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onRegisterSubmitted(RegisterSubmittedEvent event, Emitter<AuthState> emit) async {
+    final isConnected = await NetworkChecker().isConnected;
+    if (!isConnected) {
+      emit(AuthErrorState('No internet connection'));
+      return;
+    }
     emit(AuthLoadingState());
     try {
       final user = await authRepository.register(event.name, event.email, event.phone, event.password);
-      emit(BusinessSetupRequiredState(user));
+
+      final shopName = (event.shopName != null && event.shopName!.trim().isNotEmpty)
+          ? event.shopName!.trim()
+          : (event.name.isNotEmpty ? '${event.name}\'s Store' : 'My Store');
+
+      final addressComponents = [event.address, event.city, event.state, event.pinCode]
+          .where((s) => s != null && s.trim().isNotEmpty)
+          .map((s) => s!.trim())
+          .toList();
+      final fullAddress = addressComponents.isNotEmpty ? addressComponents.join(', ') : '';
+
+      final business = BusinessEntity(
+        id: 'biz_${DateTime.now().millisecondsSinceEpoch}',
+        name: shopName,
+        email: event.email.trim().isNotEmpty ? event.email.trim() : null,
+        phone: event.phone.trim(),
+        address: fullAddress,
+        gstin: event.gstin?.trim() ?? '',
+        category: event.businessType ?? 'Retail Store',
+        currency: '₹',
+        createdAt: DateTime.now(),
+      );
+
+      final savedBusiness = await authRepository.setupBusiness(business);
+      emit(RegistrationSuccessState(user: user, business: savedBusiness));
     } catch (e) {
       emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
     }

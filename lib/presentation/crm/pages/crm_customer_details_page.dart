@@ -11,6 +11,7 @@ import '../../../domain/repositories/crm_customer_repository.dart';
 import '../../../infrastructure/services/crm_service.dart';
 import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/ui_state_widgets.dart';
 import '../widgets/add_crm_customer_dialog.dart';
 
 class CrmCustomerDetailsPage extends StatefulWidget {
@@ -450,7 +451,7 @@ class _CrmCustomerDetailsPageState extends State<CrmCustomerDetailsPage>
           // Tab Content Views
           Expanded(
             child: _isLoadingData
-                ? const Center(child: CircularProgressIndicator())
+                ? const CrmCustomerDetailsSkeleton()
                 : TabBarView(
                     controller: _tabController,
                     children: [
