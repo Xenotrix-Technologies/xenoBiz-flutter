@@ -10,6 +10,7 @@ import '../../../const/strings.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
+import '../../../infrastructure/network/network_checker.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -168,7 +169,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   double get _progressFraction => _completedRequiredFieldsCount / 10.0;
 
-  void _onCreateAccountPressed() {
+  void _onCreateAccountPressed() async {
     setState(() {
       _autovalidateMode = AutovalidateMode.onUserInteraction;
     });
@@ -256,6 +257,27 @@ class _RegisterPageState extends State<RegisterPage> {
     final phone = _phoneController.text.trim();
     final password = _passwordController.text.trim();
 
+    final isConnected = await NetworkChecker().isConnected;
+    if (!isConnected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(child: Text('No internet connection')),
+            ],
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     context.read<AuthBloc>().add(
           RegisterSubmittedEvent(
             name: name,

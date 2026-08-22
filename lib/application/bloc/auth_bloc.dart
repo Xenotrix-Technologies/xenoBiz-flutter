@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/business_entity.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../infrastructure/network/network_checker.dart';
 
 // Events
 abstract class AuthEvent extends Equatable {
@@ -209,6 +210,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onLoginSubmitted(LoginSubmittedEvent event, Emitter<AuthState> emit) async {
+    final isConnected = await NetworkChecker().isConnected;
+    if (!isConnected) {
+      emit(AuthErrorState('No internet connection'));
+      return;
+    }
     emit(AuthLoadingState());
     try {
       final user = await authRepository.login(event.emailOrPhone, event.password);
@@ -241,6 +247,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onRegisterSubmitted(RegisterSubmittedEvent event, Emitter<AuthState> emit) async {
+    final isConnected = await NetworkChecker().isConnected;
+    if (!isConnected) {
+      emit(AuthErrorState('No internet connection'));
+      return;
+    }
     emit(AuthLoadingState());
     try {
       final user = await authRepository.register(event.name, event.email, event.phone, event.password);

@@ -9,6 +9,7 @@ import '../../../const/strings.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
+import '../../../infrastructure/network/network_checker.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -43,10 +44,30 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _onLoginPressed() {
+  void _onLoginPressed() async {
     final email = _emailController.text.trim();
     final pass = _passwordController.text.trim();
     if (email.isNotEmpty && pass.isNotEmpty) {
+      final isConnected = await NetworkChecker().isConnected;
+      if (!isConnected) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.wifi_off_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('No internet connection')),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
       context
           .read<AuthBloc>()
           .add(LoginSubmittedEvent(emailOrPhone: email, password: pass));
@@ -60,12 +81,32 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _onRegisterPressed() {
+  void _onRegisterPressed() async {
     final name = _regNameController.text.trim();
     final identifier = _regEmailPhoneController.text.trim();
     final pass = _regPasswordController.text.trim();
 
     if (identifier.isNotEmpty && pass.isNotEmpty) {
+      final isConnected = await NetworkChecker().isConnected;
+      if (!isConnected) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.wifi_off_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('No internet connection')),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
       context.read<AuthBloc>().add(
             RegisterSubmittedEvent(
               name: name.isNotEmpty ? name : 'Merchant',
