@@ -8,6 +8,7 @@ import '../../domain/entities/lead_entity.dart';
 import '../../domain/entities/product_entity.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
+import '../../presentation/authentication/pages/register_page.dart';
 import '../../presentation/authentication/pages/splash_page.dart';
 import '../../presentation/customers/pages/accounts_page.dart';
 import '../../presentation/customers/pages/customer_details_page.dart';
@@ -132,6 +133,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.login,
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: RouteNames.register,
+        builder: (context, state) => const RegisterPage(),
       ),
       GoRoute(
         path: RouteNames.onboarding,

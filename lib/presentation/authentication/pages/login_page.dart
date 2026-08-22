@@ -522,9 +522,7 @@ class _LoginPageState extends State<LoginPage> {
                             text: AppStrings.registerButton,
                             variant: AppButtonVariant.outline,
                             onPressed: () {
-                              setState(() {
-                                _isRegisterMode = true;
-                              });
+                              context.push(RouteNames.register);
                             },
                           ),
                           const SizedBox(height: 20),
