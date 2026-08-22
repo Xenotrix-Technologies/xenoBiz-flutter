@@ -360,8 +360,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (state is RegistrationSuccessState ||
-            state is BusinessSetupRequiredState) {
+        if (state is RegistrationSuccessState) {
           context.go(RouteNames.registrationSuccess);
         } else if (state is AuthenticatedState) {
           context.go(RouteNames.dashboard);

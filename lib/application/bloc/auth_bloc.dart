@@ -137,14 +137,7 @@ class AuthenticatedState extends AuthState {
   List<Object?> get props => [user, business];
 }
 
-class BusinessSetupRequiredState extends AuthState {
-  final UserEntity user;
 
-  const BusinessSetupRequiredState(this.user);
-
-  @override
-  List<Object?> get props => [user];
-}
 
 class RegistrationSuccessState extends AuthState {
   final UserEntity user;
@@ -200,15 +193,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final user = await authRepository.getCurrentUser();
         final business = await authRepository.getBusinessProfile();
         if (user != null) {
-          if (business == null) {
-            emit(BusinessSetupRequiredState(user));
+          final onboardingDone = await authRepository.isTrialOnboardingCompleted();
+          if (onboardingDone) {
+            emit(AuthenticatedState(user: user, business: business));
           } else {
-            final onboardingDone = await authRepository.isTrialOnboardingCompleted();
-            if (onboardingDone) {
-              emit(AuthenticatedState(user: user, business: business));
-            } else {
-              emit(TrialOnboardingRequiredState(user: user, business: business));
-            }
+            emit(TrialOnboardingRequiredState(user: user, business: business));
           }
           return;
         }
@@ -224,15 +213,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final user = await authRepository.login(event.emailOrPhone, event.password);
       final business = await authRepository.getBusinessProfile();
-      if (business == null) {
-        emit(BusinessSetupRequiredState(user));
+      final onboardingDone = await authRepository.isTrialOnboardingCompleted();
+      if (onboardingDone) {
+        emit(AuthenticatedState(user: user, business: business));
       } else {
-        final onboardingDone = await authRepository.isTrialOnboardingCompleted();
-        if (onboardingDone) {
-          emit(AuthenticatedState(user: user, business: business));
-        } else {
-          emit(TrialOnboardingRequiredState(user: user, business: business));
-        }
+        emit(TrialOnboardingRequiredState(user: user, business: business));
       }
     } catch (e) {
       emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));

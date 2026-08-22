@@ -45,7 +45,6 @@ import '../../presentation/leads/pages/lead_details_page.dart';
 import '../../presentation/leads/pages/lead_pipeline_page.dart';
 import '../../presentation/main/pages/main_shell_page.dart';
 import '../../presentation/main/pages/create_master_page.dart';
-import '../../presentation/onboarding/pages/business_onboarding_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
 import '../../presentation/products/pages/product_list_page.dart';
 import '../../presentation/products/pages/stock_adjustment_page.dart';
@@ -140,10 +139,6 @@ class AppRouter {
       GoRoute(
         path: RouteNames.register,
         builder: (context, state) => const RegisterPage(),
-      ),
-      GoRoute(
-        path: RouteNames.onboarding,
-        builder: (context, state) => const BusinessOnboardingPage(),
       ),
       GoRoute(
         path: RouteNames.registrationSuccess,

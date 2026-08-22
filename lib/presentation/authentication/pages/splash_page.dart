@@ -28,8 +28,6 @@ class _SplashPageState extends State<SplashPage> {
           context.go(RouteNames.dashboard);
         } else if (state is TrialOnboardingRequiredState) {
           context.go(RouteNames.trialWelcome);
-        } else if (state is BusinessSetupRequiredState) {
-          context.go(RouteNames.onboarding);
         } else if (state is UnauthenticatedState) {
           context.go(RouteNames.login);
         }

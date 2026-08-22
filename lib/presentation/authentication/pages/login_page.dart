@@ -308,8 +308,6 @@ class _LoginPageState extends State<LoginPage> {
           context.go(RouteNames.registrationSuccess);
         } else if (state is TrialOnboardingRequiredState) {
           context.go(RouteNames.trialWelcome);
-        } else if (state is BusinessSetupRequiredState) {
-          context.go(RouteNames.onboarding);
         } else if (state is AuthErrorState) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
