@@ -188,11 +188,13 @@ class TrialWelcomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 28),
 
-                    // Action Button 1: Continue to Trial -> Opens Plans & Pricing
+                    // Action Button 1: Continue to Trial -> Completes Onboarding & Opens Dashboard
                     AppButton(
                       text: 'Continue to Trial',
                       onPressed: () {
-                        context.go(RouteNames.plansAndPricing);
+                        context
+                            .read<AuthBloc>()
+                            .add(CompleteTrialOnboardingEvent());
                       },
                     ),
                     const SizedBox(height: 12),
@@ -204,6 +206,27 @@ class TrialWelcomePage extends StatelessWidget {
                       onPressed: () {
                         context.go(RouteNames.plansAndPricing);
                       },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Text Buttons: Continue Trial & Skip for now
+
+                    Center(
+                      child: TextButton(
+                        onPressed: () {
+                          context
+                              .read<AuthBloc>()
+                              .add(CompleteTrialOnboardingEvent());
+                        },
+                        child: const Text(
+                          'Skip for now',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.deepNavy,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

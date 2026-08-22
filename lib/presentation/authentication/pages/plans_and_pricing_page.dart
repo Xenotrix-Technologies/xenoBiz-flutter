@@ -163,11 +163,7 @@ class PlansAndPricingPage extends StatelessWidget {
                           const SizedBox(height: 20),
                           AppButton(
                             text: 'Currently Active',
-                            onPressed: () {
-                              context
-                                  .read<AuthBloc>()
-                                  .add(CompleteTrialOnboardingEvent());
-                            },
+                            onPressed: () {},
                           ),
                         ],
                       ),
@@ -383,6 +379,27 @@ class PlansAndPricingPage extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+
+                    // Text Buttons: Continue Trial & Skip for now
+                    Center(
+                      child: TextButton(
+                        onPressed: () {
+                          context
+                              .read<AuthBloc>()
+                              .add(CompleteTrialOnboardingEvent());
+                        },
+                        child: const Text(
+                          'Continue Trial instead',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.deepNavy,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
                     const SizedBox(height: 24),
                   ],
                 ),
