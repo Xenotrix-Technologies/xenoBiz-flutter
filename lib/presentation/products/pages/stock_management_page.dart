@@ -730,7 +730,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
             builder: (context, state) {
               if (state is ProductsLoadedState) {
                 return IconButton(
-                  icon: const Icon(Icons.file_upload_outlined),
+                  icon: const Icon(Icons.file_download_outlined),
                   tooltip: 'Import Stock (Excel / CSV)',
                   onPressed: () => _showImportStockDialog(context, state),
                 );
