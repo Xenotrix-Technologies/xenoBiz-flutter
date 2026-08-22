@@ -304,6 +304,8 @@ class _LoginPageState extends State<LoginPage> {
       listener: (context, state) {
         if (state is AuthenticatedState) {
           context.go(RouteNames.dashboard);
+        } else if (state is RegistrationSuccessState) {
+          context.go(RouteNames.registrationSuccess);
         } else if (state is BusinessSetupRequiredState) {
           context.go(RouteNames.onboarding);
         } else if (state is AuthErrorState) {

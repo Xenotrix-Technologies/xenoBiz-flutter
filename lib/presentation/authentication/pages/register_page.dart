@@ -259,11 +259,16 @@ class _RegisterPageState extends State<RegisterPage> {
     context.read<AuthBloc>().add(
           RegisterSubmittedEvent(
             name: name,
-            email: email.isNotEmpty
-                ? email
-                : '${_usernameController.text.trim()}@xenobiz.local',
+            email: email.isNotEmpty ? email : ' ',
             phone: phone,
             password: password,
+            shopName: _shopNameController.text.trim(),
+            address: _addressController.text.trim(),
+            city: _cityController.text.trim(),
+            state: _stateController.text.trim(),
+            pinCode: _pinCodeController.text.trim(),
+            gstin: _gstinController.text.trim(),
+            businessType: _selectedBusinessType,
           ),
         );
   }
@@ -355,10 +360,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (state is AuthenticatedState) {
+        if (state is RegistrationSuccessState ||
+            state is BusinessSetupRequiredState) {
+          context.go(RouteNames.registrationSuccess);
+        } else if (state is AuthenticatedState) {
           context.go(RouteNames.dashboard);
-        } else if (state is BusinessSetupRequiredState) {
-          context.go(RouteNames.onboarding);
         } else if (state is AuthErrorState) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

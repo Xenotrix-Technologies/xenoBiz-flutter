@@ -28,16 +28,42 @@ class RegisterSubmittedEvent extends AuthEvent {
   final String email;
   final String phone;
   final String password;
+  final String? shopName;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? pinCode;
+  final String? gstin;
+  final String? businessType;
 
   const RegisterSubmittedEvent({
     required this.name,
     required this.email,
     required this.phone,
     required this.password,
+    this.shopName,
+    this.address,
+    this.city,
+    this.state,
+    this.pinCode,
+    this.gstin,
+    this.businessType,
   });
 
   @override
-  List<Object?> get props => [name, email, phone, password];
+  List<Object?> get props => [
+        name,
+        email,
+        phone,
+        password,
+        shopName,
+        address,
+        city,
+        state,
+        pinCode,
+        gstin,
+        businessType,
+      ];
 }
 
 class BusinessSetupSubmittedEvent extends AuthEvent {
@@ -118,6 +144,16 @@ class BusinessSetupRequiredState extends AuthState {
   List<Object?> get props => [user];
 }
 
+class RegistrationSuccessState extends AuthState {
+  final UserEntity user;
+  final BusinessEntity? business;
+
+  const RegistrationSuccessState({required this.user, this.business});
+
+  @override
+  List<Object?> get props => [user, business];
+}
+
 class UnauthenticatedState extends AuthState {}
 
 class AuthErrorState extends AuthState {
@@ -184,7 +220,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoadingState());
     try {
       final user = await authRepository.register(event.name, event.email, event.phone, event.password);
-      emit(BusinessSetupRequiredState(user));
+
+      final shopName = (event.shopName != null && event.shopName!.trim().isNotEmpty)
+          ? event.shopName!.trim()
+          : (event.name.isNotEmpty ? '${event.name}\'s Store' : 'My Store');
+
+      final addressComponents = [event.address, event.city, event.state, event.pinCode]
+          .where((s) => s != null && s.trim().isNotEmpty)
+          .map((s) => s!.trim())
+          .toList();
+      final fullAddress = addressComponents.isNotEmpty ? addressComponents.join(', ') : '';
+
+      final business = BusinessEntity(
+        id: 'biz_${DateTime.now().millisecondsSinceEpoch}',
+        name: shopName,
+        email: event.email.trim().isNotEmpty ? event.email.trim() : null,
+        phone: event.phone.trim(),
+        address: fullAddress,
+        gstin: event.gstin?.trim() ?? '',
+        category: event.businessType ?? 'Retail Store',
+        currency: '₹',
+        createdAt: DateTime.now(),
+      );
+
+      final savedBusiness = await authRepository.setupBusiness(business);
+      emit(RegistrationSuccessState(user: user, business: savedBusiness));
     } catch (e) {
       emit(AuthErrorState(e.toString().replaceAll('Exception: ', '')));
     }
