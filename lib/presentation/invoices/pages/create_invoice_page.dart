@@ -17,6 +17,9 @@ import '../../../domain/entities/purchase_entity.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../domain/repositories/customer_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../../domain/entities/product_entity.dart';
+import '../../../domain/repositories/product_repository.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
@@ -35,7 +38,8 @@ class CreateInvoicePage extends ConsumerStatefulWidget {
   ConsumerState<CreateInvoicePage> createState() => _CreateInvoicePageState();
 }
 
-class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
+class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
+    with WidgetsBindingObserver {
   bool get isEditMode => widget.invoiceToEdit != null;
   bool get isPurchase =>
       (widget.invoiceToEdit?.type ?? widget.invoiceType) ==
@@ -46,8 +50,26 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   final TextEditingController _customerSearchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   bool _showSearchOverlay = false;
+  bool _isGstExpanded = false;
+  bool _isDiscountExpanded = false;
 
   List<CustomerEntity> _allCustomers = [];
+  List<ProductEntity> _allProducts = [];
+
+  // Inline Add Product State
+  bool _showInlineAddProduct = false;
+  ProductEntity? _inlineSelectedProduct;
+  late TextEditingController _inlineSearchCtrl;
+  late TextEditingController _inlinePriceCtrl;
+  int _inlineQuantity = 1;
+  bool _showSearchResultsOverlay = false;
+
+  // Barcode Scanner controls & state
+  MobileScannerController? _scannerController;
+  bool _isCameraOn = false;
+  bool _isFlashOn = false;
+  DateTime? _lastScanTime;
+  String? _lastScannedCode;
 
   late TextEditingController _notesCtrl;
   late TextEditingController _discountCtrl;
@@ -58,10 +80,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
+
     _notesCtrl = TextEditingController(text: 'Thank you for your business!');
     _discountCtrl = TextEditingController();
     _extraAmtCtrl = TextEditingController();
     _extraDescCtrl = TextEditingController();
+    _inlineSearchCtrl = TextEditingController();
+    _inlinePriceCtrl = TextEditingController();
+
+    _loadProducts();
 
     _invoiceId = isEditMode
         ? widget.invoiceToEdit!.invoiceNumber
@@ -152,6 +180,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _scannerController?.dispose();
+    _inlineSearchCtrl.dispose();
+    _inlinePriceCtrl.dispose();
     _customerSearchCtrl.dispose();
     _searchFocusNode.dispose();
     _notesCtrl.dispose();
@@ -455,16 +487,202 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   DateTime get _createdDateTime =>
       ref.watch(createInvoiceFormProvider).createdDateTime;
 
-  Future<void> _navigateToAddProducts() async {
-    final currentItems = ref.read(createInvoiceFormProvider).items;
-    final updatedItems = await context.push<List<InvoiceItemEntity>>(
-      RouteNames.addProducts,
-      extra: currentItems,
-    );
-    if (updatedItems != null) {
-      ref.read(createInvoiceFormProvider.notifier).setItems(updatedItems);
+  void _loadProducts() async {
+    try {
+      final products = await getIt<ProductRepository>().getProducts();
+      if (mounted) {
+        setState(() {
+          _allProducts = products;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_scannerController == null || !_scannerController!.value.isInitialized) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _scannerController?.stop();
+    } else if (state == AppLifecycleState.resumed && _isCameraOn) {
+      _scannerController?.start();
     }
   }
+
+
+
+  void _toggleCamera() {
+    setState(() {
+      _isCameraOn = !_isCameraOn;
+      if (_isCameraOn) {
+        _scannerController ??= MobileScannerController(
+          detectionSpeed: DetectionSpeed.normal,
+          torchEnabled: false,
+          autoStart: true,
+        );
+        _scannerController?.start();
+      } else {
+        _scannerController?.stop();
+      }
+    });
+  }
+
+  void _toggleFlash() async {
+    if (_scannerController != null) {
+      await _scannerController!.toggleTorch();
+      setState(() {
+        _isFlashOn = !_isFlashOn;
+      });
+    }
+  }
+
+  void _onBarcodeDetected(BarcodeCapture capture) {
+    final now = DateTime.now();
+    for (final barcode in capture.barcodes) {
+      final code = barcode.rawValue ?? barcode.displayValue;
+      if (code == null || code.trim().isEmpty) continue;
+
+      if (_lastScannedCode == code &&
+          _lastScanTime != null &&
+          now.difference(_lastScanTime!) < const Duration(milliseconds: 1500)) {
+        continue;
+      }
+
+      _lastScanTime = now;
+      _lastScannedCode = code;
+
+      final cleanCode = code.trim().toLowerCase();
+      final matchedProduct = _allProducts.cast<ProductEntity?>().firstWhere(
+            (p) =>
+                p != null &&
+                (p.sku.trim().toLowerCase() == cleanCode ||
+                    p.id.trim().toLowerCase() == cleanCode ||
+                    p.name.trim().toLowerCase() == cleanCode),
+            orElse: () => null,
+          );
+
+      if (matchedProduct != null) {
+        setState(() {
+          _isCameraOn = false;
+          _showInlineAddProduct = true;
+          _selectInlineProduct(matchedProduct);
+        });
+        _scannerController?.stop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Scanned: ${matchedProduct.name}'),
+            backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Product not found'),
+            backgroundColor: AppColors.error,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      break;
+    }
+  }
+
+  void _selectInlineProduct(ProductEntity prod) {
+    setState(() {
+      _inlineSelectedProduct = prod;
+      _inlineSearchCtrl.text = prod.name;
+      _inlinePriceCtrl.text = prod.sellingPrice.toStringAsFixed(0);
+      _inlineQuantity = 1;
+      _showSearchResultsOverlay = false;
+    });
+  }
+
+  List<ProductEntity> get _inlineSearchResults {
+    final query = _inlineSearchCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) return [];
+    return _allProducts.where((p) {
+      final nameMatch = p.name.toLowerCase().contains(query);
+      final skuMatch = p.sku.toLowerCase().contains(query);
+      final categoryMatch = p.category.toLowerCase().contains(query);
+      return nameMatch || skuMatch || categoryMatch;
+    }).toList();
+  }
+
+  void _addInlineProductToInvoice() {
+    final String productName = _inlineSearchCtrl.text.trim();
+    if (productName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select or enter a product name'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final double unitPrice = double.tryParse(_inlinePriceCtrl.text.trim()) ??
+        (_inlineSelectedProduct?.sellingPrice ?? 0.0);
+
+    final taxState = context.read<TaxSettingsBloc>().state;
+    TaxSettingsEntity taxSettings = const TaxSettingsEntity();
+    if (taxState is TaxSettingsLoadedState) {
+      taxSettings = taxState.settings;
+    }
+
+    final double effectiveTaxRate = taxSettings.isGstEnabled
+        ? (_inlineSelectedProduct?.taxPercentage ?? taxSettings.defaultGstRate)
+        : 0.0;
+
+    final newItem = InvoiceItemEntity(
+      productId: _inlineSelectedProduct?.id ??
+          'custom_${DateTime.now().millisecondsSinceEpoch}',
+      productName: productName,
+      sku: _inlineSelectedProduct?.sku ?? '',
+      quantity: _inlineQuantity,
+      unitPrice: unitPrice,
+      taxPercentage: effectiveTaxRate,
+    );
+
+    final currentItems = List<InvoiceItemEntity>.from(
+        ref.read(createInvoiceFormProvider).items);
+
+    final existingIdx = currentItems.indexWhere((item) =>
+        (item.productId.isNotEmpty && item.productId == newItem.productId) ||
+        (item.productName.toLowerCase() == newItem.productName.toLowerCase()));
+
+    if (existingIdx != -1) {
+      final existingItem = currentItems[existingIdx];
+      currentItems[existingIdx] = existingItem.copyWith(
+        quantity: existingItem.quantity + newItem.quantity,
+        unitPrice: unitPrice,
+      );
+    } else {
+      currentItems.add(newItem);
+    }
+
+    ref.read(createInvoiceFormProvider.notifier).setItems(currentItems);
+
+    setState(() {
+      _inlineSelectedProduct = null;
+      _inlineSearchCtrl.clear();
+      _inlinePriceCtrl.clear();
+      _inlineQuantity = 1;
+      _showSearchResultsOverlay = false;
+      _showInlineAddProduct = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$productName added to invoice'),
+        backgroundColor: AppColors.darkBlueText,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+
 
   void _updateItemQuantity(int index, int delta) {
     ref.read(createInvoiceFormProvider.notifier).updateQuantity(
@@ -527,6 +745,46 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       ref.watch(createInvoiceFormProvider).extraExpenseAmount;
   String get _extraExpenseDescription =>
       ref.watch(createInvoiceFormProvider).extraExpenseDescription;
+
+  void _updateGstRate(double rate) {
+    final updatedSettings = _taxSettings.copyWith(defaultGstRate: rate);
+    context.read<TaxSettingsBloc>().add(UpdateTaxSettingsEvent(updatedSettings));
+
+    final currentItems = ref.read(createInvoiceFormProvider).items;
+    if (currentItems.isNotEmpty) {
+      final updatedItems =
+          currentItems.map((item) => item.copyWith(taxPercentage: rate)).toList();
+      ref.read(createInvoiceFormProvider.notifier).setItems(updatedItems);
+    }
+  }
+
+  Widget _buildSegmentButton({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 44,
+        height: AppSizes.inputHeight,
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppSizes.radiusMedium - 2),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? Colors.white : AppColors.secondaryText,
+          ),
+        ),
+      ),
+    );
+  }
 
   void _onCreateInvoice() {
     if (_items.isEmpty) {
@@ -1179,9 +1437,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                   const SizedBox(height: 16),
                   TapRegion(
                     onTapOutside: (_) {
-                      if (_focusedItemIndex != null) {
+                      if (_focusedItemIndex != null || _showSearchResultsOverlay) {
                         setState(() {
                           _focusedItemIndex = null;
+                          _showSearchResultsOverlay = false;
                         });
                       }
                     },
@@ -1194,90 +1453,280 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                             const Text(
                               'Items',
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                                 fontSize: 16,
-                                color: AppColors.onSurface,
+                                color: AppColors.darkBlueText,
                               ),
                             ),
-                            if (_items.isNotEmpty)
-                              TextButton.icon(
-                                onPressed: _navigateToAddProducts,
-                                icon: const Icon(Icons.add_shopping_cart,
-                                    size: 18),
-                                label: const Text(
-                                  'Add Item',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        if (_items.isEmpty)
-                          AppCard(
-                            padding: const EdgeInsets.all(28),
-                            child: Center(
-                              child: InkWell(
-                                onTap: _navigateToAddProducts,
-                                borderRadius: BorderRadius.circular(
-                                    AppSizes.radiusMedium),
+                            if (_isCameraOn)
+                              InkWell(
+                                onTap: _toggleCamera,
+                                borderRadius:
+                                    BorderRadius.circular(AppSizes.radiusSmall),
                                 child: Container(
-                                  width: double.infinity,
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 20.0),
-                                  alignment: Alignment.center,
-                                  child: Column(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.errorContainer,
+                                    borderRadius: BorderRadius.circular(
+                                        AppSizes.radiusSmall),
+                                    border: Border.all(
+                                        color: AppColors.danger
+                                            .withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(14),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.blueTint,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.add_shopping_cart,
-                                          size: 28,
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      const Text(
-                                        'No products added yet',
+                                    children: const [
+                                      Icon(Icons.videocam_off,
+                                          size: 14, color: AppColors.danger),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Disable Camera',
                                         style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.outline,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.danger,
                                         ),
-                                      ),
-                                      const SizedBox(height: 14),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: const [
-                                          Icon(Icons.add,
-                                              size: 18,
-                                              color: AppColors.primary),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'Add Product',
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w800,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                        ],
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Inline Barcode / SKU Camera Scanner Preview
+                        if (_isCameraOn && _scannerController != null) ...[
+                          ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(AppSizes.radiusLarge),
+                            child: Container(
+                              height: 200,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius:
+                                    BorderRadius.circular(AppSizes.radiusLarge),
+                                border: Border.all(
+                                    color: AppColors.primary, width: 2),
+                              ),
+                              child: Stack(
+                                children: [
+                                  MobileScanner(
+                                    controller: _scannerController!,
+                                    onDetect: _onBarcodeDetected,
+                                  ),
+                                  Center(
+                                    child: Container(
+                                      width: 220,
+                                      height: 110,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color: AppColors.primary, width: 2),
+                                        borderRadius: BorderRadius.circular(
+                                            AppSizes.radiusMedium),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 12,
+                                    right: 12,
+                                    child: Row(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: _toggleFlash,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black
+                                                  .withValues(alpha: 0.6),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  _isFlashOn
+                                                      ? Icons.flash_on
+                                                      : Icons.flash_off,
+                                                  color: Colors.white,
+                                                  size: 14,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  _isFlashOn
+                                                      ? 'Flash ON'
+                                                      : 'Flash OFF',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: _toggleCamera,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black
+                                                  .withValues(alpha: 0.6),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: const [
+                                                Icon(
+                                                  Icons.videocam_off,
+                                                  color: Colors.white,
+                                                  size: 14,
+                                                ),
+                                                SizedBox(width: 4),
+                                                Text(
+                                                  'Cam OFF',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 12,
+                                    left: 12,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.65),
+                                        borderRadius:
+                                            BorderRadius.circular(20),
+                                      ),
+                                      child: const Text(
+                                        'Align Barcode / SKU in box',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Empty State (when no products added yet)
+                        if (_items.isEmpty)
+                          AppCard(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 24, horizontal: 20),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primaryContainer,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.shopping_cart_outlined,
+                                    size: 32,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'No products added yet',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _showInlineAddProduct = true;
+                                        });
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 18, vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                              AppSizes.radiusMedium),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const Text(
+                                        'Add Product',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    OutlinedButton.icon(
+                                      onPressed: _toggleCamera,
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.darkBlueText,
+                                        side: const BorderSide(
+                                            color: AppColors.border),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 18, vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                              AppSizes.radiusMedium),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.qr_code_scanner,
+                                          size: 18,
+                                          color: AppColors.darkBlueText),
+                                      label: const Text(
+                                        'Scan',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                          color: AppColors.darkBlueText,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           )
-                        else
-                          // List of items
+                        else ...[
+                          // Product List (when items exist)
                           ...List.generate(_items.length, (index) {
                             final item = _items[index];
                             final isFocused = _focusedItemIndex == index;
@@ -1286,16 +1735,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 10.0),
                                 child: AppCard(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.all(14),
                                   border: Border.all(
-                                    color: AppColors.primary,
-                                    width: 1.5,
-                                  ),
+                                      color: AppColors.primary, width: 1.5),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // Title & Editable Unit Price
                                       Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
@@ -1310,7 +1756,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                   style: const TextStyle(
                                                     fontSize: 15,
                                                     fontWeight: FontWeight.w800,
-                                                    color: AppColors.onSurface,
+                                                    color:
+                                                        AppColors.darkBlueText,
                                                   ),
                                                 ),
                                                 if (item.sku.isNotEmpty) ...[
@@ -1319,7 +1766,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                     'SKU: ${item.sku}',
                                                     style: const TextStyle(
                                                       fontSize: 12,
-                                                      color: AppColors.outline,
+                                                      color: AppColors
+                                                          .secondaryText,
                                                     ),
                                                   ),
                                                 ],
@@ -1335,8 +1783,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                       horizontal: 8,
                                                       vertical: 4),
                                               decoration: BoxDecoration(
-                                                color: AppColors.primary
-                                                    .withValues(alpha: 0.1),
+                                                color:
+                                                    AppColors.primaryContainer,
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                                 border: Border.all(
@@ -1350,8 +1798,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                     '₹${item.unitPrice.toStringAsFixed(0)}',
                                                     style: const TextStyle(
                                                       fontWeight:
-                                                          FontWeight.w900,
-                                                      fontSize: 16,
+                                                          FontWeight.w800,
+                                                      fontSize: 15,
                                                       color: AppColors.primary,
                                                     ),
                                                   ),
@@ -1366,17 +1814,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 14),
-
-                                      // Quantity controls & Subtotal / Remove
+                                      const SizedBox(height: 12),
                                       Row(
                                         children: [
                                           Container(
                                             decoration: BoxDecoration(
-                                              color:
-                                                  AppColors.surfaceContainerLow,
+                                              color: AppColors.pageBackground,
                                               borderRadius:
-                                                  BorderRadius.circular(10),
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
                                               border: Border.all(
                                                   color: AppColors.border),
                                             ),
@@ -1387,32 +1833,30 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                       _updateItemQuantity(
                                                           index, -1),
                                                   child: Container(
-                                                    width: 36,
-                                                    height: 36,
+                                                    width: 34,
+                                                    height: 34,
                                                     alignment: Alignment.center,
                                                     child: const Icon(
                                                         Icons.remove,
                                                         size: 16,
                                                         color: AppColors
-                                                            .onSurface),
+                                                            .darkBlueText),
                                                   ),
                                                 ),
                                                 Container(
                                                   constraints:
                                                       const BoxConstraints(
-                                                          minWidth: 38),
-                                                  height: 36,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(horizontal: 8),
+                                                          minWidth: 32),
+                                                  height: 34,
                                                   alignment: Alignment.center,
                                                   child: Text(
                                                     '${item.quantity}',
                                                     style: const TextStyle(
                                                       fontWeight:
-                                                          FontWeight.w800,
-                                                      fontSize: 15,
-                                                      color:
-                                                          AppColors.onSurface,
+                                                          FontWeight.w700,
+                                                      fontSize: 14,
+                                                      color: AppColors
+                                                          .darkBlueText,
                                                     ),
                                                   ),
                                                 ),
@@ -1421,44 +1865,33 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                                       _updateItemQuantity(
                                                           index, 1),
                                                   child: Container(
-                                                    width: 36,
-                                                    height: 36,
+                                                    width: 34,
+                                                    height: 34,
                                                     alignment: Alignment.center,
                                                     child: const Icon(Icons.add,
                                                         size: 16,
                                                         color: AppColors
-                                                            .onSurface),
+                                                            .darkBlueText),
                                                   ),
                                                 ),
                                               ],
                                             ),
                                           ),
                                           const Spacer(),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                'Sub: ₹${item.subtotal.toStringAsFixed(2)}',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppColors.outline,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              GestureDetector(
-                                                onTap: () => _removeItem(index),
-                                                child: const Text(
-                                                  'Remove',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: AppColors.error,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                          Text(
+                                            'Sub: ₹${item.subtotal.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.secondaryText,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          GestureDetector(
+                                            onTap: () => _removeItem(index),
+                                            child: const Icon(Icons.close,
+                                                size: 18,
+                                                color: AppColors.error),
                                           ),
                                         ],
                                       ),
@@ -1468,14 +1901,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                               );
                             }
 
-                            // Compact Product Card (Reference Image 1 Style)
+                            // Compact Product Card (Default)
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 10.0),
                               child: AppCard(
                                 padding: const EdgeInsets.all(14),
-                                border: Border.all(
-                                  color: AppColors.surfaceContainerHigh,
-                                ),
                                 child: InkWell(
                                   onTap: () {
                                     setState(() {
@@ -1485,8 +1915,6 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                   borderRadius: BorderRadius.circular(
                                       AppSizes.radiusMedium),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
                                         child: Column(
@@ -1498,16 +1926,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.w700,
                                                 fontSize: 14,
-                                                color: AppColors.onSurface,
+                                                color: AppColors.darkBlueText,
                                               ),
                                             ),
-                                            const SizedBox(height: 4),
+                                            const SizedBox(height: 2),
                                             Text(
                                               _isGstEnabled && _gstEnabled
                                                   ? '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${(item.taxPercentage > 0 ? item.taxPercentage : _taxSettings.defaultGstRate).toStringAsFixed(0)}% GST)'
                                                   : '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)}',
                                               style: const TextStyle(
-                                                color: AppColors.outline,
+                                                color: AppColors.secondaryText,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -1515,37 +1943,79 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                                           ],
                                         ),
                                       ),
-                                      InkWell(
-                                        onTap: () =>
-                                            _showEditPriceDialog(index, item),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary
-                                                .withValues(alpha: 0.08),
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                            border: Border.all(
-                                                color: AppColors.primary
-                                                    .withValues(alpha: 0.2)),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Text(
-                                                '₹${(item.quantity * item.unitPrice).toStringAsFixed(0)}',
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: AppColors.pageBackground,
+                                          borderRadius: BorderRadius.circular(
+                                              AppSizes.radiusMedium),
+                                          border: Border.all(
+                                              color: AppColors.border),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            InkWell(
+                                              onTap: () =>
+                                                  _updateItemQuantity(
+                                                      index, -1),
+                                              child: Container(
+                                                width: 30,
+                                                height: 30,
+                                                alignment: Alignment.center,
+                                                child: const Icon(Icons.remove,
+                                                    size: 14,
+                                                    color:
+                                                        AppColors.darkBlueText),
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6),
+                                              child: Text(
+                                                '${item.quantity}',
                                                 style: const TextStyle(
-                                                  fontWeight: FontWeight.w800,
-                                                  fontSize: 15,
-                                                  color: AppColors.primary,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13,
+                                                  color: AppColors.darkBlueText,
                                                 ),
                                               ),
-                                              const SizedBox(width: 4),
-                                              const Icon(Icons.edit_outlined,
-                                                  size: 14,
-                                                  color: AppColors.primary),
-                                            ],
+                                            ),
+                                            InkWell(
+                                              onTap: () =>
+                                                  _updateItemQuantity(index, 1),
+                                              child: Container(
+                                                width: 30,
+                                                height: 30,
+                                                alignment: Alignment.center,
+                                                child: const Icon(Icons.add,
+                                                    size: 14,
+                                                    color:
+                                                        AppColors.darkBlueText),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        '₹${(item.quantity * item.unitPrice).toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14,
+                                          color: AppColors.darkBlueText,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () => _removeItem(index),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.errorContainer,
+                                            shape: BoxShape.circle,
                                           ),
+                                          child: const Icon(Icons.close,
+                                              size: 14, color: AppColors.error),
                                         ),
                                       ),
                                     ],
@@ -1554,39 +2024,725 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                               ),
                             );
                           }),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _showInlineAddProduct = true;
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusMedium),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text(
+                                    'Add Product',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              OutlinedButton.icon(
+                                onPressed: _toggleCamera,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.darkBlueText,
+                                  side:
+                                      const BorderSide(color: AppColors.border),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        AppSizes.radiusMedium),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.qr_code_scanner,
+                                    size: 18, color: AppColors.darkBlueText),
+                                label: const Text(
+                                  'Scan',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: AppColors.darkBlueText,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // Inline Add Product Form Section
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox(
+                              width: double.infinity, height: 0),
+                          secondChild: Padding(
+                            padding: const EdgeInsets.only(top: 14.0),
+                            child: AppCard(
+                              padding: const EdgeInsets.all(16),
+                              border: Border.all(
+                                  color: AppColors.primary, width: 1.5),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'ADD PRODUCT',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.secondaryText,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _showInlineAddProduct = false;
+                                            _showSearchResultsOverlay = false;
+                                          });
+                                        },
+                                        child: const Icon(Icons.close,
+                                            size: 18,
+                                            color: AppColors.secondaryText),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Search / Product Name Field with Dropdown Overlay
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'PRODUCT NAME',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.secondaryText,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      SizedBox(
+                                        height: AppSizes.inputHeight,
+                                        child: TextField(
+                                          controller: _inlineSearchCtrl,
+                                          onTapOutside: (_) => FocusManager
+                                              .instance.primaryFocus
+                                              ?.unfocus(),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText:
+                                                'Search product name, SKU or ID',
+                                            hintStyle: const TextStyle(
+                                              color: AppColors.secondaryText,
+                                              fontSize: 13,
+                                            ),
+                                            prefixIcon: const Icon(
+                                                Icons.search,
+                                                size: 18,
+                                                color: AppColors.secondaryText),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 12),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.border),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.border),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.primary,
+                                                  width: 1.5),
+                                            ),
+                                          ),
+                                          onChanged: (val) {
+                                            setState(() {
+                                              _showSearchResultsOverlay =
+                                                  val.trim().isNotEmpty;
+                                            });
+                                          },
+                                        ),
+                                      ),
+
+                                      // Floating Search Results Dropdown Overlay
+                                      if (_showSearchResultsOverlay &&
+                                          _inlineSearchResults.isNotEmpty)
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 4),
+                                          constraints: const BoxConstraints(
+                                              maxHeight: 180),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.surfaceCard,
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            border: Border.all(
+                                                color: AppColors.border),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.08),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: ListView.separated(
+                                            shrinkWrap: true,
+                                            padding: EdgeInsets.zero,
+                                            itemCount:
+                                                _inlineSearchResults.length,
+                                            separatorBuilder: (_, __) =>
+                                                const Divider(
+                                                    height: 1,
+                                                    color: AppColors.border),
+                                            itemBuilder: (context, idx) {
+                                              final prod =
+                                                  _inlineSearchResults[idx];
+                                              return ListTile(
+                                                dense: true,
+                                                title: Text(
+                                                  prod.name,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 14,
+                                                    color:
+                                                        AppColors.darkBlueText,
+                                                  ),
+                                                ),
+                                                subtitle: prod.sku.isNotEmpty
+                                                    ? Text(
+                                                        'SKU: ${prod.sku}',
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          color: AppColors
+                                                              .secondaryText,
+                                                        ),
+                                                      )
+                                                    : null,
+                                                trailing: Text(
+                                                  '₹${prod.sellingPrice.toStringAsFixed(2)}',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 14,
+                                                    color: AppColors.primary,
+                                                  ),
+                                                ),
+                                                onTap: () =>
+                                                    _selectInlineProduct(prod),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Quantity & Unit Price Controls Row
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        flex: 1,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'QUANTITY',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.secondaryText,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Container(
+                                              height: AppSizes.inputHeight,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.pageBackground,
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        AppSizes.radiusMedium),
+                                                border: Border.all(
+                                                    color: AppColors.border),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  InkWell(
+                                                    onTap: () {
+                                                      if (_inlineQuantity > 1) {
+                                                        setState(() {
+                                                          _inlineQuantity--;
+                                                        });
+                                                      }
+                                                    },
+                                                    child: Container(
+                                                      width: 36,
+                                                      height:
+                                                          AppSizes.inputHeight,
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: const Icon(
+                                                          Icons.remove,
+                                                          size: 18,
+                                                          color: AppColors
+                                                              .darkBlueText),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '$_inlineQuantity',
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: AppColors
+                                                          .darkBlueText,
+                                                    ),
+                                                  ),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      setState(() {
+                                                        _inlineQuantity++;
+                                                      });
+                                                    },
+                                                    child: Container(
+                                                      width: 36,
+                                                      height:
+                                                          AppSizes.inputHeight,
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: const Icon(
+                                                          Icons.add,
+                                                          size: 18,
+                                                          color: AppColors
+                                                              .darkBlueText),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'UNIT PRICE (₹)',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.secondaryText,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            SizedBox(
+                                              height: AppSizes.inputHeight,
+                                              child: TextField(
+                                                controller: _inlinePriceCtrl,
+                                                keyboardType: const TextInputType
+                                                    .numberWithOptions(
+                                                    decimal: true),
+                                                onTapOutside: (_) =>
+                                                    FocusManager
+                                                        .instance.primaryFocus
+                                                        ?.unfocus(),
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.darkBlueText,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  hintText: '0',
+                                                  contentPadding:
+                                                      const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 14,
+                                                          vertical: 12),
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    borderSide: const BorderSide(
+                                                        color:
+                                                            AppColors.border),
+                                                  ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    borderSide: const BorderSide(
+                                                        color:
+                                                            AppColors.border),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    borderSide: const BorderSide(
+                                                        color:
+                                                            AppColors.primary,
+                                                        width: 1.5),
+                                                  ),
+                                                ),
+                                                onChanged: (_) {
+                                                  setState(() {});
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Calculated Line Total Display
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Line Total',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${(_inlineQuantity * (double.tryParse(_inlinePriceCtrl.text) ?? 0.0)).toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Action Buttons (Cancel / Add Product)
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _showInlineAddProduct = false;
+                                              _showSearchResultsOverlay =
+                                                  false;
+                                              _inlineSelectedProduct = null;
+                                              _inlineSearchCtrl.clear();
+                                              _inlinePriceCtrl.clear();
+                                              _inlineQuantity = 1;
+                                            });
+                                          },
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor:
+                                                AppColors.darkBlueText,
+                                            side: const BorderSide(
+                                                color: AppColors.border),
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 12),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Cancel',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: _addInlineProductToInvoice,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.primary,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 12),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Add Product',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          crossFadeState: _showInlineAddProduct
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 250),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // GST Enable/Disable Toggle Card (If global GST is enabled)
+                  // GST Enable/Disable & Expandable Card (If global GST is enabled)
                   if (_isGstEnabled) ...[
                     AppCard(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      padding: EdgeInsets.zero,
+                      child: Column(
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.receipt_long_outlined,
-                                  color: AppColors.primary, size: 20),
-                              const SizedBox(width: 10),
-                              const Text(
-                                'Apply GST Tax',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText),
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isGstExpanded = !_isGstExpanded;
+                              });
+                            },
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(AppSizes.radiusLarge),
+                              topRight: const Radius.circular(AppSizes.radiusLarge),
+                              bottomLeft: Radius.circular(
+                                  _isGstExpanded ? 0 : AppSizes.radiusLarge),
+                              bottomRight: Radius.circular(
+                                  _isGstExpanded ? 0 : AppSizes.radiusLarge),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryContainer,
+                                      borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusSmall),
+                                    ),
+                                    child: const Icon(
+                                      Icons.receipt_long_outlined,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Apply GST Tax',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _gstEnabled
+                                              ? 'On • ${_taxSettings.defaultGstRate.toStringAsFixed(0)}% applied'
+                                              : 'Off',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.secondaryText,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch.adaptive(
+                                    value: _gstEnabled,
+                                    activeTrackColor: AppColors.primary,
+                                    onChanged: (val) => ref
+                                        .read(createInvoiceFormProvider.notifier)
+                                        .toggleGst(val),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  AnimatedRotation(
+                                    turns: _isGstExpanded ? 0.5 : 0.0,
+                                    duration: const Duration(milliseconds: 250),
+                                    child: const Icon(
+                                      Icons.keyboard_arrow_down,
+                                      color: AppColors.secondaryText,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                          Switch.adaptive(
-                            value: _gstEnabled,
-                            activeTrackColor: AppColors.primary,
-                            onChanged: (val) => ref
-                                .read(createInvoiceFormProvider.notifier)
-                                .toggleGst(val),
+                          AnimatedCrossFade(
+                            firstChild: const SizedBox(
+                                width: double.infinity, height: 0),
+                            secondChild: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Divider(
+                                    height: 1, color: AppColors.border),
+                                Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Opacity(
+                                    opacity: _gstEnabled ? 1.0 : 0.4,
+                                    child: IgnorePointer(
+                                      ignoring: !_gstEnabled,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'GST RATE',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.secondaryText,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            children: [5.0, 12.0, 18.0, 28.0]
+                                                .map((rate) {
+                                              final isSelected =
+                                                  (_taxSettings.defaultGstRate -
+                                                              rate)
+                                                          .abs() <
+                                                      0.01;
+                                              return Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 4.0),
+                                                  child: InkWell(
+                                                    onTap: () =>
+                                                        _updateGstRate(rate),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    child: AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 10),
+                                                      decoration: BoxDecoration(
+                                                        color: isSelected
+                                                            ? AppColors
+                                                                .primaryContainer
+                                                            : AppColors
+                                                                .surfaceCard,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                                AppSizes
+                                                                    .radiusMedium),
+                                                        border: Border.all(
+                                                          color: isSelected
+                                                              ? AppColors.primary
+                                                              : AppColors.border,
+                                                          width: isSelected
+                                                              ? 1.5
+                                                              : 1.0,
+                                                        ),
+                                                      ),
+                                                      child: Center(
+                                                        child: Text(
+                                                          '${rate.toStringAsFixed(0)}%',
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: isSelected
+                                                                ? AppColors.primary
+                                                                : AppColors
+                                                                    .darkBlueText,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            crossFadeState: _isGstExpanded
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration: const Duration(milliseconds: 250),
                           ),
                         ],
                       ),
@@ -1594,133 +2750,349 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                     const SizedBox(height: 14),
                   ],
 
-                  // Discount & Extra Expense Controls Card
+                  // Discount & Extra Charges Expandable Card
                   AppCard(
-                    padding: const EdgeInsets.all(14),
+                    padding: EdgeInsets.zero,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Discount & Extra Expense',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.darkBlueText),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: _discountCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                onTapOutside: (_) => FocusManager
-                                    .instance.primaryFocus
-                                    ?.unfocus(),
-                                decoration: InputDecoration(
-                                  labelText: 'Discount',
-                                  hintText: '0.00',
-                                  prefixText: _discountIsPercentage ? '' : '₹ ',
-                                  suffixText: _discountIsPercentage ? '%' : '',
-                                  border: const OutlineInputBorder(),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              _isDiscountExpanded = !_isDiscountExpanded;
+                            });
+                          },
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(AppSizes.radiusLarge),
+                            topRight: const Radius.circular(AppSizes.radiusLarge),
+                            bottomLeft: Radius.circular(
+                                _isDiscountExpanded ? 0 : AppSizes.radiusLarge),
+                            bottomRight: Radius.circular(
+                                _isDiscountExpanded ? 0 : AppSizes.radiusLarge),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryContainer,
+                                    borderRadius: BorderRadius.circular(
+                                        AppSizes.radiusSmall),
+                                  ),
+                                  child: const Icon(
+                                    Icons.local_offer_outlined,
+                                    color: AppColors.primary,
+                                    size: 20,
+                                  ),
                                 ),
-                                onChanged: (val) {
-                                  final d = double.tryParse(val) ?? 0.0;
-                                  ref
-                                      .read(createInvoiceFormProvider.notifier)
-                                      .updateDiscount(d, _discountIsPercentage);
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            ToggleButtons(
-                              isSelected: [
-                                !_discountIsPercentage,
-                                _discountIsPercentage
-                              ],
-                              onPressed: (idx) {
-                                final isPct = idx == 1;
-                                ref
-                                    .read(createInvoiceFormProvider.notifier)
-                                    .updateDiscount(_discountAmount, isPct);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              children: const [
-                                Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 12),
-                                    child: Text('₹',
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Discount & Extra Charges',
                                         style: TextStyle(
-                                            fontWeight: FontWeight.w800))),
-                                Padding(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 12),
-                                    child: Text('%',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w800))),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.darkBlueText,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Discount: ${_discountIsPercentage ? '${_discountAmount.toStringAsFixed(0)}%' : '₹${_discountAmount.toStringAsFixed(0)}'}   Extra: ₹${_extraExpenseAmount.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.secondaryText,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                AnimatedRotation(
+                                  turns: _isDiscountExpanded ? 0.5 : 0.0,
+                                  duration: const Duration(milliseconds: 250),
+                                  child: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: AppColors.secondaryText,
+                                    size: 22,
+                                  ),
+                                ),
                               ],
                             ),
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: TextField(
-                                controller: _extraAmtCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                onTapOutside: (_) => FocusManager
-                                    .instance.primaryFocus
-                                    ?.unfocus(),
-                                decoration: const InputDecoration(
-                                  labelText: 'Extra Amount',
-                                  hintText: '0.00',
-                                  prefixText: '₹ ',
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox(
+                              width: double.infinity, height: 0),
+                          secondChild: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Divider(height: 1, color: AppColors.border),
+                              Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'DISCOUNT AMOUNT',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.secondaryText,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: SizedBox(
+                                            height: AppSizes.inputHeight,
+                                            child: TextField(
+                                              controller: _discountCtrl,
+                                              keyboardType:
+                                                  const TextInputType.numberWithOptions(
+                                                      decimal: true),
+                                              onTapOutside: (_) =>
+                                                  FocusManager
+                                                      .instance.primaryFocus
+                                                      ?.unfocus(),
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.darkBlueText,
+                                              ),
+                                              decoration: InputDecoration(
+                                                hintText: '0',
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 12),
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          AppSizes.radiusMedium),
+                                                  borderSide: const BorderSide(
+                                                      color: AppColors.border),
+                                                ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          AppSizes.radiusMedium),
+                                                  borderSide: const BorderSide(
+                                                      color: AppColors.border),
+                                                ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          AppSizes.radiusMedium),
+                                                  borderSide: const BorderSide(
+                                                      color: AppColors.primary,
+                                                      width: 1.5),
+                                                ),
+                                              ),
+                                              onChanged: (val) {
+                                                final d =
+                                                    double.tryParse(val) ?? 0.0;
+                                                ref
+                                                    .read(
+                                                        createInvoiceFormProvider
+                                                            .notifier)
+                                                    .updateDiscount(
+                                                        d, _discountIsPercentage);
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Container(
+                                          height: AppSizes.inputHeight,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.surfaceCard,
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            border: Border.all(
+                                                color: AppColors.border),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              _buildSegmentButton(
+                                                label: '₹',
+                                                isSelected:
+                                                    !_discountIsPercentage,
+                                                onTap: () {
+                                                  ref
+                                                      .read(
+                                                          createInvoiceFormProvider
+                                                              .notifier)
+                                                      .updateDiscount(
+                                                          _discountAmount, false);
+                                                },
+                                              ),
+                                              _buildSegmentButton(
+                                                label: '%',
+                                                isSelected:
+                                                    _discountIsPercentage,
+                                                onTap: () {
+                                                  ref
+                                                      .read(
+                                                          createInvoiceFormProvider
+                                                              .notifier)
+                                                      .updateDiscount(
+                                                          _discountAmount, true);
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'EXTRA EXPENSE AMOUNT',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.secondaryText,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      height: AppSizes.inputHeight,
+                                      child: TextField(
+                                        controller: _extraAmtCtrl,
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                                decimal: true),
+                                        onTapOutside: (_) => FocusManager
+                                            .instance.primaryFocus
+                                            ?.unfocus(),
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.darkBlueText,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: '0',
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 14,
+                                                  vertical: 12),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            borderSide: const BorderSide(
+                                                color: AppColors.border),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            borderSide: const BorderSide(
+                                                color: AppColors.border),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            borderSide: const BorderSide(
+                                                color: AppColors.primary,
+                                                width: 1.5),
+                                          ),
+                                        ),
+                                        onChanged: (val) {
+                                          final amt =
+                                              double.tryParse(val) ?? 0.0;
+                                          ref
+                                              .read(
+                                                  createInvoiceFormProvider
+                                                      .notifier)
+                                              .updateExtraExpense(
+                                                  amt, _extraDescCtrl.text);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'EXPENSE NOTE',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.secondaryText,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      height: AppSizes.inputHeight,
+                                      child: TextField(
+                                        controller: _extraDescCtrl,
+                                        onTapOutside: (_) => FocusManager
+                                            .instance.primaryFocus
+                                            ?.unfocus(),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.darkBlueText,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'e.g. Delivery charge',
+                                          hintStyle: const TextStyle(
+                                            color: AppColors.secondaryText,
+                                            fontSize: 14,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 14,
+                                                  vertical: 12),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            borderSide: const BorderSide(
+                                                color: AppColors.border),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            borderSide: const BorderSide(
+                                                color: AppColors.border),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            borderSide: const BorderSide(
+                                                color: AppColors.primary,
+                                                width: 1.5),
+                                          ),
+                                        ),
+                                        onChanged: (val) {
+                                          ref
+                                              .read(
+                                                  createInvoiceFormProvider
+                                                      .notifier)
+                                              .updateExtraExpense(
+                                                  _extraExpenseAmount, val);
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                onChanged: (val) {
-                                  final amt = double.tryParse(val) ?? 0.0;
-                                  ref
-                                      .read(createInvoiceFormProvider.notifier)
-                                      .updateExtraExpense(
-                                          amt, _extraDescCtrl.text);
-                                },
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: _extraDescCtrl,
-                                onTapOutside: (_) => FocusManager
-                                    .instance.primaryFocus
-                                    ?.unfocus(),
-                                decoration: const InputDecoration(
-                                  labelText: 'Expense Note',
-                                  hintText: 'e.g. Delivery Charge',
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
-                                ),
-                                onChanged: (val) {
-                                  ref
-                                      .read(createInvoiceFormProvider.notifier)
-                                      .updateExtraExpense(
-                                          _extraExpenseAmount, val);
-                                },
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          crossFadeState: _isDiscountExpanded
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 250),
                         ),
                       ],
                     ),

@@ -15,7 +15,6 @@ import '../../../domain/entities/invoice_entity.dart';
 import '../../../infrastructure/services/backup_restore_service.dart';
 import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/quick_actions_bottom_sheet.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
 
@@ -378,14 +377,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: null,
-        backgroundColor: AppColors.primaryBlue,
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onPressed: () => QuickActionsBottomSheet.show(context),
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
       ),
 
       body: BlocBuilder<DashboardBloc, DashboardState>(

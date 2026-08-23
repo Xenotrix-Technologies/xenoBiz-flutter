@@ -3,12 +3,16 @@ import '../../const/colors.dart';
 
 class XenoBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
+  final bool isCreateMenuOpen;
   final ValueChanged<int> onTap;
+  final VoidCallback onToggleCreateMenu;
 
   const XenoBottomNavigationBar({
     super.key,
     required this.currentIndex,
+    this.isCreateMenuOpen = false,
     required this.onTap,
+    required this.onToggleCreateMenu,
   });
 
   @override
@@ -27,10 +31,11 @@ class XenoBottomNavigationBar extends StatelessWidget {
         top: false,
         child: Container(
           height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
+              // 1. Home
               _NavItem(
                 index: 0,
                 currentIndex: currentIndex,
@@ -39,6 +44,8 @@ class XenoBottomNavigationBar extends StatelessWidget {
                 label: 'Home',
                 onTap: () => onTap(0),
               ),
+
+              // 2. Sales
               _NavItem(
                 index: 1,
                 currentIndex: currentIndex,
@@ -47,23 +54,63 @@ class XenoBottomNavigationBar extends StatelessWidget {
                 label: 'Sales',
                 onTap: () => onTap(1),
               ),
-              _NavItem(
-                index: 2,
-                currentIndex: currentIndex,
-                icon: Icons.account_balance_wallet_outlined,
-                activeIcon: Icons.account_balance_wallet_rounded,
-                label: 'Accounts',
-                onTap: () => onTap(2),
+
+              // 3. Center Universal Create Button (+)
+              Expanded(
+                child: GestureDetector(
+                  onTap: onToggleCreateMenu,
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Transform.translate(
+                      offset: const Offset(0, -10),
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isCreateMenuOpen
+                              ? AppColors.deepNavy
+                              : AppColors.primaryBlue,
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isCreateMenuOpen
+                                      ? AppColors.deepNavy
+                                      : AppColors.primaryBlue)
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: AnimatedRotation(
+                            turns: isCreateMenuOpen ? 0.125 : 0.0, // 45 degrees rotation for + -> x
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeInOutCubic,
+                            child: Icon(
+                              Icons.add_rounded,
+                              size: 28,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
 
+              // 4. Inventory (Stock)
               _NavItem(
                 index: 3,
                 currentIndex: currentIndex,
                 icon: Icons.inventory_2_outlined,
                 activeIcon: Icons.inventory_2_rounded,
-                label: 'Stock',
+                label: 'Inventory',
                 onTap: () => onTap(3),
               ),
+
+              // 5. More
               _NavItem(
                 index: 4,
                 currentIndex: currentIndex,
@@ -112,16 +159,16 @@ class _NavItem extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 56,
-              height: 30,
+              width: 52,
+              height: 28,
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.blueTint : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Center(
                 child: Icon(
                   isSelected ? activeIcon : icon,
-                  size: 22,
+                  size: 21,
                   color: isSelected ? activeColor : inactiveColor,
                 ),
               ),
@@ -132,7 +179,7 @@ class _NavItem extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected ? activeColor : inactiveColor,
                 letterSpacing: -0.1,
