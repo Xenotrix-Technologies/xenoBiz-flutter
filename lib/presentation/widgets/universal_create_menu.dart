@@ -73,12 +73,14 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
   }
 
   void _onActionTap(VoidCallback action) {
-    _animController.reverse().then((_) {
-      if (mounted) {
-        widget.onDismiss();
-        action();
-      }
-    });
+    // _animController.reverse().then((_) {
+    //   if (mounted) {
+    //     widget.onDismiss();
+    //     action();
+    //   }
+    // });
+    widget.onDismiss();
+    action();
   }
 
   void _showPartyChooser(BuildContext context) {
@@ -146,7 +148,8 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
               ),
               title: const Text('Supplier',
                   style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('Add a vendor/supplier account for purchases'),
+              subtitle:
+                  const Text('Add a vendor/supplier account for purchases'),
               onTap: () {
                 Navigator.pop(ctx);
                 context.push(RouteNames.createMaster, extra: 2);
@@ -219,12 +222,13 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                   color: AppColors.warning.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.build_outlined,
-                    color: AppColors.warning),
+                child:
+                    const Icon(Icons.build_outlined, color: AppColors.warning),
               ),
               title: const Text('Service',
                   style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('Add a non-stock service or consulting item'),
+              subtitle:
+                  const Text('Add a non-stock service or consulting item'),
               onTap: () {
                 Navigator.pop(ctx);
                 context.push(RouteNames.createMaster, extra: 0);
@@ -345,7 +349,8 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             subtitle: 'Sales & Docs',
                             icon: Icons.receipt_long_rounded,
                             iconColor: AppColors.primaryBlue,
-                            bgColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                            bgColor:
+                                AppColors.primaryBlue.withValues(alpha: 0.1),
                             onTap: () => _onActionTap(() {
                               context.push(
                                 RouteNames.createInvoice,
@@ -359,7 +364,8 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             subtitle: 'Estimate',
                             icon: Icons.request_quote_rounded,
                             iconColor: const Color(0xFF0284C7),
-                            bgColor: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                            bgColor:
+                                const Color(0xFF0284C7).withValues(alpha: 0.1),
                             onTap: () => _onActionTap(() {
                               context.push(
                                 RouteNames.createInvoice,
@@ -420,7 +426,8 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             subtitle: 'Credit Note',
                             icon: Icons.assignment_return_outlined,
                             iconColor: const Color(0xFF7C3AED),
-                            bgColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                            bgColor:
+                                const Color(0xFF7C3AED).withValues(alpha: 0.1),
                             onTap: () => _onActionTap(() {
                               context.push(
                                 RouteNames.createReturn,
@@ -434,11 +441,14 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             subtitle: 'Debit Note',
                             icon: Icons.settings_backup_restore_rounded,
                             iconColor: const Color(0xFFD97706),
-                            bgColor: const Color(0xFFD97706).withValues(alpha: 0.1),
+                            bgColor:
+                                const Color(0xFFD97706).withValues(alpha: 0.1),
                             onTap: () => _onActionTap(() {
                               context.push(
                                 RouteNames.createReturn,
-                                extra: {'returnType': ReturnType.purchaseReturn},
+                                extra: {
+                                  'returnType': ReturnType.purchaseReturn
+                                },
                               );
                             }),
                           ),
