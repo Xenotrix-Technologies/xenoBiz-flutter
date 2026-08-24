@@ -45,7 +45,10 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       widget.supplierToEdit != null ||
       widget.expenseToEdit != null;
 
-  // Product Form Controllers
+  // Item vs Service state (0 = Item, 1 = Service)
+  int _itemOrServiceIndex = 0;
+
+  // Product / Item Form Controllers
   final _prodNameCtrl = TextEditingController();
   final _prodSkuCtrl = TextEditingController();
   final _prodCategoryCtrl = TextEditingController(text: 'Grocery');
@@ -54,6 +57,10 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   final _prodStockCtrl = TextEditingController(text: '0');
   final _prodLowStockCtrl = TextEditingController(text: '10');
   final _prodDescCtrl = TextEditingController();
+
+  // Service Specific Controllers
+  final _serviceSacCtrl = TextEditingController();
+  final _serviceTaxCtrl = TextEditingController(text: '0.00');
 
   // SKU Barcode Scanner controls & state
   MobileScannerController? _skuScannerController;
@@ -106,6 +113,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     if (widget.productToEdit != null) {
       _activeTab = 0;
       final p = widget.productToEdit!;
+      _itemOrServiceIndex = (p.unit == 'Service') ? 1 : 0;
       _prodNameCtrl.text = p.name;
       _prodSkuCtrl.text = p.sku;
       _prodCategoryCtrl.text = p.category;
@@ -120,6 +128,11 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       _prodStockCtrl.text = p.stockQuantity.toString();
       _prodLowStockCtrl.text = p.reorderLevel.toString();
       _prodDescCtrl.text = p.description;
+      if (p.taxPercentage != null) {
+        _serviceTaxCtrl.text = p.taxPercentage! % 1 == 0
+            ? p.taxPercentage!.toInt().toString()
+            : p.taxPercentage!.toStringAsFixed(2);
+      }
     } else if (widget.customerToEdit != null) {
       _activeTab = 1;
       final c = widget.customerToEdit!;
@@ -166,7 +179,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     _prodSellingPriceCtrl.dispose();
     _prodStockCtrl.dispose();
     _prodLowStockCtrl.dispose();
-    _prodDescCtrl.dispose();
+    _serviceSacCtrl.dispose();
+    _serviceTaxCtrl.dispose();
 
     _saleNameCtrl.dispose();
     _salePhoneCtrl.dispose();
@@ -229,13 +243,89 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
 
   void _saveCurrentForm() {
     if (_activeTab == 0) {
-      _saveProduct();
+      if (_itemOrServiceIndex == 0) {
+        _saveProduct();
+      } else {
+        _saveService();
+      }
     } else if (_activeTab == 1) {
       _saveSaleAccount();
     } else if (_activeTab == 2) {
       _savePurchaseAccount();
     } else if (_activeTab == 3) {
       _saveExpenseAccount();
+    }
+  }
+
+  void _saveService() {
+    final name = _prodNameCtrl.text.trim();
+    if (name.isEmpty) {
+      _showErrorSnackBar('Please enter service name');
+      return;
+    }
+    final sellingPrice =
+        double.tryParse(_prodSellingPriceCtrl.text.trim()) ?? 0.0;
+    if (sellingPrice <= 0) {
+      _showErrorSnackBar('Please enter a valid service price');
+      return;
+    }
+    final category = _prodCategoryCtrl.text.trim().isNotEmpty
+        ? _prodCategoryCtrl.text.trim()
+        : 'Services';
+    final sku = _prodSkuCtrl.text.trim().isNotEmpty
+        ? _prodSkuCtrl.text.trim()
+        : (_serviceSacCtrl.text.trim().isNotEmpty
+            ? _serviceSacCtrl.text.trim()
+            : 'SRV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
+    final tax = double.tryParse(_serviceTaxCtrl.text.trim()) ?? 0.0;
+
+    if (widget.productToEdit != null) {
+      final existing = widget.productToEdit!;
+      final updatedService = existing.copyWith(
+        name: name,
+        sku: sku,
+        barcode: sku,
+        category: category,
+        sellingPrice: sellingPrice,
+        purchasePrice: 0.0,
+        stockQuantity: 0,
+        reorderLevel: 0,
+        unit: 'Service',
+        taxPercentage: tax,
+        description: _prodDescCtrl.text.trim(),
+        updatedAt: DateTime.now(),
+      );
+
+      context.read<ProductBloc>().add(UpdateProductEvent(updatedService));
+      context.read<ProductBloc>().add(const FetchProductsEvent());
+      _showSuccessSnackBar(
+          'Service "${updatedService.name}" updated successfully!');
+    } else {
+      final service = ProductEntity(
+        id: 'srv_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        sku: sku,
+        barcode: sku,
+        category: category,
+        sellingPrice: sellingPrice,
+        purchasePrice: 0.0,
+        stockQuantity: 0,
+        reorderLevel: 0,
+        unit: 'Service',
+        taxPercentage: tax,
+        description: _prodDescCtrl.text.trim(),
+        createdAt: DateTime.now(),
+      );
+
+      context.read<ProductBloc>().add(CreateProductEvent(service));
+      context.read<ProductBloc>().add(const FetchProductsEvent());
+      _showSuccessSnackBar('Service "${service.name}" created successfully!');
+    }
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RouteNames.stockManagement);
     }
   }
 
@@ -495,7 +585,21 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                   ),
                   const SizedBox(width: 14),
                   Text(
-                    isEditMode ? 'Edit' : 'Create',
+                    isEditMode
+                        ? (_activeTab == 0
+                            ? (_itemOrServiceIndex == 0
+                                ? 'Edit Item'
+                                : 'Edit Service')
+                            : (_activeTab == 1
+                                ? 'Edit Customer'
+                                : (_activeTab == 2
+                                    ? 'Edit Supplier'
+                                    : 'Edit Account')))
+                        : (_activeTab == 0
+                            ? 'Create Item'
+                            : (_activeTab == 1 || _activeTab == 2
+                                ? 'Create Party'
+                                : 'Create Account')),
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -505,31 +609,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                 ],
               ),
             ),
-
-            // CREATION TYPE SELECTOR BAR (Product, Sale, Purchase, Expense)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                      child: _buildSelectorTab(
-                          0, 'Product', Icons.inventory_2_outlined)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child:
-                          _buildSelectorTab(1, 'Sale', Icons.person_outline)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: _buildSelectorTab(
-                          2, 'Purchase', Icons.business_outlined)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: _buildSelectorTab(
-                          3, 'Income/Expense', Icons.account_balance_outlined)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // FORM BODY + FIXED BOTTOM BUTTON
             Expanded(
@@ -580,12 +660,24 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                               onPressed: _saveCurrentForm,
                               child: Text(
                                 _activeTab == 0
-                                    ? (widget.productToEdit != null
-                                        ? 'Update Product'
-                                        : 'Save Product')
-                                    : (isEditMode
-                                        ? 'Update Account'
-                                        : 'Save Account'),
+                                    ? (_itemOrServiceIndex == 0
+                                        ? (widget.productToEdit != null
+                                            ? 'Update Item'
+                                            : 'Save Item')
+                                        : (widget.productToEdit != null
+                                            ? 'Update Service'
+                                            : 'Save Service'))
+                                    : (_activeTab == 1
+                                        ? (widget.customerToEdit != null
+                                            ? 'Update Customer'
+                                            : 'Save Customer')
+                                        : (_activeTab == 2
+                                            ? (widget.supplierToEdit != null
+                                                ? 'Update Supplier'
+                                                : 'Save Supplier')
+                                            : (isEditMode
+                                                ? 'Update Account'
+                                                : 'Save Account'))),
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -604,48 +696,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     );
   }
 
-  Widget _buildSelectorTab(int index, String label, IconData icon) {
-    final isSelected = _activeTab == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _activeTab = index;
-        });
-      },
-      child: Container(
-        height: 54,
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? AppColors.primaryBlue : const Color(0xFFE5E7EB),
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : const Color(0xFF4B5563),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF4B5563),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTypeIndicatorTag() {
     String tagText;
     switch (_activeTab) {
@@ -653,10 +703,10 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         tagText = 'CREATETYPE.PRODUCT';
         break;
       case 1:
-        tagText = 'CREATETYPE.SALE';
+        tagText = 'CREATETYPE.CUSTOMER';
         break;
       case 2:
-        tagText = 'CREATETYPE.PURCHASE';
+        tagText = 'CREATETYPE.SUPPLIER';
         break;
       case 3:
         tagText = 'CREATETYPE.INCOME_EXPENSE';
@@ -692,10 +742,262 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   // ==========================================
   // 1. ADD PRODUCT FORM
   // ==========================================
+  Widget _buildItemServiceSegmentedControl() {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFEFF4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _itemOrServiceIndex = 0;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  color: _itemOrServiceIndex == 0
+                      ? AppColors.primaryBlue
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: _itemOrServiceIndex == 0
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 16,
+                        color: _itemOrServiceIndex == 0
+                            ? Colors.white
+                            : AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Item',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _itemOrServiceIndex == 0
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _itemOrServiceIndex = 1;
+                  if (_prodCategoryCtrl.text == 'Grocery') {
+                    _prodCategoryCtrl.text = 'Services';
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  color: _itemOrServiceIndex == 1
+                      ? AppColors.primaryBlue
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: _itemOrServiceIndex == 1
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.build_outlined,
+                        size: 16,
+                        color: _itemOrServiceIndex == 1
+                            ? Colors.white
+                            : AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Service',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _itemOrServiceIndex == 1
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomerSupplierSegmentedControl() {
+    final isCustomer = _activeTab == 1;
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFEFF4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _activeTab = 1;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  color: isCustomer
+                      ? AppColors.primaryBlue
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: isCustomer
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.person_outline_rounded,
+                        size: 16,
+                        color: isCustomer
+                            ? Colors.white
+                            : AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Customer',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isCustomer
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _activeTab = 2;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                decoration: BoxDecoration(
+                  color: !isCustomer
+                      ? AppColors.primaryBlue
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: !isCustomer
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.business_outlined,
+                        size: 16,
+                        color: !isCustomer
+                            ? Colors.white
+                            : AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Supplier',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: !isCustomer
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAddProductForm() {
+    final isItem = _itemOrServiceIndex == 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Segmented Switch [ Item | Service ]
+        _buildItemServiceSegmentedControl(),
+        const SizedBox(height: 16),
+
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,233 +1008,386 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                 children: [
                   Text(
                     widget.productToEdit != null
-                        ? 'Edit Product'
-                        : 'Add Product',
+                        ? (isItem ? 'Edit Item' : 'Edit Service')
+                        : (isItem ? 'Add Item' : 'Add Service'),
                     style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF050B20)),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF050B20),
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     widget.productToEdit != null
-                        ? 'Update product information'
-                        : 'Add a new item to your inventory',
-                    style:
-                        const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                        ? (isItem
+                            ? 'Update item information'
+                            : 'Update service details')
+                        : (isItem
+                            ? 'Add a new item to your inventory'
+                            : 'Add a new service to your business'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                    ),
                   ),
                 ],
               ),
             ),
-            InkWell(
-              onTap: () => _showImportStockDialog(context),
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+            if (isItem)
+              InkWell(
+                onTap: () => _showImportStockDialog(context),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.file_upload_outlined,
+                          size: 16, color: AppColors.primaryBlue),
+                      SizedBox(width: 4),
+                      Text(
+                        'Upload Excel/CSV',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        if (isItem && _isSkuCameraOn) _buildSkuScannerHeader(),
+
+        if (isItem) ...[
+          // Item Name *
+          _buildFormFieldLabel('Item Name', required: true),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodNameCtrl,
+            hint: 'e.g. Basmati Rice 5kg',
+          ),
+          const SizedBox(height: 14),
+
+          // SKU / Barcode + Category Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.file_upload_outlined,
-                        size: 16, color: AppColors.primaryBlue),
-                    SizedBox(width: 4),
-                    Text(
-                      'Upload Excel/CSV',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryBlue,
+                    _buildFormFieldLabel('SKU / Barcode'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodSkuCtrl,
+                      hint: 'Scan or enter',
+                      suffixIcon: InkWell(
+                        onTap: _toggleSkuScanner,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Icon(
+                          _isSkuCameraOn
+                              ? Icons.close
+                              : Icons.qr_code_scanner,
+                          size: 18,
+                          color: _isSkuCameraOn
+                              ? AppColors.danger
+                              : const Color(0xFF6B7280),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        const SizedBox(height: 14),
-        if (_isSkuCameraOn) _buildSkuScannerHeader(),
-
-        // Product Name *
-        _buildFormFieldLabel('Product Name', required: true),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _prodNameCtrl,
-          hint: 'e.g. Basmati Rice 5kg',
-        ),
-        const SizedBox(height: 14),
-
-        // SKU / Barcode + Category Side-by-Side
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('SKU / Barcode'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _prodSkuCtrl,
-                    hint: 'Scan or enter',
-                    suffixIcon: InkWell(
-                      onTap: _toggleSkuScanner,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Icon(
-                        _isSkuCameraOn ? Icons.close : Icons.qr_code_scanner,
-                        size: 18,
-                        color: _isSkuCameraOn
-                            ? AppColors.danger
-                            : const Color(0xFF6B7280),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Category'),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Category'),
-                  const SizedBox(height: 6),
-                  Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: [
-                          'Grocery',
-                          'Beverages',
-                          'Electronics',
-                          'Clothing',
-                          'General'
-                        ].contains(_prodCategoryCtrl.text)
-                            ? _prodCategoryCtrl.text
-                            : 'Grocery',
-                        isExpanded: true,
-                        style: const TextStyle(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: [
+                            'Grocery',
+                            'Beverages',
+                            'Electronics',
+                            'Clothing',
+                            'Services',
+                            'General'
+                          ].contains(_prodCategoryCtrl.text)
+                              ? _prodCategoryCtrl.text
+                              : 'Grocery',
+                          isExpanded: true,
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20)),
-                        items: [
-                          'Grocery',
-                          'Beverages',
-                          'Electronics',
-                          'Clothing',
-                          'General'
-                        ].map((cat) {
-                          return DropdownMenuItem(value: cat, child: Text(cat));
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _prodCategoryCtrl.text = val);
-                          }
-                        },
+                            color: Color(0xFF050B20),
+                          ),
+                          items: [
+                            'Grocery',
+                            'Beverages',
+                            'Electronics',
+                            'Clothing',
+                            'Services',
+                            'General'
+                          ].map((cat) {
+                            return DropdownMenuItem(
+                                value: cat, child: Text(cat));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _prodCategoryCtrl.text = val);
+                            }
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
+            ],
+          ),
+          const SizedBox(height: 14),
 
-        // Purchase Price + Selling Price * Side-by-Side
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Purchase Price'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _prodPurchasePriceCtrl,
-                    hint: '0.00',
-                    prefixText: '₹ ',
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
+          // Purchase Price + Selling Price * Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Purchase Price'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodPurchasePriceCtrl,
+                      hint: '₹ 0.00',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Selling Price', required: true),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _prodSellingPriceCtrl,
-                    hint: '0.00',
-                    prefixText: '₹ ',
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Selling Price', required: true),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodSellingPriceCtrl,
+                      hint: '₹ 0.00',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
+            ],
+          ),
+          const SizedBox(height: 14),
 
-        // Opening Stock + Low-stock Alert Side-by-Side
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Opening Stock'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _prodStockCtrl,
-                    hint: '0',
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
+          // Opening Stock + Low-stock Alert Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Opening Stock'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodStockCtrl,
+                      hint: '0',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Low-stock Alert'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _prodLowStockCtrl,
-                    hint: 'e.g. 10',
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Low-stock Alert'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodLowStockCtrl,
+                      hint: 'e.g. 10',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
+            ],
+          ),
+          const SizedBox(height: 14),
 
-        _buildFormFieldLabel('Description'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _prodDescCtrl,
-          hint: 'Optional description',
-          maxLines: 3,
-        ),
+          _buildFormFieldLabel('Description'),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodDescCtrl,
+            hint: 'Optional description',
+            maxLines: 3,
+          ),
+        ] else ...[
+          // SERVICE FORM
+          // Service Name *
+          _buildFormFieldLabel('Service Name', required: true),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodNameCtrl,
+            hint: 'e.g. AC Repair & Maintenance',
+          ),
+          const SizedBox(height: 14),
+
+          // Service Code + Category Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Service Code'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodSkuCtrl,
+                      hint: 'e.g. SRV-001',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Category'),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: [
+                            'Services',
+                            'Consulting',
+                            'Maintenance',
+                            'Installation',
+                            'General'
+                          ].contains(_prodCategoryCtrl.text)
+                              ? _prodCategoryCtrl.text
+                              : 'Services',
+                          isExpanded: true,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF050B20),
+                          ),
+                          items: [
+                            'Services',
+                            'Consulting',
+                            'Maintenance',
+                            'Installation',
+                            'General'
+                          ].map((cat) {
+                            return DropdownMenuItem(
+                                value: cat, child: Text(cat));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _prodCategoryCtrl.text = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // SAC Code + Tax / GST % Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('SAC Code'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _serviceSacCtrl,
+                      hint: 'e.g. 998714',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Tax / GST %'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _serviceTaxCtrl,
+                      hint: 'e.g. 18',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Service Price *
+          _buildFormFieldLabel('Service Price', required: true),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodSellingPriceCtrl,
+            hint: '₹ 0.00',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 14),
+
+          _buildFormFieldLabel('Description'),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodDescCtrl,
+            hint: 'Optional service details',
+            maxLines: 3,
+          ),
+        ],
       ],
     );
   }
@@ -944,10 +1399,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Segmented Switch [ Customer | Supplier ]
+        _buildCustomerSupplierSegmentedControl(),
+        const SizedBox(height: 16),
+
         Text(
           widget.customerToEdit != null
-              ? 'Edit Sale Account'
-              : 'Add Sale Account',
+              ? 'Edit Customer'
+              : 'Add Customer',
           style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -957,7 +1416,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         Text(
           widget.customerToEdit != null
               ? 'Update customer information'
-              : 'Create a customer you sell to',
+              : 'Add a new customer account for sales',
           style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),
@@ -1074,10 +1533,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Segmented Switch [ Customer | Supplier ]
+        _buildCustomerSupplierSegmentedControl(),
+        const SizedBox(height: 16),
+
         Text(
           widget.supplierToEdit != null
-              ? 'Edit Purchase Account'
-              : 'Add Purchase Account',
+              ? 'Edit Supplier'
+              : 'Add Supplier',
           style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -1087,7 +1550,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         Text(
           widget.supplierToEdit != null
               ? 'Update supplier information'
-              : 'Create a supplier you buy from',
+              : 'Add a new supplier account for purchases',
           style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 18),

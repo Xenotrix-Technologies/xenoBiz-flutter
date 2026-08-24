@@ -30,7 +30,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 150),
     );
 
     _fadeAnim = CurvedAnimation(
@@ -81,164 +81,6 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
     // });
     widget.onDismiss();
     action();
-  }
-
-  void _showPartyChooser(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Select Party Type',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.darkBlueText,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.person_outline_rounded,
-                    color: AppColors.primaryBlue),
-              ),
-              title: const Text('Customer',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('Add a customer account for sales'),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push(RouteNames.createMaster, extra: 1);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.deepNavy.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.business_outlined,
-                    color: AppColors.deepNavy),
-              ),
-              title: const Text('Supplier',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle:
-                  const Text('Add a vendor/supplier account for purchases'),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push(RouteNames.createMaster, extra: 2);
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showItemChooser(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Select Item Type',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.darkBlueText,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.inventory_2_outlined,
-                    color: AppColors.success),
-              ),
-              title: const Text('Product',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('Add inventory product or stock item'),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push(RouteNames.createMaster, extra: 0);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child:
-                    const Icon(Icons.build_outlined, color: AppColors.warning),
-              ),
-              title: const Text('Service',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle:
-                  const Text('Add a non-stock service or consulting item'),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push(RouteNames.createMaster, extra: 0);
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -304,7 +146,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               ),
                               SizedBox(width: 8),
                               Text(
-                                'Universal Create',
+                                'Create',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
@@ -334,15 +176,16 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                       ),
                       const SizedBox(height: 14),
 
-                      // Grid of 8 Actions
+                      // Grid of 9 Actions (3 columns x 3 rows)
                       GridView.count(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        childAspectRatio: 2.2,
-                        crossAxisSpacing: 10,
+                        crossAxisCount: 3,
+                        childAspectRatio: 1.0,
+                        crossAxisSpacing: 8,
                         mainAxisSpacing: 10,
                         children: [
+                          // Row 1
                           // 1. Invoice
                           _ActionCard(
                             title: 'Invoice',
@@ -358,7 +201,22 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               );
                             }),
                           ),
-                          // 2. Quotation
+                          // 2. Purchase Invoice
+                          _ActionCard(
+                            title: 'Purchase Invoice',
+                            subtitle: 'Supplier Bill',
+                            icon: Icons.shopping_bag_outlined,
+                            iconColor: const Color(0xFF0D9488),
+                            bgColor:
+                                const Color(0xFF0D9488).withValues(alpha: 0.1),
+                            onTap: () => _onActionTap(() {
+                              context.push(
+                                RouteNames.createInvoice,
+                                extra: {'invoiceType': InvoiceType.purchase},
+                              );
+                            }),
+                          ),
+                          // 3. Quotation
                           _ActionCard(
                             title: 'Quotation',
                             subtitle: 'Estimate',
@@ -376,7 +234,8 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               );
                             }),
                           ),
-                          // 3. Payment
+                          // Row 2
+                          // 4. Payment
                           _ActionCard(
                             title: 'Payment',
                             subtitle: 'Money Out',
@@ -387,7 +246,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               context.push(RouteNames.expense);
                             }),
                           ),
-                          // 4. Receipt
+                          // 5. Receipt
                           _ActionCard(
                             title: 'Receipt',
                             subtitle: 'Money In',
@@ -398,7 +257,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               context.push(RouteNames.income);
                             }),
                           ),
-                          // 5. Party
+                          // 6. Party
                           _ActionCard(
                             title: 'Party',
                             subtitle: 'Customer / Supplier',
@@ -406,10 +265,11 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             iconColor: AppColors.deepNavy,
                             bgColor: AppColors.deepNavy.withValues(alpha: 0.1),
                             onTap: () => _onActionTap(() {
-                              _showPartyChooser(context);
+                              context.push(RouteNames.createMaster, extra: 1);
                             }),
                           ),
-                          // 6. Item
+                          // Row 3
+                          // 7. Item
                           _ActionCard(
                             title: 'Item',
                             subtitle: 'Product / Service',
@@ -417,10 +277,10 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             iconColor: AppColors.warning,
                             bgColor: AppColors.warning.withValues(alpha: 0.1),
                             onTap: () => _onActionTap(() {
-                              _showItemChooser(context);
+                              context.push(RouteNames.createMaster, extra: 0);
                             }),
                           ),
-                          // 7. Sales Return
+                          // 8. Sales Return
                           _ActionCard(
                             title: 'Sales Return',
                             subtitle: 'Credit Note',
@@ -435,7 +295,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               );
                             }),
                           ),
-                          // 8. Purchase Return
+                          // 9. Purchase Return
                           _ActionCard(
                             title: 'Purchase Return',
                             subtitle: 'Debit Note',
@@ -492,8 +352,8 @@ class _ActionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         splashColor: iconColor.withValues(alpha: 0.15),
         highlightColor: iconColor.withValues(alpha: 0.05),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           decoration: BoxDecoration(
             color: const Color(0xFFF9FAFB),
             borderRadius: BorderRadius.circular(16),
@@ -502,11 +362,12 @@ class _ActionCard extends StatelessWidget {
               width: 1.0,
             ),
           ),
-          child: Row(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: bgColor,
                   borderRadius: BorderRadius.circular(12),
@@ -519,34 +380,30 @@ class _ActionCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.darkBlueText,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 6),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkBlueText,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.secondaryText,
+                  height: 1.15,
                 ),
               ),
             ],
