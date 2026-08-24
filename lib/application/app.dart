@@ -42,9 +42,6 @@ class XenoBizApp extends StatelessWidget {
               recordPaymentUseCase: getIt(),
             ),
           ),
-          BlocProvider<LeadBloc>(
-            create: (_) => LeadBloc(leadRepository: getIt()),
-          ),
           BlocProvider<SyncBloc>(
             create: (_) => SyncBloc(
               syncRepository: getIt(),
@@ -82,16 +79,6 @@ class XenoBizApp extends StatelessWidget {
               invoiceRepository: getIt(),
               hiveService: getIt(),
             )..add(const FetchAccountsEvent()),
-          ),
-          BlocProvider<CrmBloc>(
-            create: (_) => CrmBloc(
-              crmService: getIt(),
-            )..add(const FetchCrmDataEvent()),
-          ),
-          BlocProvider<CrmCustomerBloc>(
-            create: (_) => CrmCustomerBloc(
-              repository: getIt(),
-            )..add(const FetchCrmCustomersEvent()),
           ),
         ],
 

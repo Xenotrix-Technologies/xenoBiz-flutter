@@ -1,7 +1,6 @@
 import 'package:get_it/get_it.dart';
 
-import '../bloc/crm_bloc.dart';
-import '../bloc/crm_customer_bloc.dart';
+
 import '../../domain/repositories/repositories.dart';
 import '../../domain/usecases/create_invoice_usecase.dart';
 import '../../domain/usecases/record_payment_usecase.dart';
@@ -13,21 +12,18 @@ import '../../infrastructure/repositories/category_repository_impl.dart';
 import '../../infrastructure/repositories/expense_repository_impl.dart';
 import '../../infrastructure/repositories/income_repository_impl.dart';
 import '../../infrastructure/repositories/invoice_repository_impl.dart';
-import '../../infrastructure/repositories/lead_repository_impl.dart';
+
 import '../../infrastructure/repositories/product_repository_impl.dart';
 import '../../infrastructure/repositories/purchase_repository_impl.dart';
 import '../../infrastructure/repositories/returns_repository_impl.dart';
 import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
-import '../../infrastructure/services/crm_service.dart';
-import '../../infrastructure/services/lead_export_service.dart';
-import '../../infrastructure/services/lead_import_service.dart';
+
 
 import '../../domain/repositories/billing_customer_repository.dart';
-import '../../domain/repositories/crm_customer_repository.dart';
 import '../../infrastructure/repositories/billing_customer_repository_impl.dart';
-import '../../infrastructure/repositories/crm_customer_repository_impl.dart';
+
 import '../../infrastructure/storage/hive_service.dart';
 import '../../infrastructure/storage/secure_storage_service.dart';
 
@@ -84,11 +80,7 @@ Future<void> configureDependencies() async {
     ),
   );
 
-  getIt.registerLazySingleton<CrmCustomerRepository>(
-    () => CrmCustomerRepositoryImpl(
-      hiveService: getIt(),
-    ),
-  );
+
 
   getIt.registerLazySingleton<ProductRepository>(
     () => ProductRepositoryImpl(
@@ -108,15 +100,7 @@ Future<void> configureDependencies() async {
     ),
   );
 
-  getIt.registerLazySingleton<LeadRepository>(
-    () => LeadRepositoryImpl(
-      dioClient: getIt(),
-      hiveService: getIt(),
-      networkChecker: getIt(),
-      syncRepository: getIt(),
-      crmCustomerRepository: getIt(),
-    ),
-  );
+
 
   getIt.registerLazySingleton<ExpenseRepository>(
     () => ExpenseRepositoryImpl(hiveService: getIt()),
@@ -143,29 +127,7 @@ Future<void> configureDependencies() async {
     ),
   );
 
-  getIt.registerLazySingleton<CrmService>(
-    () => CrmService(
-      hiveService: getIt(),
-      crmCustomerRepository: getIt(),
-      leadRepository: getIt(),
-    ),
-  );
 
-  getIt.registerLazySingleton<LeadExportService>(
-    () => LeadExportService(),
-  );
-
-  getIt.registerLazySingleton<LeadImportService>(
-    () => LeadImportService(leadRepository: getIt()),
-  );
-
-  getIt.registerFactory<CrmBloc>(
-    () => CrmBloc(crmService: getIt()),
-  );
-
-  getIt.registerFactory<CrmCustomerBloc>(
-    () => CrmCustomerBloc(repository: getIt()),
-  );
 
   // 4. Use Cases
   getIt.registerLazySingleton<CreateInvoiceUseCase>(

@@ -73,11 +73,9 @@ class BackupRestoreService {
     HiveService.boxBusiness,
     HiveService.boxSubscription,
     HiveService.boxBillingCustomers,
-    HiveService.boxCrmCustomers,
     HiveService.boxCustomers,
     HiveService.boxProducts,
     HiveService.boxInvoices,
-    HiveService.boxLeads,
     HiveService.boxPayments,
     HiveService.boxPurchases,
     HiveService.boxExpenses,
@@ -87,9 +85,6 @@ class BackupRestoreService {
     HiveService.boxPurchaseReturns,
     HiveService.boxIncome,
     HiveService.boxCategories,
-    HiveService.boxCrmNotes,
-    HiveService.boxCrmFollowUps,
-    HiveService.boxCrmSettings,
   ];
 
   /// Calculates Indian Financial Year string (e.g. FY_2026-27 for 2026-04-01 to 2027-03-31).

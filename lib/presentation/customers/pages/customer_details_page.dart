@@ -2,23 +2,68 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
-import '../../../domain/entities/crm_entities.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import '../../../domain/repositories/billing_customer_repository.dart';
 import '../../../domain/repositories/invoice_repository.dart';
 import '../../../infrastructure/pdf/pdf_statement_service.dart';
-import '../../../infrastructure/services/crm_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
+
+class CustomerNoteItem {
+  final String id;
+  final String content;
+  final DateTime timestamp;
+
+  CustomerNoteItem({
+    required this.id,
+    required this.content,
+    required this.timestamp,
+  });
+}
+
+class _RawTransaction {
+  final DateTime date;
+  final String type;
+  final String ref;
+  final double debit;
+  final double credit;
+
+  _RawTransaction({
+    required this.date,
+    required this.type,
+    required this.ref,
+    required this.debit,
+    required this.credit,
+  });
+}
+
+class _PassbookRow {
+  final DateTime date;
+  final String type;
+  final String ref;
+  final double debit;
+  final double credit;
+  final double runningBalance;
+
+  _PassbookRow({
+    required this.date,
+    required this.type,
+    required this.ref,
+    required this.debit,
+    required this.credit,
+    required this.runningBalance,
+  });
+}
 
 class CustomerDetailsPage extends StatefulWidget {
   final CustomerEntity? customer;
@@ -31,19 +76,28 @@ class CustomerDetailsPage extends StatefulWidget {
 
 class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTickerProviderStateMixin {
   late CustomerEntity _customer;
-  late final CrmService _crmService;
   late TabController _tabController;
 
   List<InvoiceEntity> _customerInvoices = [];
-  List<CrmNoteEntity> _customerNotes = [];
-  List<CrmFollowUpEntity> _customerFollowUps = [];
   List<CustomerTimelineEvent> _customerTimeline = [];
+  final List<CustomerNoteItem> _customerNotes = [
+    CustomerNoteItem(
+      id: '1',
+      content: 'Requested 30-day credit terms on bulk purchases.',
+      timestamp: DateTime.now().subtract(const Duration(days: 10)),
+    ),
+    CustomerNoteItem(
+      id: '2',
+      content: 'Prefers digital invoices over WhatsApp.',
+      timestamp: DateTime.now().subtract(const Duration(days: 4)),
+    ),
+  ];
+
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _crmService = getIt<CrmService>();
     _tabController = TabController(length: 4, vsync: this);
 
     _customer = widget.customer ??
@@ -66,6 +120,17 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     super.dispose();
   }
 
+  Future<void> _makePhoneCall(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  Future<void> _openWhatsApp(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    final uri = Uri.parse('https://wa.me/$clean');
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   Future<void> _loadCustomerData() async {
     try {
       final invRepo = getIt<InvoiceRepository>();
@@ -73,15 +138,11 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
       final filteredInvoices = allInvoices.where((i) => i.customerId == _customer.id || i.customerName == _customer.name).toList();
       filteredInvoices.sort((a, b) => b.issueDate.compareTo(a.issueDate));
 
-      final notes = _crmService.getNotesForCustomer(_customer.id);
-      final followUps = _crmService.getFollowUps(customerId: _customer.id);
       final timeline = await getIt<BillingCustomerRepository>().getCustomerTimeline(_customer.id);
 
       if (mounted) {
         setState(() {
           _customerInvoices = filteredInvoices;
-          _customerNotes = notes;
-          _customerFollowUps = followUps;
           _customerTimeline = timeline;
           _isLoading = false;
         });
@@ -91,159 +152,45 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     }
   }
 
-  void _showAddEditNoteDialog([CrmNoteEntity? existingNote]) {
-    final textCtrl = TextEditingController(text: existingNote?.text ?? '');
-
+  void _showAddNoteDialog() {
+    final noteController = TextEditingController();
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(existingNote == null ? 'Add Customer Note' : 'Edit Customer Note', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Add important remarks, communication preferences, or payment instructions.',
-              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Add Customer Note', style: TextStyle(fontWeight: FontWeight.w800)),
+          content: TextField(
+            controller: noteController,
+            maxLines: 3,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Enter note details (e.g. credit terms, delivery note)...',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textCtrl,
-              maxLines: 4,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'e.g., Customer prefers WhatsApp invoices. Follow up around month-end.',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
+              onPressed: () {
+                final text = noteController.text.trim();
+                if (text.isNotEmpty) {
+                  setState(() {
+                    _customerNotes.insert(
+                      0,
+                      CustomerNoteItem(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        content: text,
+                        timestamp: DateTime.now(),
+                      ),
+                    );
+                  });
+                  Navigator.pop(ctx);
+                }
+              },
+              child: const Text('Save Note'),
             ),
           ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-            onPressed: () async {
-              final text = textCtrl.text.trim();
-              if (text.isNotEmpty) {
-                Navigator.pop(dialogCtx);
-                final note = existingNote?.copyWith(text: text, updatedAt: DateTime.now()) ??
-                    CrmNoteEntity(
-                      id: 'note_${DateTime.now().millisecondsSinceEpoch}',
-                      customerId: _customer.id,
-                      text: text,
-                      createdAt: DateTime.now(),
-                      updatedAt: DateTime.now(),
-                    );
-                await _crmService.saveNote(note);
-                _loadCustomerData();
-              }
-            },
-            child: Text(existingNote == null ? 'Save Note' : 'Update Note'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddFollowUpDialog() {
-    final titleCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
-    TimeOfDay selectedTime = const TimeOfDay(hour: 10, minute: 30);
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('Schedule Follow-Up', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Follow-up Title *',
-                        hintText: 'e.g. Call regarding pending payment',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: notesCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Additional Notes',
-                        hintText: 'Optional instructions or context',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: selectedDate,
-                                firstDate: DateTime.now(),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
-                              );
-                              if (picked != null) {
-                                setDialogState(() => selectedDate = picked);
-                              }
-                            },
-                            icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                            label: Text(DateFormat('dd MMM yyyy').format(selectedDate), style: const TextStyle(fontSize: 12)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              final picked = await showTimePicker(context: context, initialTime: selectedTime);
-                              if (picked != null) {
-                                setDialogState(() => selectedTime = picked);
-                              }
-                            },
-                            icon: const Icon(Icons.access_time_rounded, size: 16),
-                            label: Text(selectedTime.format(context), style: const TextStyle(fontSize: 12)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-                  onPressed: () async {
-                    if (titleCtrl.text.trim().isNotEmpty) {
-                      Navigator.pop(dialogCtx);
-                      final fu = CrmFollowUpEntity(
-                        id: 'fu_${DateTime.now().millisecondsSinceEpoch}',
-                        customerId: _customer.id,
-                        customerName: _customer.name,
-                        title: titleCtrl.text.trim(),
-                        notes: notesCtrl.text.trim(),
-                        dueDate: selectedDate,
-                        dueTime: selectedTime.format(context),
-                        status: 'pending',
-                      );
-                      await _crmService.saveFollowUp(fu);
-                      _loadCustomerData();
-                    }
-                  },
-                  child: const Text('Schedule'),
-                ),
-              ],
-            );
-          },
         );
       },
     );
@@ -409,6 +356,61 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     return '₹${amount.toStringAsFixed(0)}';
   }
 
+  List<_PassbookRow> _calculatePassbookRows() {
+    final List<_RawTransaction> raw = [];
+
+    for (var inv in _customerInvoices) {
+      raw.add(_RawTransaction(
+        date: inv.issueDate,
+        type: 'Sale',
+        ref: '#${inv.invoiceNumber}',
+        debit: inv.grandTotal,
+        credit: 0,
+      ));
+
+      if (inv.paidAmount > 0) {
+        raw.add(_RawTransaction(
+          date: inv.issueDate.add(const Duration(seconds: 1)),
+          type: 'Payment',
+          ref: 'Rec #${inv.invoiceNumber}',
+          debit: 0,
+          credit: inv.paidAmount,
+        ));
+      }
+    }
+
+    for (var t in _customerTimeline) {
+      if (t.eventType == 'PAYMENT' && !_customerInvoices.any((i) => t.description.contains(i.invoiceNumber))) {
+        raw.add(_RawTransaction(
+          date: t.timestamp,
+          type: 'Receipt',
+          ref: t.title,
+          debit: 0,
+          credit: double.tryParse(RegExp(r'\d+').firstMatch(t.description)?.group(0) ?? '') ?? 0,
+        ));
+      }
+    }
+
+    // Sort by date ascending (creation date order)
+    raw.sort((a, b) => a.date.compareTo(b.date));
+
+    double running = 0;
+    final List<_PassbookRow> result = [];
+    for (var item in raw) {
+      running += (item.debit - item.credit);
+      result.add(_PassbookRow(
+        date: item.date,
+        type: item.type,
+        ref: item.ref,
+        debit: item.debit,
+        credit: item.credit,
+        runningBalance: running,
+      ));
+    }
+
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalPurchases = _customer.totalPurchases > 0 ? _customer.totalPurchases : _customerInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
@@ -417,15 +419,10 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     final avgInvoiceValue = invoiceCount > 0 ? (totalPurchases / invoiceCount) : 0.0;
     final lastPurchaseDate = _customerInvoices.isNotEmpty ? DateFormat('dd MMM yyyy').format(_customerInvoices.first.issueDate) : 'No purchases';
 
-    final segment = CustomerSegmentation.calculateSegment(_customer, _customerInvoices);
-    final segmentLabel = CustomerSegmentation.getLabel(segment);
-    final segmentColor = CustomerSegmentation.getColor(segment);
-    final segmentBg = CustomerSegmentation.getBgColor(segment);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Customer Profile & CRM'),
+        title: const Text('Customer Profile'),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -461,10 +458,10 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                                 children: [
                                   CircleAvatar(
                                     radius: 26,
-                                    backgroundColor: segmentBg,
+                                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
                                     child: Text(
                                       _customer.name.isNotEmpty ? _customer.name.substring(0, 1).toUpperCase() : 'C',
-                                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: segmentColor),
+                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
                                     ),
                                   ),
                                   const SizedBox(width: 14),
@@ -472,20 +469,9 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                _customer.name,
-                                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-                                              ),
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(color: segmentBg, borderRadius: BorderRadius.circular(6)),
-                                              child: Text(segmentLabel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: segmentColor)),
-                                            ),
-                                          ],
+                                        Text(
+                                          _customer.name,
+                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
                                         ),
                                         const SizedBox(height: 2),
                                         Text('Customer ID: ${_customer.id}', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
@@ -539,7 +525,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         ),
-                                        onPressed: () => CrmService.makePhoneCall(_customer.phone),
+                                        onPressed: () => _makePhoneCall(_customer.phone),
                                         icon: const Icon(Icons.phone_rounded, size: 16),
                                         label: const Text('Call', style: TextStyle(fontWeight: FontWeight.w800)),
                                       ),
@@ -552,7 +538,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         ),
-                                        onPressed: () => CrmService.openWhatsApp(_customer.phone),
+                                        onPressed: () => _openWhatsApp(_customer.phone),
                                         icon: const Icon(Icons.chat_bubble_rounded, size: 16),
                                         label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w800)),
                                       ),
@@ -623,7 +609,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                       tabs: const [
                         Tab(text: 'Invoices'),
                         Tab(text: 'Notes'),
-                        Tab(text: 'Follow-ups'),
+                        Tab(text: 'Book'),
                         Tab(text: 'Timeline'),
                       ],
                     ),
@@ -639,8 +625,8 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                   // TAB 2: NOTES
                   _buildNotesTab(),
 
-                  // TAB 3: FOLLOW-UPS
-                  _buildFollowUpsTab(),
+                  // TAB 3: BOOK (Passbook Table View)
+                  _buildBookTab(),
 
                   // TAB 4: TIMELINE
                   _buildTimelineTab(),
@@ -701,27 +687,34 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primaryBlue,
-                side: const BorderSide(color: AppColors.primaryBlue),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Customer Notes (${_customerNotes.length})',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
               ),
-              onPressed: () => _showAddEditNoteDialog(),
-              icon: const Icon(Icons.note_add_outlined, size: 18),
-              label: const Text('+ Add Customer Note', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: _showAddNoteDialog,
+                icon: const Icon(Icons.note_add_outlined, size: 16),
+                label: const Text('Add Note', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              ),
+            ],
           ),
         ),
         Expanded(
           child: _customerNotes.isEmpty
               ? const EmptyState(
                   title: 'No Notes Added',
-                  message: 'Keep track of customer preferences, remarks, and reminders.',
-                  icon: Icons.note_alt_outlined,
+                  message: 'Add customer preferences, payment reminders, or key details here.',
+                  icon: Icons.note_add_outlined,
                 )
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
@@ -736,30 +729,31 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                DateFormat('dd MMM yyyy, hh:mm a').format(note.updatedAt),
-                                style: const TextStyle(fontSize: 11, color: AppColors.secondaryText, fontWeight: FontWeight.w600),
-                              ),
                               Row(
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primaryBlue),
-                                    onPressed: () => _showAddEditNoteDialog(note),
-                                    tooltip: 'Edit Note',
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.danger),
-                                    onPressed: () async {
-                                      await _crmService.deleteNote(note.id);
-                                      _loadCustomerData();
-                                    },
-                                    tooltip: 'Delete Note',
+                                  const Icon(Icons.sticky_note_2_outlined, size: 16, color: AppColors.primaryBlue),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    DateFormat('dd MMM yyyy, hh:mm a').format(note.timestamp),
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondaryText),
                                   ),
                                 ],
                               ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  setState(() => _customerNotes.removeAt(idx));
+                                },
+                              ),
                             ],
                           ),
-                          Text(note.text, style: const TextStyle(fontSize: 13, color: AppColors.darkBlueText, height: 1.3)),
+                          const SizedBox(height: 6),
+                          Text(
+                            note.content,
+                            style: const TextStyle(fontSize: 13, color: AppColors.darkBlueText, height: 1.4),
+                          ),
                         ],
                       ),
                     );
@@ -770,89 +764,114 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     );
   }
 
-  Widget _buildFollowUpsTab() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.warning,
-                side: const BorderSide(color: AppColors.warning),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  Widget _buildBookTab() {
+    final List<_PassbookRow> rows = _calculatePassbookRows();
+
+    if (rows.isEmpty) {
+      return const EmptyState(
+        title: 'No Ledger Entries',
+        message: 'Passbook transaction ledger will appear here once sales or payments are recorded.',
+        icon: Icons.menu_book_outlined,
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: AppCard(
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            children: [
+              // Table Header
+              Container(
+                color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: const Row(
+                  children: [
+                    Expanded(flex: 2, child: Text('Date', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.darkBlueText))),
+                    Expanded(flex: 3, child: Text('Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.darkBlueText))),
+                    Expanded(flex: 2, child: Text('Debit (+)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.danger), textAlign: TextAlign.right)),
+                    Expanded(flex: 2, child: Text('Credit (-)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.success), textAlign: TextAlign.right)),
+                    Expanded(flex: 2, child: Text('Balance', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.darkBlueText), textAlign: TextAlign.right)),
+                  ],
+                ),
               ),
-              onPressed: _showAddFollowUpDialog,
-              icon: const Icon(Icons.event_available_outlined, size: 18),
-              label: const Text('+ Schedule Follow-Up', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
+              const Divider(height: 1),
+
+              // Table Rows
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: rows.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, indent: 12, endIndent: 12),
+                itemBuilder: (ctx, idx) {
+                  final row = rows[idx];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            DateFormat('dd MMM').format(row.date),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.darkBlueText),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                row.type,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+                              ),
+                              if (row.ref.isNotEmpty)
+                                Text(
+                                  row.ref,
+                                  style: const TextStyle(fontSize: 10, color: AppColors.secondaryText),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            row.debit > 0 ? '₹${row.debit.toStringAsFixed(0)}' : '-',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.danger),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            row.credit > 0 ? '₹${row.credit.toStringAsFixed(0)}' : '-',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.success),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            '₹${row.runningBalance.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: row.runningBalance > 0 ? AppColors.danger : AppColors.success,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ),
-        Expanded(
-          child: _customerFollowUps.isEmpty
-              ? const EmptyState(
-                  title: 'No Follow-ups Scheduled',
-                  message: 'Schedule follow-up calls or payment reminders for this customer.',
-                  icon: Icons.notifications_none_rounded,
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _customerFollowUps.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (ctx, idx) {
-                    final fu = _customerFollowUps[idx];
-                    return AppCard(
-                      child: Row(
-                        children: [
-                          Checkbox(
-                            value: fu.isCompleted,
-                            activeColor: AppColors.success,
-                            onChanged: (_) async {
-                              await _crmService.toggleFollowUpStatus(fu.id);
-                              _loadCustomerData();
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  fu.title,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    decoration: fu.isCompleted ? TextDecoration.lineThrough : null,
-                                    color: fu.isCompleted ? AppColors.secondaryText : AppColors.darkBlueText,
-                                  ),
-                                ),
-                                if (fu.notes.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(fu.notes, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                                ],
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Due: ${DateFormat('dd MMM yyyy').format(fu.dueDate)} • ${fu.dueTime}',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fu.isOverdue ? AppColors.danger : AppColors.primaryBlue),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger),
-                            onPressed: () async {
-                              await _crmService.deleteFollowUp(fu.id);
-                              _loadCustomerData();
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+      ),
     );
   }
 

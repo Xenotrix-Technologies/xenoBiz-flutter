@@ -280,9 +280,6 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
           context.read<AccountsBloc>().add(const FetchAccountsEvent());
           context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
           context.read<ExpenseBloc>().add(const FetchExpensesEvent());
-          context.read<LeadBloc>().add(const FetchLeadsEvent());
-          context.read<CrmBloc>().add(const FetchCrmDataEvent());
-          context.read<CrmCustomerBloc>().add(const FetchCrmCustomersEvent());
           context.read<DailyLedgerBloc>().add(FetchDailyLedgerDataEvent(DateTime.now()));
           context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
           context.read<TaxSettingsBloc>().add(const FetchTaxSettingsEvent());

@@ -16,7 +16,9 @@ class _CustomerTimelinePageState extends State<CustomerTimelinePage> {
   @override
   void initState() {
     super.initState();
-    context.read<CustomerBloc>().add(const FetchCustomerTimelineEvent('cust_101'));
+    context
+        .read<CustomerBloc>()
+        .add(const FetchCustomerTimelineEvent('cust_101'));
   }
 
   @override
@@ -31,7 +33,7 @@ class _CustomerTimelinePageState extends State<CustomerTimelinePage> {
       body: BlocBuilder<CustomerBloc, CustomerState>(
         builder: (context, state) {
           if (state is CustomerLoadingState) {
-            return const FollowupsPageSkeleton();
+            return const CustomerTimeLineSkeleton();
           }
           if (state is CustomerTimelineLoadedState) {
             return SingleChildScrollView(
@@ -49,11 +51,15 @@ class _CustomerTimelinePageState extends State<CustomerTimelinePage> {
                           children: [
                             Text(
                               state.customer.name,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w700),
                             ),
                             Text(
                               'Outstanding: ₹${state.customer.outstandingBalance.toStringAsFixed(0)}',
-                              style: const TextStyle(fontSize: 13, color: AppColors.error, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -63,7 +69,10 @@ class _CustomerTimelinePageState extends State<CustomerTimelinePage> {
                   const SizedBox(height: 20),
                   const Text(
                     'Chronological Feed',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.onSurface),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.onSurface),
                   ),
                   const SizedBox(height: 12),
                   ListView.separated(
@@ -114,12 +123,15 @@ class _CustomerTimelinePageState extends State<CustomerTimelinePage> {
                                   const SizedBox(height: 4),
                                   Text(
                                     item.description,
-                                    style: const TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant),
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.onSurfaceVariant),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
                                     item.timestamp.toString().substring(0, 16),
-                                    style: const TextStyle(fontSize: 11, color: AppColors.outline),
+                                    style: const TextStyle(
+                                        fontSize: 11, color: AppColors.outline),
                                   ),
                                 ],
                               ),

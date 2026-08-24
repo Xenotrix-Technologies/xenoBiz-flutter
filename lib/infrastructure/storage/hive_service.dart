@@ -5,11 +5,9 @@ class HiveService {
   static const String boxBusiness = 'business_box';
   static const String boxSubscription = 'subscription_box';
   static const String boxBillingCustomers = 'billing_customers_box';
-  static const String boxCrmCustomers = 'crm_customers_box';
   static const String boxCustomers = 'customers_box';
   static const String boxProducts = 'products_box';
   static const String boxInvoices = 'invoices_box';
-  static const String boxLeads = 'leads_box';
   static const String boxSyncQueue = 'sync_queue_box';
   static const String boxPayments = 'payments_box';
   static const String boxPurchases = 'purchases_box';
@@ -20,9 +18,6 @@ class HiveService {
   static const String boxPurchaseReturns = 'purchase_returns_box';
   static const String boxIncome = 'income_box';
   static const String boxCategories = 'categories_box';
-  static const String boxCrmNotes = 'crm_notes_box';
-  static const String boxCrmFollowUps = 'crm_followups_box';
-  static const String boxCrmSettings = 'crm_settings_box';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -30,11 +25,9 @@ class HiveService {
     await Hive.openBox(boxBusiness);
     await Hive.openBox(boxSubscription);
     await Hive.openBox(boxBillingCustomers);
-    await Hive.openBox(boxCrmCustomers);
     await Hive.openBox(boxCustomers);
     await Hive.openBox(boxProducts);
     await Hive.openBox(boxInvoices);
-    await Hive.openBox(boxLeads);
     await Hive.openBox(boxSyncQueue);
     await Hive.openBox(boxPayments);
     await Hive.openBox(boxPurchases);
@@ -45,9 +38,6 @@ class HiveService {
     await Hive.openBox(boxPurchaseReturns);
     await Hive.openBox(boxIncome);
     await Hive.openBox(boxCategories);
-    await Hive.openBox(boxCrmNotes);
-    await Hive.openBox(boxCrmFollowUps);
-    await Hive.openBox(boxCrmSettings);
 
     _migrateLegacyCustomers();
   }
