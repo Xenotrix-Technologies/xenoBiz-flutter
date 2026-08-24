@@ -573,7 +573,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
               ),
             ),
             child: Icon(
-              Icons.tune_rounded,
+              Icons.filter_list_rounded,
               color: state.isFiltered ? Colors.white : AppColors.darkBlueText,
               size: 20,
             ),
@@ -876,186 +876,183 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
 
     return Column(
       children: [
-        InkWell(
-          onTap: () => _handleViewTransaction(context, tx),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
-            child: Row(
-              children: [
-                // Icon Box
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: iconBgColor,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 18),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+          child: Row(
+            children: [
+              // Icon Box
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(9),
                 ),
-                const SizedBox(width: 12),
+                child: Icon(icon, color: iconColor, size: 18),
+              ),
+              const SizedBox(width: 12),
 
-                // Left Section: Type • ID, Customer & Time
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              // Left Section: Type • ID, Customer & Time
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          tx.typeLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: iconColor,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '• ${tx.transactionNumber}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.darkBlueText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${tx.customerName} · ${_formatShortTime(tx.date)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Right Section: Amount, Status Dot, More Button (⋮)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      Text(
+                        tx.isReturn
+                            ? '-${_formatCurrency(tx.totalAmount)}'
+                            : _formatCurrency(tx.totalAmount),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: amountColor,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            tx.typeLabel,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: iconColor,
-                              letterSpacing: 0.4,
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: statusDotColor,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                           Text(
-                            '• ${tx.transactionNumber}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.darkBlueText,
+                            statusText,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: statusDotColor,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${tx.customerName} · ${_formatShortTime(tx.date)}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.secondaryText,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                     ],
                   ),
-                ),
-
-                // Right Section: Amount, Status Dot, More Button (⋮)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          tx.isReturn
-                              ? '-${_formatCurrency(tx.totalAmount)}'
-                              : _formatCurrency(tx.totalAmount),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: amountColor,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 4),
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    color: Colors.white,
+                    elevation: 4,
+                    onSelected: (value) {
+                      if (value == 'view') {
+                        _handleViewTransaction(context, tx);
+                      } else if (value == 'edit') {
+                        _handleEditTransaction(context, tx);
+                      } else if (value == 'delete') {
+                        _handleDeleteTransaction(context, tx);
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem<String>(
+                        value: 'view',
+                        height: 38,
+                        child: Row(
                           children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: statusDotColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              statusText,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: statusDotColor,
-                              ),
-                            ),
+                            Icon(Icons.visibility_outlined,
+                                size: 18, color: AppColors.primaryBlue),
+                            SizedBox(width: 10),
+                            Text('View',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.darkBlueText)),
                           ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(width: 4),
-                    PopupMenuButton<String>(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      color: Colors.white,
-                      elevation: 4,
-                      onSelected: (value) {
-                        if (value == 'view') {
-                          _handleViewTransaction(context, tx);
-                        } else if (value == 'edit') {
-                          _handleEditTransaction(context, tx);
-                        } else if (value == 'delete') {
-                          _handleDeleteTransaction(context, tx);
-                        }
-                      },
-                      itemBuilder: (ctx) => [
-                        const PopupMenuItem<String>(
-                          value: 'view',
-                          height: 38,
-                          child: Row(
-                            children: [
-                              Icon(Icons.visibility_outlined,
-                                  size: 18, color: AppColors.primaryBlue),
-                              SizedBox(width: 10),
-                              Text('View',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.darkBlueText)),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem<String>(
-                          value: 'edit',
-                          height: 38,
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_outlined,
-                                  size: 18, color: AppColors.primaryBlue),
-                              SizedBox(width: 10),
-                              Text('Edit',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.darkBlueText)),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem<String>(
-                          value: 'delete',
-                          height: 38,
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline,
-                                  size: 18, color: AppColors.danger),
-                              SizedBox(width: 10),
-                              Text('Delete',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.danger)),
-                            ],
-                          ),
-                        ),
-                      ],
-                      child: const Padding(
-                        padding: EdgeInsets.only(
-                            left: 2.0, right: 0.0, top: 4.0, bottom: 4.0),
-                        child: Icon(Icons.more_vert,
-                            size: 20, color: AppColors.secondaryText),
                       ),
+                      const PopupMenuItem<String>(
+                        value: 'edit',
+                        height: 38,
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined,
+                                size: 18, color: AppColors.primaryBlue),
+                            SizedBox(width: 10),
+                            Text('Edit',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.darkBlueText)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        height: 38,
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline,
+                                size: 18, color: AppColors.danger),
+                            SizedBox(width: 10),
+                            Text('Delete',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.danger)),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: const Padding(
+                      padding: EdgeInsets.only(
+                          left: 2.0, right: 0.0, top: 4.0, bottom: 4.0),
+                      child: Icon(Icons.more_vert,
+                          size: 20, color: AppColors.secondaryText),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         if (!isLast)

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../application/bloc/auth_bloc.dart';
 import '../../../application/bloc/dashboard_bloc.dart';
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/bloc/product_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
@@ -211,6 +212,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(FetchDashboardDataEvent());
+    context.read<ProductBloc>().add(const FetchProductsEvent());
   }
 
   String _getGreeting() {
@@ -402,6 +404,7 @@ class _DashboardPageState extends State<DashboardPage> {
             return RefreshIndicator(
               onRefresh: () async {
                 context.read<DashboardBloc>().add(FetchDashboardDataEvent());
+                context.read<ProductBloc>().add(const FetchProductsEvent());
               },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -556,6 +559,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     // Relocated Section 2: Invoice Stats & Outstanding Summary
                     _buildInvoiceStatsAndOutstanding(context, state),
+                    const SizedBox(height: 14),
+
+                    // Inventory Overview Section
+                    _buildInventoryOverviewSection(context),
                     const SizedBox(height: 20),
 
                     // Relocated Section 3: Weekly Overview Dual Bar Chart
@@ -1395,3 +1402,206 @@ class _DashboardWavePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+// INVENTORY OVERVIEW SECTION FOR DASHBOARD
+Widget _buildInventoryOverviewSection(BuildContext context) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Inventory Overview',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.darkBlueText,
+            ),
+          ),
+          GestureDetector(
+            onTap: () => context.push(RouteNames.stockManagement),
+            child: const Text(
+              'Manage',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      BlocBuilder<ProductBloc, ProductState>(
+        builder: (context, pState) {
+          if (pState is ProductsLoadedState) {
+            final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => context.push(RouteNames.stockManagement),
+                          child: _InventorySummaryBox(
+                            label: 'Total Products',
+                            value: '${pState.totalProducts}',
+                            subText: '${pState.totalItems} Total Items',
+                            valueColor: AppColors.darkBlueText,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => context.push(RouteNames.stockManagement),
+                          child: _InventorySummaryBox(
+                            label: 'Low Stock',
+                            value: '${pState.lowStockCount}',
+                            subText: 'Running Low',
+                            valueColor: pState.lowStockCount > 0 ? AppColors.warning : AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => context.push(RouteNames.stockManagement),
+                          child: _InventorySummaryBox(
+                            label: 'Out of Stock',
+                            value: '${pState.outOfStockCount}',
+                            subText: 'Empty Stock',
+                            valueColor: pState.outOfStockCount > 0 ? AppColors.danger : AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.secondaryText),
+                            SizedBox(width: 6),
+                            Text('Stock Value', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryText)),
+                          ],
+                        ),
+                        Text(
+                          formatter.format(pState.stockValue),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: Row(
+                      children: [
+                        const Text('Stock Health: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondaryText)),
+                        _InventoryHealthBadge(label: 'Healthy ${pState.healthyCount}', color: AppColors.success, bg: AppColors.successContainer),
+                        const SizedBox(width: 6),
+                        _InventoryHealthBadge(label: 'Low ${pState.lowStockCount}', color: AppColors.warning, bg: AppColors.warningContainer),
+                        const SizedBox(width: 6),
+                        _InventoryHealthBadge(label: 'Out ${pState.outOfStockCount}', color: AppColors.danger, bg: AppColors.errorContainer),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    ],
+  );
+}
+
+class _InventorySummaryBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final String subText;
+  final Color valueColor;
+
+  const _InventorySummaryBox({
+    required this.label,
+    required this.value,
+    required this.subText,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondaryText), maxLines: 1),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: valueColor),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(subText, style: const TextStyle(fontSize: 10, color: AppColors.secondaryText), maxLines: 1),
+        ],
+      ),
+    );
+  }
+}
+
+class _InventoryHealthBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bg;
+
+  const _InventoryHealthBadge({required this.label, required this.color, required this.bg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+}
+
