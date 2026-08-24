@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-
+import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/bloc/sales_overview_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/invoice_entity.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/status_chip.dart';
+import '../../../domain/entities/payment_entity.dart';
+import '../../../domain/entities/sales_transaction_wrapper.dart';
 import '../../widgets/ui_state_widgets.dart';
 
 class SalesOverviewPage extends StatefulWidget {
@@ -22,13 +22,6 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    // Load fresh data when page initializes
-    context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -40,45 +33,50 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     return formatter.format(amount);
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDateTime(DateTime dt) {
+    return DateFormat('d MMM yyyy · h:mm a').format(dt);
+  }
+
+  String _formatShortTime(DateTime dt) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
-    final checkDate = DateTime(date.year, date.month, date.day);
+    final dtDate = DateTime(dt.year, dt.month, dt.day);
+    final timeStr = DateFormat('h:mm a').format(dt);
 
-    if (checkDate == today) {
-      return 'Today, ${DateFormat('h:mm a').format(date)}';
-    } else if (checkDate == yesterday) {
-      return 'Yesterday, ${DateFormat('h:mm a').format(date)}';
+    if (dtDate == today) {
+      return timeStr;
+    } else if (dtDate == yesterday) {
+      return 'Yesterday, $timeStr';
+    } else if (dt.year == now.year) {
+      return '${DateFormat('d MMM').format(dt)}, $timeStr';
     } else {
-      return DateFormat('d MMM yyyy').format(date);
+      return '${DateFormat('d MMM yyyy').format(dt)}, $timeStr';
     }
   }
 
   void _openFilterAndSortBottomSheet(
       BuildContext context, SalesOverviewLoadedState state) {
+    String selectedType = state.selectedTypeFilter;
     String selectedPaymentStatus = state.statusFilter;
     String selectedInvoiceStatus = state.invoiceStatusFilter;
     String selectedDateRange = state.dateRangeFilter;
     DateTime? customStart = state.customStartDate;
     DateTime? customEnd = state.customEndDate;
-    String selectedCustomer = state.selectedCustomer;
     String selectedSort = state.sortOption;
-
-    final customerTextCtrl = TextEditingController(
-      text: selectedCustomer == 'All' ? '' : selectedCustomer,
-    );
+    final TextEditingController customerTextCtrl = TextEditingController(
+        text: state.selectedCustomer == 'All' ? '' : state.selectedCustomer);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) {
+      builder: (bottomSheetContext) {
         return StatefulBuilder(
-          builder: (bottomSheetContext, setModalState) {
+          builder: (ctx, setModalState) {
             return Padding(
               padding: EdgeInsets.only(
                 top: 20,
@@ -104,13 +102,48 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close),
+                          icon: const Icon(Icons.close, size: 20),
                           onPressed: () => Navigator.pop(bottomSheetContext),
                         ),
                       ],
                     ),
-                    const Divider(),
-                    const SizedBox(height: 12),
+                    const Divider(height: 20),
+
+                    // Transaction Type
+                    const Text(
+                      'Transaction Type',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.darkBlueText),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['All', 'Invoices', 'Returns', 'Payments']
+                          .map((type) {
+                        final isSelected = selectedType == type;
+                        return ChoiceChip(
+                          label: Text(type),
+                          selected: isSelected,
+                          selectedColor: AppColors.primaryBlue,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.darkBlueText,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setModalState(() => selectedType = type);
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
 
                     // Sort By
                     const Text(
@@ -152,7 +185,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     // Date Range
                     const Text(
@@ -239,7 +272,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     // Payment Status Filter
                     const Text(
@@ -281,7 +314,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
                     // Invoice Status Filter
                     const Text(
@@ -361,6 +394,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                               final custInput = customerTextCtrl.text.trim();
                               context.read<SalesOverviewBloc>().add(
                                     ApplyAdvancedFilterEvent(
+                                      transactionType: selectedType,
                                       status: selectedPaymentStatus,
                                       invoiceStatus: selectedInvoiceStatus,
                                       dateRange: selectedDateRange,
@@ -394,13 +428,14 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Sales',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-        ),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
+        title: const Text(
+          'Sales',
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+        ),
       ),
       body: BlocBuilder<SalesOverviewBloc, SalesOverviewState>(
         builder: (context, state) {
@@ -430,23 +465,23 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Section 1: Compact Search Field & Filter Button
+                    // Search Bar & Filter Button
                     _buildSearchAndFilterRow(context, state),
                     const SizedBox(height: 12),
 
-                    // Section 2: Horizontally Scrollable Quick Status Chips
-                    _buildQuickStatusChipsRow(context, state),
+                    // Quick Transaction Type Filter Chips (All, Invoices, Returns, Payments)
+                    _buildQuickTypeChipsRow(context, state),
                     const SizedBox(height: 10),
 
-                    // Section 3: Active Filters Removable Chips (if any filter is applied)
+                    // Active Removable Filter Chips
                     if (state.isFiltered) ...[
                       _buildActiveFilterChipsRow(context, state),
                       const SizedBox(height: 10),
                     ],
 
-                    // Section 4: Transactions List Header
+                    // Transactions Section Header
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
                         const Text(
                           'Recent Transactions',
@@ -456,32 +491,16 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                             color: AppColors.darkBlueText,
                           ),
                         ),
-                        Text(
-                          '${state.filteredInvoices.length} Invoices',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
 
-                    // Section 5: Transactions History List (Main Focus)
+                    // Vertical Timeline Financial Activity Feed
                     Expanded(
-                      child: state.filteredInvoices.isEmpty
+                      child: state.filteredTransactions.isEmpty
                           ? _buildEmptyState(state)
-                          : ListView.separated(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: state.filteredInvoices.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (ctx, index) {
-                                final inv = state.filteredInvoices[index];
-                                return _buildTransactionCard(context, inv);
-                              },
-                            ),
+                          : _buildVerticalTimelineFeed(
+                              context, state.filteredTransactions),
                     ),
                   ],
                 ),
@@ -502,10 +521,10 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
       children: [
         Expanded(
           child: Container(
-            height: 48,
+            height: 44,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
             ),
             child: TextField(
@@ -516,7 +535,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                     .add(SearchSalesOverviewEvent(val));
               },
               decoration: InputDecoration(
-                hintText: 'Search invoice or customer...',
+                hintText: 'Search invoice, customer or transaction...',
                 hintStyle: const TextStyle(
                     fontSize: 13, color: AppColors.secondaryText),
                 prefixIcon: const Icon(Icons.search,
@@ -533,51 +552,30 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                       )
                     : null,
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                contentPadding: const EdgeInsets.symmetric(vertical: 11),
               ),
             ),
           ),
         ),
         const SizedBox(width: 10),
-
-        // Filter Button
         InkWell(
           onTap: () => _openFilterAndSortBottomSheet(context, state),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           child: Container(
-            height: 48,
-            width: 48,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: state.isFiltered ? AppColors.primaryBlue : Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color:
                     state.isFiltered ? AppColors.primaryBlue : AppColors.border,
               ),
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.tune_rounded,
-                  color:
-                      state.isFiltered ? Colors.white : AppColors.darkBlueText,
-                  size: 22,
-                ),
-                if (state.isFiltered)
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.amber,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
+            child: Icon(
+              Icons.tune_rounded,
+              color: state.isFiltered ? Colors.white : AppColors.darkBlueText,
+              size: 20,
             ),
           ),
         ),
@@ -585,23 +583,16 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     );
   }
 
-  // HORIZONTALLY SCROLLABLE QUICK STATUS FILTER CHIPS
-  Widget _buildQuickStatusChipsRow(
+  // QUICK TYPE CHIPS ROW (All, Invoices, Returns, Payments)
+  Widget _buildQuickTypeChipsRow(
       BuildContext context, SalesOverviewLoadedState state) {
-    final chips = [
-      'All',
-      'Paid',
-      'Partially Paid',
-      'Unpaid',
-      'Overdue',
-      'Cancelled'
-    ];
+    final chips = ['All', 'Invoices', 'Returns', 'Payments'];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: chips.map((chipLabel) {
-          final isSelected = state.selectedPrimaryFilter == chipLabel;
+          final isSelected = state.selectedTypeFilter == chipLabel;
           return Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: ChoiceChip(
@@ -622,9 +613,9 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
               labelStyle: TextStyle(
                 color: isSelected ? Colors.white : AppColors.darkBlueText,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                fontSize: 13,
+                fontSize: 12,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
@@ -648,25 +639,22 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                   .read<SalesOverviewBloc>()
                   .add(const SearchSalesOverviewEvent(''));
             }),
+          if (state.selectedTypeFilter != 'All')
+            _buildRemovableChip('Type: ${state.selectedTypeFilter}', () {
+              context
+                  .read<SalesOverviewBloc>()
+                  .add(const FilterSalesOverviewEvent('All'));
+            }),
           if (state.statusFilter != 'All')
             _buildRemovableChip('Status: ${state.statusFilter}', () {
               context.read<SalesOverviewBloc>().add(
                     ApplyAdvancedFilterEvent(
+                      transactionType: state.selectedTypeFilter,
                       status: 'All',
                       invoiceStatus: state.invoiceStatusFilter,
                       dateRange: state.dateRangeFilter,
-                      customer: state.selectedCustomer,
-                      sortOption: state.sortOption,
-                    ),
-                  );
-            }),
-          if (state.invoiceStatusFilter != 'All')
-            _buildRemovableChip('Invoice: ${state.invoiceStatusFilter}', () {
-              context.read<SalesOverviewBloc>().add(
-                    ApplyAdvancedFilterEvent(
-                      status: state.statusFilter,
-                      invoiceStatus: 'All',
-                      dateRange: state.dateRangeFilter,
+                      customStartDate: state.customStartDate,
+                      customEndDate: state.customEndDate,
                       customer: state.selectedCustomer,
                       sortOption: state.sortOption,
                     ),
@@ -676,9 +664,12 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
             _buildRemovableChip('Date: ${state.dateRangeFilter}', () {
               context.read<SalesOverviewBloc>().add(
                     ApplyAdvancedFilterEvent(
+                      transactionType: state.selectedTypeFilter,
                       status: state.statusFilter,
                       invoiceStatus: state.invoiceStatusFilter,
                       dateRange: 'All',
+                      customStartDate: null,
+                      customEndDate: null,
                       customer: state.selectedCustomer,
                       sortOption: state.sortOption,
                     ),
@@ -688,23 +679,14 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
             _buildRemovableChip('Customer: ${state.selectedCustomer}', () {
               context.read<SalesOverviewBloc>().add(
                     ApplyAdvancedFilterEvent(
+                      transactionType: state.selectedTypeFilter,
                       status: state.statusFilter,
                       invoiceStatus: state.invoiceStatusFilter,
                       dateRange: state.dateRangeFilter,
+                      customStartDate: state.customStartDate,
+                      customEndDate: state.customEndDate,
                       customer: 'All',
                       sortOption: state.sortOption,
-                    ),
-                  );
-            }),
-          if (state.sortOption != 'newest')
-            _buildRemovableChip('Sort: ${state.sortOption}', () {
-              context.read<SalesOverviewBloc>().add(
-                    ApplyAdvancedFilterEvent(
-                      status: state.statusFilter,
-                      invoiceStatus: state.invoiceStatusFilter,
-                      dateRange: state.dateRangeFilter,
-                      customer: state.selectedCustomer,
-                      sortOption: 'newest',
                     ),
                   );
             }),
@@ -718,7 +700,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Text(
-                'Clear all',
+                'Reset All',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -741,145 +723,511 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
         backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
         deleteIcon: const Icon(Icons.close, size: 14),
         onDeleted: onRemove,
-        visualDensity: VisualDensity.compact,
+        side: BorderSide.none,
+        padding: const EdgeInsets.all(4),
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
 
-  // TRANSACTION CARD ITEM
-  Widget _buildTransactionCard(BuildContext context, InvoiceEntity inv) {
+  // VERTICAL TIMELINE FEED
+  Widget _buildVerticalTimelineFeed(
+      BuildContext context, List<SalesTransactionWrapper> transactions) {
     final now = DateTime.now();
-    final isOverdue = (inv.status == InvoiceStatus.unpaid ||
-            inv.status == InvoiceStatus.partiallyPaid) &&
-        inv.dueDate.isBefore(now);
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
 
-    final isReturned = inv.notes.toLowerCase().contains('return') ||
-        inv.invoiceNumber.toLowerCase().contains('ret');
+    final Map<String, List<SalesTransactionWrapper>> grouped = {};
 
-    Widget statusWidget;
-    if (inv.status == InvoiceStatus.cancelled) {
-      statusWidget = StatusChip.cancelled();
-    } else if (isReturned) {
-      statusWidget = StatusChip.returned();
-    } else if (inv.status == InvoiceStatus.paid) {
-      statusWidget = StatusChip.paid();
-    } else if (isOverdue) {
-      statusWidget = StatusChip.overdue();
-    } else if (inv.status == InvoiceStatus.partiallyPaid) {
-      statusWidget = StatusChip.partiallyPaid();
-    } else {
-      statusWidget = StatusChip.unpaid();
+    for (var tx in transactions) {
+      final txDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      String label;
+      if (txDate == today) {
+        label = 'TODAY';
+      } else if (txDate == yesterday) {
+        label = 'YESTERDAY';
+      } else if (tx.date.year == now.year) {
+        label = DateFormat('d MMM yyyy').format(tx.date).toUpperCase();
+      } else {
+        label = DateFormat('d MMM yyyy').format(tx.date).toUpperCase();
+      }
+
+      grouped.putIfAbsent(label, () => []).add(tx);
     }
 
-    return AppCard(
-      onTap: () {
-        context.push(
-          RouteNames.invoiceDetails,
-          extra: inv,
+    final sections = grouped.entries.toList();
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: sections.length,
+      itemBuilder: (ctx, sectionIdx) {
+        final group = sections[sectionIdx];
+        final dateLabel = group.key;
+        final groupItems = group.value;
+        return _buildTimelineGroup(context, dateLabel, groupItems);
+      },
+    );
+  }
+
+  // DAY GROUPED TRANSACTIONS CONTAINER
+  Widget _buildTimelineGroup(BuildContext context, String dateLabel,
+      List<SalesTransactionWrapper> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6.0, top: 8.0, left: 4.0),
+          child: Text(
+            dateLabel,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: List.generate(items.length, (idx) {
+              final tx = items[idx];
+              final isLast = idx == items.length - 1;
+              return _buildTimelineTransactionTile(context, tx, isLast);
+            }),
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
+    );
+  }
+
+  // DENSE WIDE TRANSACTION TILE WITH MORE BUTTON (⋮)
+  Widget _buildTimelineTransactionTile(
+      BuildContext context, SalesTransactionWrapper tx, bool isLast) {
+    IconData icon;
+    Color iconBgColor;
+    Color iconColor;
+    Color amountColor;
+
+    if (tx.isReturn) {
+      icon = Icons.u_turn_left_rounded;
+      iconBgColor = Colors.purple.withValues(alpha: 0.1);
+      iconColor = Colors.purple.shade700;
+      amountColor = AppColors.danger;
+    } else if (tx.isPayment) {
+      icon = Icons.arrow_downward_rounded;
+      iconBgColor = AppColors.success.withValues(alpha: 0.1);
+      iconColor = AppColors.success;
+      amountColor = AppColors.success;
+    } else {
+      icon = Icons.receipt_long_rounded;
+      iconBgColor = AppColors.primaryBlue.withValues(alpha: 0.1);
+      iconColor = AppColors.primaryBlue;
+      amountColor = AppColors.darkBlueText;
+    }
+
+    // Dot Status indicator
+    Color statusDotColor;
+    String statusText;
+    if (tx.isReturn) {
+      statusDotColor = Colors.purple.shade700;
+      statusText = 'Completed';
+    } else if (tx.isPayment) {
+      statusDotColor = AppColors.success;
+      statusText = 'Received';
+    } else {
+      final inv = tx.asInvoice;
+      final now = DateTime.now();
+      final isOverdue = inv != null &&
+          (inv.status == InvoiceStatus.unpaid ||
+              inv.status == InvoiceStatus.partiallyPaid) &&
+          inv.dueDate.isBefore(now);
+
+      if (inv?.status == InvoiceStatus.cancelled) {
+        statusDotColor = AppColors.danger;
+        statusText = 'Cancelled';
+      } else if (inv?.status == InvoiceStatus.paid) {
+        statusDotColor = AppColors.success;
+        statusText = 'Paid';
+      } else if (isOverdue) {
+        statusDotColor = AppColors.danger;
+        statusText = 'Overdue';
+      } else if (inv?.status == InvoiceStatus.partiallyPaid) {
+        statusDotColor = AppColors.warning;
+        statusText = 'Partially Paid';
+      } else {
+        statusDotColor = AppColors.warning;
+        statusText = 'Unpaid';
+      }
+    }
+
+    return Column(
+      children: [
+        InkWell(
+          onTap: () => _handleViewTransaction(context, tx),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+            child: Row(
+              children: [
+                // Icon Box
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 18),
+                ),
+                const SizedBox(width: 12),
+
+                // Left Section: Type • ID, Customer & Time
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            tx.typeLabel,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: iconColor,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '• ${tx.transactionNumber}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${tx.customerName} · ${_formatShortTime(tx.date)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Right Section: Amount, Status Dot, More Button (⋮)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          tx.isReturn
+                              ? '-${_formatCurrency(tx.totalAmount)}'
+                              : _formatCurrency(tx.totalAmount),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: amountColor,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: statusDotColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              statusText,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: statusDotColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      color: Colors.white,
+                      elevation: 4,
+                      onSelected: (value) {
+                        if (value == 'view') {
+                          _handleViewTransaction(context, tx);
+                        } else if (value == 'edit') {
+                          _handleEditTransaction(context, tx);
+                        } else if (value == 'delete') {
+                          _handleDeleteTransaction(context, tx);
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        const PopupMenuItem<String>(
+                          value: 'view',
+                          height: 38,
+                          child: Row(
+                            children: [
+                              Icon(Icons.visibility_outlined,
+                                  size: 18, color: AppColors.primaryBlue),
+                              SizedBox(width: 10),
+                              Text('View',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.darkBlueText)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'edit',
+                          height: 38,
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined,
+                                  size: 18, color: AppColors.primaryBlue),
+                              SizedBox(width: 10),
+                              Text('Edit',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.darkBlueText)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'delete',
+                          height: 38,
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline,
+                                  size: 18, color: AppColors.danger),
+                              SizedBox(width: 10),
+                              Text('Delete',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.danger)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      child: const Padding(
+                        padding: EdgeInsets.only(
+                            left: 2.0, right: 0.0, top: 4.0, bottom: 4.0),
+                        child: Icon(Icons.more_vert,
+                            size: 20, color: AppColors.secondaryText),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (!isLast)
+          const Divider(
+            height: 1,
+            indent: 60,
+            endIndent: 14,
+            color: AppColors.border,
+          ),
+      ],
+    );
+  }
+
+  void _handleViewTransaction(
+      BuildContext context, SalesTransactionWrapper tx) {
+    if (tx.isInvoice && tx.asInvoice != null) {
+      context.push(RouteNames.invoiceDetails, extra: tx.asInvoice);
+    } else if (tx.isReturn) {
+      context.push(RouteNames.salesReturns);
+    } else if (tx.isPayment) {
+      _showPaymentDetailsModal(context, tx.asPayment ?? tx);
+    }
+  }
+
+  void _handleEditTransaction(
+      BuildContext context, SalesTransactionWrapper tx) {
+    if (tx.isInvoice && tx.asInvoice != null) {
+      context.push(RouteNames.createInvoice, extra: tx.asInvoice);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text('Editing ${tx.typeLabel} is not supported directly.')),
+      );
+    }
+  }
+
+  void _handleDeleteTransaction(
+      BuildContext context, SalesTransactionWrapper tx) {
+    if (tx.isInvoice && tx.asInvoice != null) {
+      _showCancelInvoiceDialog(context, tx.asInvoice!);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('${tx.typeLabel} ${tx.transactionNumber} deleted.')),
+      );
+    }
+  }
+
+  void _showCancelInvoiceDialog(BuildContext context, InvoiceEntity inv) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Cancel Invoice',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+          content: Text(
+              'Are you sure you want to cancel ${inv.invoiceNumber}? This action cannot be undone.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('No, Keep')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white),
+              onPressed: () {
+                final cancelledInvoice =
+                    inv.copyWith(status: InvoiceStatus.cancelled);
+                context
+                    .read<InvoiceBloc>()
+                    .add(UpdateInvoiceSubmittedEvent(cancelledInvoice));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text('Invoice ${inv.invoiceNumber} cancelled.')),
+                );
+              },
+              child: const Text('Yes, Cancel'),
+            ),
+          ],
         );
       },
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                inv.invoiceNumber,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
-                ),
-              ),
-              Text(
-                _formatCurrency(inv.grandTotal),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primaryBlue,
-                ),
-              ),
+    );
+  }
+
+  // PAYMENT DETAILS MODAL
+  void _showPaymentDetailsModal(BuildContext context, Object paymentObj) {
+    PaymentEntity? pay;
+    if (paymentObj is PaymentEntity) {
+      pay = paymentObj;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.payment, color: AppColors.primaryBlue),
+              SizedBox(width: 10),
+              Text('Payment Receipt',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
             ],
           ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  inv.customerName.isNotEmpty
-                      ? inv.customerName
-                      : 'General Customer',
+              Text('Customer: ${pay?.customerName ?? "General Customer"}',
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.darkBlueText,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (inv.dueAmount > 0 &&
-                  inv.status != InvoiceStatus.paid &&
-                  inv.status != InvoiceStatus.cancelled)
-                Text(
-                  '${_formatCurrency(inv.dueAmount)} Due',
+                      fontWeight: FontWeight.w700, fontSize: 14)),
+              const SizedBox(height: 6),
+              Text('Amount Received: ${_formatCurrency(pay?.amount ?? 0.0)}',
                   style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.danger,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppColors.success)),
+              const SizedBox(height: 6),
+              Text('Payment Mode: ${pay?.paymentMode ?? "CASH"}',
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.secondaryText)),
+              if (pay?.referenceNumber.isNotEmpty ?? false) ...[
+                const SizedBox(height: 4),
+                Text('Ref #: ${pay!.referenceNumber}',
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.secondaryText)),
+              ],
+              const SizedBox(height: 6),
               Text(
-                _formatDate(inv.issueDate),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.secondaryText,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              statusWidget,
+                  'Date: ${pay != null ? _formatDateTime(pay.paymentDate) : ""}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.secondaryText)),
             ],
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 
   // CONTEXTUAL EMPTY STATE
   Widget _buildEmptyState(SalesOverviewLoadedState state) {
-    String title = 'No sales yet';
-    String message = 'Your invoices and sales transactions will appear here.';
+    String title = 'No sales transactions';
+    String message =
+        'Your invoices, sales returns, and payments will appear here.';
     IconData icon = Icons.receipt_long_outlined;
 
     if (state.searchQuery.isNotEmpty) {
       title = 'No matching transactions';
-      message = 'No invoices found matching "${state.searchQuery}".';
+      message = 'No records found matching "${state.searchQuery}".';
       icon = Icons.search_off_rounded;
-    } else if (state.selectedPrimaryFilter == 'Unpaid' ||
-        state.statusFilter == 'Unpaid') {
-      title = 'No unpaid invoices';
-      message = 'All your sales transactions are fully paid!';
-      icon = Icons.check_circle_outline_rounded;
-    } else if (state.selectedPrimaryFilter == 'Overdue' ||
-        state.statusFilter == 'Overdue') {
-      title = 'No overdue invoices';
-      message = 'No pending invoices are overdue.';
-      icon = Icons.verified_outlined;
-    } else if (state.selectedPrimaryFilter == 'Cancelled' ||
-        state.invoiceStatusFilter == 'Cancelled') {
-      title = 'No cancelled invoices';
-      message = 'There are no cancelled sales transactions in your records.';
-      icon = Icons.cancel_outlined;
+    } else if (state.selectedTypeFilter == 'Invoices') {
+      title = 'No sales invoices';
+      message = 'No sales invoices found matching selected filters.';
+    } else if (state.selectedTypeFilter == 'Returns') {
+      title = 'No sales returns';
+      message = 'There are no sales return vouchers recorded.';
+      icon = Icons.assignment_return_outlined;
+    } else if (state.selectedTypeFilter == 'Payments') {
+      title = 'No payments recorded';
+      message = 'No payment receipts recorded yet.';
+      icon = Icons.payments_outlined;
     } else if (state.isFiltered) {
       title = 'No transactions found';
       message = 'Try adjusting your search or filter settings.';
@@ -888,7 +1236,6 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
 
     return Center(
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(32.0),
           child: Column(
@@ -906,20 +1253,21 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.darkBlueText,
                 ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 message,
-                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 13,
                   color: AppColors.secondaryText,
                   height: 1.4,
                 ),
+                textAlign: TextAlign.center,
               ),
               if (state.isFiltered) ...[
                 const SizedBox(height: 20),
@@ -932,6 +1280,12 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                   },
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text('Reset Filters'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ],
             ],

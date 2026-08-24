@@ -62,6 +62,8 @@ class XenoBizApp extends StatelessWidget {
               invoiceRepository: getIt(),
               expenseRepository: getIt(),
               customerRepository: getIt(),
+              returnsRepository: getIt(),
+              hiveService: getIt(),
             )..add(FetchSalesOverviewDataEvent()),
           ),
           BlocProvider<DailyLedgerBloc>(
