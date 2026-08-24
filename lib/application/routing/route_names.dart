@@ -7,6 +7,7 @@ abstract class RouteNames {
   static const String trialWelcome = '/trial-welcome';
   static const String plansAndPricing = '/plans-and-pricing';
   static const String dashboard = '/dashboard';
+  static const String globalSearch = '/global-search';
   static const String subscription = '/subscription';
 
   // Customers

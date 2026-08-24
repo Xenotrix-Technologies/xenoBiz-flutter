@@ -19,6 +19,7 @@ import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/customers/pages/expense_account_details_page.dart';
 
 import '../../presentation/dashboard/pages/dashboard_page.dart';
+import '../../presentation/dashboard/pages/global_search_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
 import '../../presentation/invoices/pages/daily_ledger_page.dart';
@@ -204,6 +205,10 @@ class AppRouter {
       ),
 
       // Standalone / Pushed Detail Sub-Routes
+      GoRoute(
+        path: RouteNames.globalSearch,
+        builder: (context, state) => const GlobalSearchPage(),
+      ),
       GoRoute(
         path: RouteNames.subscription,
         builder: (context, state) => const SubscriptionPaywallPage(),

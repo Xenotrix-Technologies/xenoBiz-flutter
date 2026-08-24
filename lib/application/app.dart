@@ -80,6 +80,16 @@ class XenoBizApp extends StatelessWidget {
               hiveService: getIt(),
             )..add(const FetchAccountsEvent()),
           ),
+          BlocProvider<GlobalSearchBloc>(
+            create: (_) => GlobalSearchBloc(
+              customerRepository: getIt(),
+              invoiceRepository: getIt(),
+              productRepository: getIt(),
+              expenseRepository: getIt(),
+              purchaseRepository: getIt(),
+              hiveService: getIt(),
+            )..add(LoadRecentSearchesEvent()),
+          ),
         ],
 
 

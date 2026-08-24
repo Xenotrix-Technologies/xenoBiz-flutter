@@ -145,8 +145,9 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                             fontSize: 12,
                           ),
                           onSelected: (val) {
-                            if (val)
+                            if (val) {
                               setModalState(() => selectedSort = item['val']!);
+                            }
                           },
                         );
                       }).toList(),
@@ -272,9 +273,10 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                             fontSize: 12,
                           ),
                           onSelected: (val) {
-                            if (val)
+                            if (val) {
                               setModalState(
                                   () => selectedPaymentStatus = status);
+                            }
                           },
                         );
                       }).toList(),
@@ -313,9 +315,10 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                             fontSize: 12,
                           ),
                           onSelected: (val) {
-                            if (val)
+                            if (val) {
                               setModalState(
                                   () => selectedInvoiceStatus = invStatus);
+                            }
                           },
                         );
                       }).toList(),

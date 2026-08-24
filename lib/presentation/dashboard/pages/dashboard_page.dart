@@ -437,6 +437,45 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                     const SizedBox(height: 16),
 
+                    // Global Search Bar Entry Button
+                    InkWell(
+                      onTap: () => context.push(RouteNames.globalSearch),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.search, color: AppColors.primaryBlue, size: 22),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Search anything (customers, invoices, products)...',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward, size: 16, color: AppColors.primaryBlue),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // Top Banner Card: Today's Sales with Wave Painter
                     Container(
                       width: double.infinity,
