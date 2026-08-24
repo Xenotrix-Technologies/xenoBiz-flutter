@@ -305,7 +305,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.invoiceDetails,
-        builder: (context, state) => const InvoiceDetailsPage(),
+        builder: (context, state) {
+          final inv = state.extra as InvoiceEntity?;
+          return InvoiceDetailsPage(invoice: inv);
+        },
       ),
       GoRoute(
         path: RouteNames.salesReturns,

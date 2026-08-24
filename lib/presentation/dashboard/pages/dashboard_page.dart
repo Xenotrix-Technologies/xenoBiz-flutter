@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../application/bloc/auth_bloc.dart';
 import '../../../application/bloc/dashboard_bloc.dart';
 import '../../../application/bloc/invoice_bloc.dart';
@@ -510,6 +511,22 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                     const SizedBox(height: 16),
 
+                    // Relocated Section 1: Today Summary (Sales, Expenses, Net)
+                    _buildTodaySummarySection(context, state),
+                    const SizedBox(height: 14),
+
+                    // Relocated Section 2: Invoice Stats & Outstanding Summary
+                    _buildInvoiceStatsAndOutstanding(context, state),
+                    const SizedBox(height: 20),
+
+                    // Relocated Section 3: Weekly Overview Dual Bar Chart
+                    _buildWeeklyChartSection(state),
+                    const SizedBox(height: 14),
+
+                    // Relocated Section 4: Weekly Summary (Sales, Expenses, Net)
+                    _buildWeeklySummarySection(state),
+                    const SizedBox(height: 20),
+
                     // Marked 2x2 Grid using App Color Palette (AppColors)
                     Row(
                       children: [
@@ -852,6 +869,389 @@ class _DashboardPageState extends State<DashboardPage> {
     ),
   );
 }
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
+    return formatter.format(amount);
+  }
+
+  // TODAY SUMMARY CARDS (Relocated from Sales Overview)
+  Widget _buildTodaySummarySection(BuildContext context, DashboardLoadedState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Today Overview',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.darkBlueText,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _SummaryMetricCard(
+                title: 'Sales',
+                amount: _formatCurrency(state.todaySales),
+                amountColor: AppColors.primaryBlue,
+                onTap: () {
+                  context.push(
+                    RouteNames.dailyLedger,
+                    extra: {'initialTab': 0, 'initialDate': DateTime.now()},
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SummaryMetricCard(
+                title: 'Expenses',
+                amount: _formatCurrency(state.todayExpenses),
+                amountColor: AppColors.warning,
+                onTap: () {
+                  context.push(
+                    RouteNames.dailyLedger,
+                    extra: {'initialTab': 1, 'initialDate': DateTime.now()},
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SummaryMetricCard(
+                title: 'Net',
+                amount: _formatCurrency(state.todayNet),
+                amountColor: state.todayNet >= 0 ? AppColors.success : AppColors.danger,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // INVOICE STATS & OUTSTANDING CARD (Relocated from Sales Overview)
+  Widget _buildInvoiceStatsAndOutstanding(BuildContext context, DashboardLoadedState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${state.todayInvoiceCount} invoices',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkBlueText,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('•', style: TextStyle(color: AppColors.secondaryText)),
+              ),
+              Text(
+                '${state.todayPaidCount} paid',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.success,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('•', style: TextStyle(color: AppColors.secondaryText)),
+              ),
+              Text(
+                '${state.todayDueCount} due',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        AppCard(
+          onTap: () {
+            context.push(RouteNames.salesOverview);
+          },
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Outstanding',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatCurrency(state.totalOutstandingAmount),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.danger,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: const [
+                  Text(
+                    'View Unpaid',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryBlue,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.chevron_right, color: AppColors.primaryBlue, size: 20),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // WEEKLY DUAL BAR CHART (SALES VS EXPENSES) (Relocated from Sales Overview)
+  Widget _buildWeeklyChartSection(DashboardLoadedState state) {
+    double maxVal = 0.0;
+    for (var day in state.weeklyDailyBreakdown) {
+      if (day.sales > maxVal) maxVal = day.sales;
+      if (day.expenses > maxVal) maxVal = day.expenses;
+    }
+    if (maxVal == 0.0) maxVal = 1.0;
+
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Weekly Overview',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText,
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Sales', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppColors.warning,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Expenses', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 140,
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: state.weeklyDailyBreakdown.map((dayData) {
+                    final salesPct = (dayData.sales / maxVal).clamp(0.05, 1.0);
+                    final expPct = (dayData.expenses / maxVal).clamp(0.05, 1.0);
+
+                    final salesBarHeight = dayData.sales > 0 ? (100 * salesPct) : 4.0;
+                    final expBarHeight = dayData.expenses > 0 ? (100 * expPct) : 4.0;
+
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Tooltip(
+                              message: 'Sales: ${_formatCurrency(dayData.sales)}',
+                              child: Container(
+                                width: 10,
+                                height: salesBarHeight,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.primaryBlue,
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Tooltip(
+                              message: 'Expenses: ${_formatCurrency(dayData.expenses)}',
+                              child: Container(
+                                width: 10,
+                                height: expBarHeight,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.warning,
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(4)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          dayData.dayName,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // WEEKLY SUMMARY ROW
+  Widget _buildWeeklySummarySection(DashboardLoadedState state) {
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This week',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.darkBlueText,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Sales', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              Text(_formatCurrency(state.weeklySales), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Expenses', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              Text(_formatCurrency(state.weeklyExpenses), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.warning)),
+            ],
+          ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Net', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
+              Text(
+                _formatCurrency(state.weeklyNet),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: state.weeklyNet >= 0 ? AppColors.success : AppColors.danger,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetricCard extends StatelessWidget {
+  final String title;
+  final String amount;
+  final Color amountColor;
+  final VoidCallback? onTap;
+
+  const _SummaryMetricCard({
+    required this.title,
+    required this.amount,
+    required this.amountColor,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                amount,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: amountColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {

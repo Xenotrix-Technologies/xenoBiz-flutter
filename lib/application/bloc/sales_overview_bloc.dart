@@ -1,28 +1,11 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../domain/entities/expense_entity.dart';
+import '../../domain/entities/daily_sales_expense_data.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/expense_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
-
-class DailySalesExpenseData extends Equatable {
-  final String dayName; // 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
-  final double sales;
-  final double expenses;
-  final DateTime date;
-
-  const DailySalesExpenseData({
-    required this.dayName,
-    required this.sales,
-    required this.expenses,
-    required this.date,
-  });
-
-  @override
-  List<Object?> get props => [dayName, sales, expenses, date];
-}
 
 // Events
 abstract class SalesOverviewEvent extends Equatable {
@@ -51,18 +34,34 @@ class FilterSalesOverviewEvent extends SalesOverviewEvent {
 }
 
 class ApplyAdvancedFilterEvent extends SalesOverviewEvent {
-  final String status;
-  final String paymentMethod;
-  final String dateRange;
+  final String status; // Payment Status: All, Paid, Partially Paid, Unpaid, Overdue
+  final String invoiceStatus; // Invoice Status: All, Draft, Issued, Cancelled, Returned
+  final String dateRange; // Date Range: All, Today, Yesterday, This week, This month, Custom
+  final DateTime? customStartDate;
+  final DateTime? customEndDate;
+  final String customer;
+  final String sortOption; // newest, oldest, amount_high, amount_low, name_asc, name_desc
 
   const ApplyAdvancedFilterEvent({
-    required this.status,
-    required this.paymentMethod,
-    required this.dateRange,
+    this.status = 'All',
+    this.invoiceStatus = 'All',
+    this.dateRange = 'All',
+    this.customStartDate,
+    this.customEndDate,
+    this.customer = 'All',
+    this.sortOption = 'newest',
   });
 
   @override
-  List<Object?> get props => [status, paymentMethod, dateRange];
+  List<Object?> get props => [
+        status,
+        invoiceStatus,
+        dateRange,
+        customStartDate,
+        customEndDate,
+        customer,
+        sortOption,
+      ];
 }
 
 class ClearSalesOverviewFiltersEvent extends SalesOverviewEvent {}
@@ -96,17 +95,16 @@ class SalesOverviewLoadedState extends SalesOverviewState {
 
   final List<InvoiceEntity> allInvoices;
   final List<InvoiceEntity> filteredInvoices;
-  final List<InvoiceEntity> recentInvoices;
-
-  final List<ExpenseEntity> allExpenses;
-  final List<ExpenseEntity> filteredExpenses;
-  final List<ExpenseEntity> recentExpenses;
 
   final String searchQuery;
-  final String selectedPrimaryFilter;
-  final String statusFilter;
-  final String paymentMethodFilter;
+  final String selectedPrimaryFilter; // Quick chip: All, Paid, Partially Paid, Unpaid, Overdue, Cancelled
+  final String statusFilter; // Payment Status
+  final String invoiceStatusFilter; // Invoice Status
   final String dateRangeFilter;
+  final DateTime? customStartDate;
+  final DateTime? customEndDate;
+  final String selectedCustomer;
+  final String sortOption;
 
   const SalesOverviewLoadedState({
     required this.todaySales,
@@ -122,23 +120,25 @@ class SalesOverviewLoadedState extends SalesOverviewState {
     required this.weeklyDailyBreakdown,
     required this.allInvoices,
     required this.filteredInvoices,
-    required this.recentInvoices,
-    required this.allExpenses,
-    required this.filteredExpenses,
-    required this.recentExpenses,
     this.searchQuery = '',
     this.selectedPrimaryFilter = 'All',
     this.statusFilter = 'All',
-    this.paymentMethodFilter = 'All',
+    this.invoiceStatusFilter = 'All',
     this.dateRangeFilter = 'All',
+    this.customStartDate,
+    this.customEndDate,
+    this.selectedCustomer = 'All',
+    this.sortOption = 'newest',
   });
 
   bool get isFiltered =>
       searchQuery.isNotEmpty ||
       selectedPrimaryFilter != 'All' ||
       statusFilter != 'All' ||
-      paymentMethodFilter != 'All' ||
-      dateRangeFilter != 'All';
+      invoiceStatusFilter != 'All' ||
+      dateRangeFilter != 'All' ||
+      selectedCustomer != 'All' ||
+      sortOption != 'newest';
 
   SalesOverviewLoadedState copyWith({
     double? todaySales,
@@ -154,15 +154,15 @@ class SalesOverviewLoadedState extends SalesOverviewState {
     List<DailySalesExpenseData>? weeklyDailyBreakdown,
     List<InvoiceEntity>? allInvoices,
     List<InvoiceEntity>? filteredInvoices,
-    List<InvoiceEntity>? recentInvoices,
-    List<ExpenseEntity>? allExpenses,
-    List<ExpenseEntity>? filteredExpenses,
-    List<ExpenseEntity>? recentExpenses,
     String? searchQuery,
     String? selectedPrimaryFilter,
     String? statusFilter,
-    String? paymentMethodFilter,
+    String? invoiceStatusFilter,
     String? dateRangeFilter,
+    DateTime? customStartDate,
+    DateTime? customEndDate,
+    String? selectedCustomer,
+    String? sortOption,
   }) {
     return SalesOverviewLoadedState(
       todaySales: todaySales ?? this.todaySales,
@@ -178,15 +178,15 @@ class SalesOverviewLoadedState extends SalesOverviewState {
       weeklyDailyBreakdown: weeklyDailyBreakdown ?? this.weeklyDailyBreakdown,
       allInvoices: allInvoices ?? this.allInvoices,
       filteredInvoices: filteredInvoices ?? this.filteredInvoices,
-      recentInvoices: recentInvoices ?? this.recentInvoices,
-      allExpenses: allExpenses ?? this.allExpenses,
-      filteredExpenses: filteredExpenses ?? this.filteredExpenses,
-      recentExpenses: recentExpenses ?? this.recentExpenses,
       searchQuery: searchQuery ?? this.searchQuery,
       selectedPrimaryFilter: selectedPrimaryFilter ?? this.selectedPrimaryFilter,
       statusFilter: statusFilter ?? this.statusFilter,
-      paymentMethodFilter: paymentMethodFilter ?? this.paymentMethodFilter,
+      invoiceStatusFilter: invoiceStatusFilter ?? this.invoiceStatusFilter,
       dateRangeFilter: dateRangeFilter ?? this.dateRangeFilter,
+      customStartDate: customStartDate ?? this.customStartDate,
+      customEndDate: customEndDate ?? this.customEndDate,
+      selectedCustomer: selectedCustomer ?? this.selectedCustomer,
+      sortOption: sortOption ?? this.sortOption,
     );
   }
 
@@ -205,15 +205,15 @@ class SalesOverviewLoadedState extends SalesOverviewState {
         weeklyDailyBreakdown,
         allInvoices,
         filteredInvoices,
-        recentInvoices,
-        allExpenses,
-        filteredExpenses,
-        recentExpenses,
         searchQuery,
         selectedPrimaryFilter,
         statusFilter,
-        paymentMethodFilter,
+        invoiceStatusFilter,
         dateRangeFilter,
+        customStartDate,
+        customEndDate,
+        selectedCustomer,
+        sortOption,
       ];
 }
 
@@ -276,7 +276,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
           .where((i) => i.status == InvoiceStatus.unpaid || i.status == InvoiceStatus.partiallyPaid)
           .length;
 
-      // Outstanding calculation: sum of customer balances or unpaid invoice due amounts
+      // Outstanding calculation
       double totalOutstanding = customers.fold(0.0, (sum, c) => sum + c.outstandingBalance);
       if (totalOutstanding == 0.0) {
         totalOutstanding = invoices
@@ -318,15 +318,8 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       final weeklyExpenses = weeklyBreakdown.fold(0.0, (sum, d) => sum + d.expenses);
       final weeklyNet = weeklySales - weeklyExpenses;
 
-      // Sorted recent invoices
       final sortedInvoices = List<InvoiceEntity>.from(invoices)
         ..sort((a, b) => b.issueDate.compareTo(a.issueDate));
-      final recentInvoices = sortedInvoices.take(5).toList();
-
-      // Sorted recent expenses
-      final sortedExpenses = List<ExpenseEntity>.from(expenses)
-        ..sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
-      final recentExpenses = sortedExpenses.take(5).toList();
 
       emit(
         SalesOverviewLoadedState(
@@ -343,10 +336,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
           weeklyDailyBreakdown: weeklyBreakdown,
           allInvoices: sortedInvoices,
           filteredInvoices: sortedInvoices,
-          recentInvoices: recentInvoices,
-          allExpenses: sortedExpenses,
-          filteredExpenses: sortedExpenses,
-          recentExpenses: recentExpenses,
         ),
       );
     } catch (e) {
@@ -364,18 +353,17 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         query: query,
         primaryFilter: current.selectedPrimaryFilter,
         statusFilter: current.statusFilter,
-        paymentMethodFilter: current.paymentMethodFilter,
+        invoiceStatusFilter: current.invoiceStatusFilter,
         dateRangeFilter: current.dateRangeFilter,
-      );
-      final filteredExp = _filterExpenses(
-        allExpenses: current.allExpenses,
-        query: query,
+        customStartDate: current.customStartDate,
+        customEndDate: current.customEndDate,
+        customer: current.selectedCustomer,
+        sortOption: current.sortOption,
       );
 
       emit(current.copyWith(
         searchQuery: query,
         filteredInvoices: filteredInv,
-        filteredExpenses: filteredExp,
       ));
     }
   }
@@ -390,18 +378,17 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         query: current.searchQuery,
         primaryFilter: primary,
         statusFilter: current.statusFilter,
-        paymentMethodFilter: current.paymentMethodFilter,
+        invoiceStatusFilter: current.invoiceStatusFilter,
         dateRangeFilter: current.dateRangeFilter,
-      );
-      final filteredExp = _filterExpenses(
-        allExpenses: current.allExpenses,
-        query: current.searchQuery,
+        customStartDate: current.customStartDate,
+        customEndDate: current.customEndDate,
+        customer: current.selectedCustomer,
+        sortOption: current.sortOption,
       );
 
       emit(current.copyWith(
         selectedPrimaryFilter: primary,
         filteredInvoices: filteredInv,
-        filteredExpenses: filteredExp,
       ));
     }
   }
@@ -415,20 +402,23 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         query: current.searchQuery,
         primaryFilter: current.selectedPrimaryFilter,
         statusFilter: event.status,
-        paymentMethodFilter: event.paymentMethod,
+        invoiceStatusFilter: event.invoiceStatus,
         dateRangeFilter: event.dateRange,
-      );
-      final filteredExp = _filterExpenses(
-        allExpenses: current.allExpenses,
-        query: current.searchQuery,
+        customStartDate: event.customStartDate,
+        customEndDate: event.customEndDate,
+        customer: event.customer,
+        sortOption: event.sortOption,
       );
 
       emit(current.copyWith(
         statusFilter: event.status,
-        paymentMethodFilter: event.paymentMethod,
+        invoiceStatusFilter: event.invoiceStatus,
         dateRangeFilter: event.dateRange,
+        customStartDate: event.customStartDate,
+        customEndDate: event.customEndDate,
+        selectedCustomer: event.customer,
+        sortOption: event.sortOption,
         filteredInvoices: filteredInv,
-        filteredExpenses: filteredExp,
       ));
     }
   }
@@ -437,14 +427,20 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       ClearSalesOverviewFiltersEvent event, Emitter<SalesOverviewState> emit) {
     if (state is SalesOverviewLoadedState) {
       final current = state as SalesOverviewLoadedState;
+      final resetList = List<InvoiceEntity>.from(current.allInvoices)
+        ..sort((a, b) => b.issueDate.compareTo(a.issueDate));
+
       emit(current.copyWith(
         searchQuery: '',
         selectedPrimaryFilter: 'All',
         statusFilter: 'All',
-        paymentMethodFilter: 'All',
+        invoiceStatusFilter: 'All',
         dateRangeFilter: 'All',
-        filteredInvoices: current.allInvoices,
-        filteredExpenses: current.allExpenses,
+        customStartDate: null,
+        customEndDate: null,
+        selectedCustomer: 'All',
+        sortOption: 'newest',
+        filteredInvoices: resetList,
       ));
     }
   }
@@ -454,12 +450,16 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
     required String query,
     required String primaryFilter,
     required String statusFilter,
-    required String paymentMethodFilter,
+    required String invoiceStatusFilter,
     required String dateRangeFilter,
+    required DateTime? customStartDate,
+    required DateTime? customEndDate,
+    required String customer,
+    required String sortOption,
   }) {
     List<InvoiceEntity> result = List.from(allInvoices);
 
-    // Search Query
+    // Search Query (Invoice #, Customer Name, Customer Phone)
     if (query.trim().isNotEmpty) {
       final q = query.toLowerCase().trim();
       result = result.where((inv) {
@@ -470,62 +470,111 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }).toList();
     }
 
-    // Primary Chip Filter
+    // Quick Status Filter Chips (All, Paid, Partially Paid, Unpaid, Overdue, Cancelled)
     if (primaryFilter != 'All') {
+      final now = DateTime.now();
       if (primaryFilter == 'Paid') {
         result = result.where((inv) => inv.status == InvoiceStatus.paid).toList();
       } else if (primaryFilter == 'Unpaid') {
         result = result.where((inv) => inv.status == InvoiceStatus.unpaid).toList();
-      } else if (primaryFilter == 'Partial') {
+      } else if (primaryFilter == 'Partially Paid') {
         result = result.where((inv) => inv.status == InvoiceStatus.partiallyPaid).toList();
-      } else if (primaryFilter == 'Cash Sale') {
-        result = result
-            .where((inv) =>
-                inv.notes.toLowerCase().contains('cash') || inv.status == InvoiceStatus.paid)
-            .toList();
+      } else if (primaryFilter == 'Overdue') {
+        result = result.where((inv) {
+          final isUnpaidOrPartial = inv.status == InvoiceStatus.unpaid || inv.status == InvoiceStatus.partiallyPaid;
+          return isUnpaidOrPartial && inv.dueDate.isBefore(now);
+        }).toList();
+      } else if (primaryFilter == 'Cancelled') {
+        result = result.where((inv) => inv.status == InvoiceStatus.cancelled).toList();
       }
     }
 
-    // Advanced Status Filter
+    // Advanced Payment Status Filter
     if (statusFilter != 'All') {
+      final now = DateTime.now();
       if (statusFilter == 'Paid') {
         result = result.where((inv) => inv.status == InvoiceStatus.paid).toList();
       } else if (statusFilter == 'Unpaid') {
         result = result.where((inv) => inv.status == InvoiceStatus.unpaid).toList();
       } else if (statusFilter == 'Partially Paid') {
         result = result.where((inv) => inv.status == InvoiceStatus.partiallyPaid).toList();
+      } else if (statusFilter == 'Overdue') {
+        result = result.where((inv) {
+          final isUnpaidOrPartial = inv.status == InvoiceStatus.unpaid || inv.status == InvoiceStatus.partiallyPaid;
+          return isUnpaidOrPartial && inv.dueDate.isBefore(now);
+        }).toList();
       }
+    }
+
+    // Advanced Invoice Status Filter (Draft, Issued, Cancelled, Returned)
+    if (invoiceStatusFilter != 'All') {
+      if (invoiceStatusFilter == 'Draft') {
+        result = result.where((inv) => inv.status == InvoiceStatus.draft).toList();
+      } else if (invoiceStatusFilter == 'Issued') {
+        result = result.where((inv) => inv.status != InvoiceStatus.draft && inv.status != InvoiceStatus.cancelled).toList();
+      } else if (invoiceStatusFilter == 'Cancelled') {
+        result = result.where((inv) => inv.status == InvoiceStatus.cancelled).toList();
+      } else if (invoiceStatusFilter == 'Returned') {
+        result = result.where((inv) => inv.notes.toLowerCase().contains('return') || inv.invoiceNumber.toLowerCase().contains('ret')).toList();
+      }
+    }
+
+    // Advanced Customer Filter
+    if (customer != 'All' && customer.trim().isNotEmpty) {
+      final cust = customer.toLowerCase().trim();
+      result = result.where((inv) => inv.customerName.toLowerCase().contains(cust) || inv.customerId == customer).toList();
     }
 
     // Advanced Date Filter
     if (dateRangeFilter != 'All') {
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
+      final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
       if (dateRangeFilter == 'Today') {
-        result = result.where((inv) => inv.issueDate.isAfter(todayStart)).toList();
-      } else if (dateRangeFilter == 'This Week') {
+        result = result.where((inv) => inv.issueDate.isAfter(todayStart.subtract(const Duration(seconds: 1))) && inv.issueDate.isBefore(todayEnd.add(const Duration(seconds: 1)))).toList();
+      } else if (dateRangeFilter == 'Yesterday') {
+        final yestStart = todayStart.subtract(const Duration(days: 1));
+        final yestEnd = todayStart.subtract(const Duration(seconds: 1));
+        result = result.where((inv) => inv.issueDate.isAfter(yestStart) && inv.issueDate.isBefore(yestEnd)).toList();
+      } else if (dateRangeFilter == 'This week') {
         final monday = todayStart.subtract(Duration(days: now.weekday - 1));
-        result = result.where((inv) => inv.issueDate.isAfter(monday)).toList();
-      } else if (dateRangeFilter == 'This Month') {
+        result = result.where((inv) => inv.issueDate.isAfter(monday.subtract(const Duration(seconds: 1)))).toList();
+      } else if (dateRangeFilter == 'This month') {
         final monthStart = DateTime(now.year, now.month, 1);
-        result = result.where((inv) => inv.issueDate.isAfter(monthStart)).toList();
+        result = result.where((inv) => inv.issueDate.isAfter(monthStart.subtract(const Duration(seconds: 1)))).toList();
+      } else if (dateRangeFilter == 'Custom' && customStartDate != null) {
+        final start = DateTime(customStartDate.year, customStartDate.month, customStartDate.day);
+        final end = customEndDate != null
+            ? DateTime(customEndDate.year, customEndDate.month, customEndDate.day, 23, 59, 59)
+            : DateTime(customStartDate.year, customStartDate.month, customStartDate.day, 23, 59, 59);
+        result = result.where((inv) => inv.issueDate.isAfter(start.subtract(const Duration(seconds: 1))) && inv.issueDate.isBefore(end.add(const Duration(seconds: 1)))).toList();
       }
     }
 
-    return result;
-  }
+    // Sorting
+    switch (sortOption) {
+      case 'oldest':
+        result.sort((a, b) => a.issueDate.compareTo(b.issueDate));
+        break;
+      case 'amount_high':
+        result.sort((a, b) => b.grandTotal.compareTo(a.grandTotal));
+        break;
+      case 'amount_low':
+        result.sort((a, b) => a.grandTotal.compareTo(b.grandTotal));
+        break;
+      case 'name_asc':
+        result.sort((a, b) => a.customerName.toLowerCase().compareTo(b.customerName.toLowerCase()));
+        break;
+      case 'name_desc':
+        result.sort((a, b) => b.customerName.toLowerCase().compareTo(a.customerName.toLowerCase()));
+        break;
+      case 'newest':
+      default:
+        result.sort((a, b) => b.issueDate.compareTo(a.issueDate));
+        break;
+    }
 
-  List<ExpenseEntity> _filterExpenses({
-    required List<ExpenseEntity> allExpenses,
-    required String query,
-  }) {
-    if (query.trim().isEmpty) return allExpenses;
-    final q = query.toLowerCase().trim();
-    return allExpenses.where((exp) {
-      return exp.title.toLowerCase().contains(q) ||
-          exp.category.toLowerCase().contains(q) ||
-          exp.notes.toLowerCase().contains(q) ||
-          exp.amount.toString().contains(q);
-    }).toList();
+    return result;
   }
 }

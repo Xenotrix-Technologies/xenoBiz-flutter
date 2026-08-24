@@ -1,69 +1,147 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+
 import '../../../application/bloc/invoice_bloc.dart';
-import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
-import '../../../const/strings.dart';
+import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/payment_entity.dart';
 import '../../widgets/app_button.dart';
-
-
 import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
-import '../../widgets/ui_state_widgets.dart';
+import 'return_voucher_screen.dart';
 
 class InvoiceDetailsPage extends StatelessWidget {
-  const InvoiceDetailsPage({super.key});
+  final InvoiceEntity? invoice;
 
-  Future<void> _shareInvoice() async {
-    const text = 'Invoice #XB-2026-004 generated via XenoBiz Manager. Total: ₹45,000';
-    final url = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
+  const InvoiceDetailsPage({
+    super.key,
+    this.invoice,
+  });
+
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
+    return formatter.format(amount);
   }
 
-  void _showRecordPaymentDialog(BuildContext context) {
-    final amountCtrl = TextEditingController(text: '14500');
+  String _formatDate(DateTime date) {
+    return DateFormat('d MMM yyyy, h:mm a').format(date);
+  }
+
+  Future<void> _shareInvoice(BuildContext context, InvoiceEntity inv) async {
+    final text =
+        'Invoice ${inv.invoiceNumber} for ${inv.customerName}\nTotal: ${_formatCurrency(inv.grandTotal)}\nPaid: ${_formatCurrency(inv.paidAmount)}\nBalance Due: ${_formatCurrency(inv.dueAmount)}\nGenerated via XenoBiz Manager.';
+    await Share.share(text, subject: 'Invoice ${inv.invoiceNumber}');
+  }
+
+  void _showRecordPaymentDialog(BuildContext context, InvoiceEntity inv) {
+    final due = inv.dueAmount > 0 ? inv.dueAmount : inv.grandTotal;
+    final amountCtrl = TextEditingController(text: due.toStringAsFixed(0));
+    String selectedMode = 'UPI';
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(AppStrings.recordPayment),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Invoice #XB-2026-004'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Payment Amount (₹)'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setModalState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('Record Payment - ${inv.invoiceNumber}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Customer: ${inv.customerName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text('Outstanding Due: ${_formatCurrency(inv.dueAmount)}', style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Amount (₹)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text('Payment Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children: ['UPI', 'Cash', 'Card', 'Bank Transfer'].map((mode) {
+                    final isSel = selectedMode == mode;
+                    return ChoiceChip(
+                      label: Text(mode),
+                      selected: isSel,
+                      selectedColor: AppColors.primaryBlue,
+                      labelStyle: TextStyle(color: isSel ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w600),
+                      onSelected: (val) {
+                        if (val) setModalState(() => selectedMode = mode);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
-          ],
-        ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  final amount = double.tryParse(amountCtrl.text) ?? 0.0;
+                  if (amount <= 0) return;
+                  final payment = PaymentEntity(
+                    id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
+                    invoiceId: inv.id,
+                    customerId: inv.customerId,
+                    customerName: inv.customerName,
+                    amount: amount,
+                    paymentMode: selectedMode,
+                    paymentDate: DateTime.now(),
+                  );
+                  context.read<InvoiceBloc>().add(RecordPaymentSubmittedEvent(payment));
+                  Navigator.pop(dialogCtx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Recorded payment of ${_formatCurrency(amount)} for ${inv.invoiceNumber}')),
+                  );
+                },
+                child: const Text('Confirm Payment', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmCancelInvoice(BuildContext context, InvoiceEntity inv) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Cancel Invoice?'),
+        content: Text('Are you sure you want to cancel invoice ${inv.invoiceNumber}? This transaction will be marked as Cancelled.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('No, Keep')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
             onPressed: () {
-              final amount = double.tryParse(amountCtrl.text) ?? 1000.0;
-              final payment = PaymentEntity(
-                id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
-                invoiceId: 'inv_101',
-                customerId: 'cust_101',
-                customerName: 'Apex Technologies Pvt Ltd',
-                amount: amount,
-                paymentMode: 'UPI',
-                paymentDate: DateTime.now(),
+              final cancelledInv = inv.copyWith(status: InvoiceStatus.cancelled);
+              context.read<InvoiceBloc>().add(UpdateInvoiceSubmittedEvent(cancelledInv));
+              Navigator.pop(dialogCtx);
+              context.pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Invoice ${inv.invoiceNumber} has been cancelled.')),
               );
-              context.read<InvoiceBloc>().add(RecordPaymentSubmittedEvent(payment));
-              Navigator.pop(ctx);
             },
-            child: const Text('Confirm Payment'),
+            child: const Text('Yes, Cancel Invoice'),
           ),
         ],
       ),
@@ -72,29 +150,134 @@ class InvoiceDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Fallback if accessed without extra invoice parameter
+    final inv = invoice ??
+        InvoiceEntity(
+          id: 'inv_demo',
+          invoiceNumber: 'INV-1042',
+          customerId: 'cust_101',
+          customerName: 'Rahul Traders',
+          customerPhone: '+91 98765 43210',
+          items: const [
+            InvoiceItemEntity(
+              productId: 'prod_1',
+              productName: 'Wireless POS Terminal',
+              quantity: 2,
+              unitPrice: 1200.0,
+              taxPercentage: 18.0,
+            ),
+          ],
+          subtotal: 2400.0,
+          taxTotal: 432.0,
+          grandTotal: 2832.0,
+          paidAmount: 2832.0,
+          status: InvoiceStatus.paid,
+          issueDate: DateTime.now().subtract(const Duration(hours: 4)),
+          dueDate: DateTime.now(),
+        );
+
+    final now = DateTime.now();
+    final isOverdue = (inv.status == InvoiceStatus.unpaid || inv.status == InvoiceStatus.partiallyPaid) &&
+        inv.dueDate.isBefore(now);
+    final isReturned = inv.notes.toLowerCase().contains('return') || inv.invoiceNumber.toLowerCase().contains('ret');
+
+    Widget statusWidget;
+    if (inv.status == InvoiceStatus.cancelled) {
+      statusWidget = StatusChip.cancelled();
+    } else if (isReturned) {
+      statusWidget = StatusChip.returned();
+    } else if (inv.status == InvoiceStatus.paid) {
+      statusWidget = StatusChip.paid();
+    } else if (isOverdue) {
+      statusWidget = StatusChip.overdue();
+    } else if (inv.status == InvoiceStatus.partiallyPaid) {
+      statusWidget = StatusChip.partiallyPaid();
+    } else {
+      statusWidget = StatusChip.unpaid();
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(AppStrings.invoiceDetails),
-        backgroundColor: AppColors.primary,
+        title: Text(
+          inv.invoiceNumber,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: _shareInvoice,
+            icon: const Icon(Icons.share_outlined),
+            tooltip: 'Share',
+            onPressed: () => _shareInvoice(context, inv),
+          ),
+          IconButton(
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Print / Result',
+            onPressed: () {
+              context.push(
+                RouteNames.invoiceResult,
+                extra: {
+                  'invoice': inv,
+                  'paymentMethod': 'Cash',
+                  'amountPaid': inv.paidAmount,
+                },
+              );
+            },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (val) {
+              if (val == 'edit') {
+                context.push(
+                  RouteNames.createInvoice,
+                  extra: {
+                    'invoiceType': inv.type,
+                    'invoiceToEdit': inv,
+                  },
+                );
+              } else if (val == 'return') {
+                context.push(
+                  RouteNames.createReturn,
+                  extra: {'returnType': ReturnType.salesReturn},
+                );
+              } else if (val == 'cancel') {
+                _confirmCancelInvoice(context, inv);
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit Invoice')],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'return',
+                child: Row(
+                  children: [Icon(Icons.assignment_return_outlined, size: 18), SizedBox(width: 8), Text('Create Sales Return')],
+                ),
+              ),
+              if (inv.status != InvoiceStatus.cancelled)
+                const PopupMenuItem(
+                  value: 'cancel',
+                  child: Row(
+                    children: [Icon(Icons.cancel_outlined, size: 18, color: AppColors.danger), SizedBox(width: 8), Text('Cancel Invoice', style: TextStyle(color: AppColors.danger))],
+                  ),
+                ),
+            ],
           ),
         ],
       ),
-      body: BlocBuilder<InvoiceBloc, InvoiceState>(
-        builder: (context, state) {
-          if (state is InvoiceLoadingState) {
-            return const InvoiceDetailsSkeleton();
-          }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Status & Invoice Overview Header Card
             AppCard(
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -103,94 +286,268 @@ class InvoiceDetailsPage extends StatelessWidget {
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('INVOICE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.secondary)),
-                          SizedBox(height: 2),
-                          Text('#XB-2026-004', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                        children: [
+                          Text(
+                            inv.type == InvoiceType.purchase ? 'PURCHASE VOUCHER' : 'SALES INVOICE',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            inv.invoiceNumber,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
                         ],
                       ),
-                      StatusChip.partiallyPaid(),
+                      statusWidget,
                     ],
                   ),
                   const Divider(height: 24),
-                  const Text('Customer: Apex Technologies Pvt Ltd', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                  const Text('Phone: +91 98470 11223', style: TextStyle(fontSize: 13, color: AppColors.outline)),
-                  const SizedBox(height: 16),
-                  const _ItemRow('Wireless Smart POS Machine v2 (5x)', '₹42,500'),
-                  Builder(builder: (context) {
-                    final state = context.watch<TaxSettingsBloc>().state;
-                    final isGstEnabled = state is TaxSettingsLoadedState ? state.settings.isGstEnabled : true;
-                    if (!isGstEnabled) return const SizedBox.shrink();
-                    return const _ItemRow('GST Tax (18%)', '₹7,650');
-                  }),
-                  const _ItemRow('Special Discount', '-₹5,150'),
-                  const Divider(height: 20),
-                  const Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Grand Total', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                      Text('₹45,000', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Balance Due', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.error)),
-                      Text('₹14,500', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.error)),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Issue Date', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          const SizedBox(height: 2),
+                          Text(_formatDate(inv.issueDate), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('Due Date', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          const SizedBox(height: 2),
+                          Text(
+                            DateFormat('d MMM yyyy').format(inv.dueDate),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isOverdue ? AppColors.danger : AppColors.darkBlueText,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Customer Info Card
+            AppCard(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.person_outline, color: AppColors.primaryBlue, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          inv.customerName.isNotEmpty ? inv.customerName : 'General Customer',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                        ),
+                        if (inv.customerPhone.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(inv.customerPhone, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, color: AppColors.secondaryText),
+                    onPressed: () {
+                      final customer = CustomerEntity(
+                        id: inv.customerId.isNotEmpty ? inv.customerId : 'cust_gen',
+                        name: inv.customerName,
+                        phone: inv.customerPhone,
+                        email: '',
+                        address: '',
+                        outstandingBalance: inv.dueAmount,
+                        createdAt: inv.issueDate,
+                      );
+                      context.push(RouteNames.customerDetails, extra: customer);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Itemized Invoice Items List
+            AppCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Invoice Items',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                  ),
+                  const SizedBox(height: 14),
+                  if (inv.items.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text('No itemized details recorded for this invoice.', style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
+                    )
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: inv.items.length,
+                      separatorBuilder: (_, __) => const Divider(height: 18),
+                      itemBuilder: (ctx, index) {
+                        final item = inv.items[index];
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.productName,
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${item.quantity} x ${_formatCurrency(item.unitPrice)}${item.taxPercentage > 0 ? ' (+${item.taxPercentage.toStringAsFixed(0)}% Tax)' : ''}',
+                                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              _formatCurrency(item.total),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  const Divider(height: 24),
+
+                  // Financial Breakdown
+                  _buildSummaryLine('Subtotal', _formatCurrency(inv.subtotal)),
+                  if (inv.taxTotal > 0) ...[
+                    const SizedBox(height: 6),
+                    _buildSummaryLine('Tax / GST', _formatCurrency(inv.taxTotal)),
+                  ],
+                  if (inv.discountTotal > 0) ...[
+                    const SizedBox(height: 6),
+                    _buildSummaryLine('Discount', '-${_formatCurrency(inv.discountTotal)}', isDiscount: true),
+                  ],
+                  const Divider(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total Amount', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
+                      Text(
+                        _formatCurrency(inv.grandTotal),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Paid Amount', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                      Text(_formatCurrency(inv.paidAmount), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.success)),
+                    ],
+                  ),
+                  if (inv.dueAmount > 0 && inv.status != InvoiceStatus.paid && inv.status != InvoiceStatus.cancelled) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Outstanding Due', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                        Text(_formatCurrency(inv.dueAmount), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.danger)),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (inv.notes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              AppCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Notes / Terms', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                    const SizedBox(height: 4),
+                    Text(inv.notes, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+
+            // Bottom Action Buttons
             Row(
               children: [
                 Expanded(
                   child: AppButton(
                     text: 'Share WhatsApp',
-                    icon: Icons.chat,
+                    icon: Icons.chat_bubble_outline,
                     variant: AppButtonVariant.secondary,
-                    onPressed: () {
-                      context.push(RouteNames.whatsappTemplates);
-                    },
+                    onPressed: () => _shareInvoice(context, inv),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: AppButton(
-                    text: 'Record Payment',
-                    icon: Icons.payments,
-                    onPressed: () => _showRecordPaymentDialog(context),
+                if (inv.dueAmount > 0 && inv.status != InvoiceStatus.paid && inv.status != InvoiceStatus.cancelled) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AppButton(
+                      text: 'Record Payment',
+                      icon: Icons.payments_outlined,
+                      onPressed: () => _showRecordPaymentDialog(context, inv),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
+            const SizedBox(height: 20),
           ],
         ),
-      );
-    },
-  ),
-);
-  }
-}
-
-class _ItemRow extends StatelessWidget {
-  final String title;
-  final String price;
-  const _ItemRow(this.title, this.price);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 14, color: AppColors.onSurface)),
-          Text(price, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
-        ],
       ),
+    );
+  }
+
+  Widget _buildSummaryLine(String title, String value, {bool isDiscount = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isDiscount ? AppColors.success : AppColors.darkBlueText,
+          ),
+        ),
+      ],
     );
   }
 }
