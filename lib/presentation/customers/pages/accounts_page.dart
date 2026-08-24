@@ -657,8 +657,9 @@ class _AccountsPageState extends State<AccountsPage> {
                                           : AppColors.darkBlueText,
                                       fontWeight: FontWeight.w700),
                                   onSelected: (val) {
-                                    if (val)
+                                    if (val) {
                                       setSheetState(() => tempFilter = st);
+                                    }
                                   },
                                 );
                               }).toList(),
@@ -682,8 +683,9 @@ class _AccountsPageState extends State<AccountsPage> {
                                           : AppColors.darkBlueText,
                                       fontWeight: FontWeight.w700),
                                   onSelected: (val) {
-                                    if (val)
+                                    if (val) {
                                       setSheetState(() => tempSort = sortOpt);
+                                    }
                                   },
                                 );
                               }).toList(),

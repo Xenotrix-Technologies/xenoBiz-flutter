@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
@@ -31,37 +28,25 @@ class CustomerNoteItem {
   });
 }
 
-class _RawTransaction {
+class TransactionItem {
+  final String id;
+  final String title;
+  final String refNumber;
   final DateTime date;
-  final String type;
-  final String ref;
-  final double debit;
-  final double credit;
+  final double amount;
+  final String status;
+  final String type; // 'INVOICE', 'PAYMENT', 'RETURN'
+  final dynamic originalObject;
 
-  _RawTransaction({
+  TransactionItem({
+    required this.id,
+    required this.title,
+    required this.refNumber,
     required this.date,
+    required this.amount,
+    required this.status,
     required this.type,
-    required this.ref,
-    required this.debit,
-    required this.credit,
-  });
-}
-
-class _PassbookRow {
-  final DateTime date;
-  final String type;
-  final String ref;
-  final double debit;
-  final double credit;
-  final double runningBalance;
-
-  _PassbookRow({
-    required this.date,
-    required this.type,
-    required this.ref,
-    required this.debit,
-    required this.credit,
-    required this.runningBalance,
+    this.originalObject,
   });
 }
 
@@ -74,24 +59,20 @@ class CustomerDetailsPage extends StatefulWidget {
   State<CustomerDetailsPage> createState() => _CustomerDetailsPageState();
 }
 
-class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTickerProviderStateMixin {
+class _CustomerDetailsPageState extends State<CustomerDetailsPage>
+    with SingleTickerProviderStateMixin {
   late CustomerEntity _customer;
   late TabController _tabController;
 
   List<InvoiceEntity> _customerInvoices = [];
   List<CustomerTimelineEvent> _customerTimeline = [];
-  final List<CustomerNoteItem> _customerNotes = [
-    CustomerNoteItem(
-      id: '1',
-      content: 'Requested 30-day credit terms on bulk purchases.',
-      timestamp: DateTime.now().subtract(const Duration(days: 10)),
-    ),
-    CustomerNoteItem(
-      id: '2',
-      content: 'Prefers digital invoices over WhatsApp.',
-      timestamp: DateTime.now().subtract(const Duration(days: 4)),
-    ),
-  ];
+  List<TransactionItem> _allTransactions = [];
+  List<TransactionItem> _filteredTransactions = [];
+
+  String _txSearchQuery = '';
+  String _selectedTxFilter = 'All'; // 'All', 'Invoices', 'Payments', 'Returns'
+
+  final List<CustomerNoteItem> _customerNotes = [];
 
   bool _isLoading = true;
 
@@ -102,12 +83,13 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
 
     _customer = widget.customer ??
         CustomerEntity(
-          id: 'CUST-001',
-          name: 'Apex Technologies Pvt Ltd',
-          phone: '+91 98470 11223',
-          email: 'finance@apextech.in',
-          address: 'Kochi, Kerala',
-          outstandingBalance: 2550,
+          id: 'CUST-323450',
+          name: 'Rahul Traders',
+          phone: '98450 11223',
+          email: 'rahul@traders.com',
+          address: 'MG Road, Thrissur',
+          outstandingBalance: 7200,
+          totalPurchases: 85400,
           createdAt: DateTime.now().subtract(const Duration(days: 30)),
         );
 
@@ -128,22 +110,116 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
   Future<void> _openWhatsApp(String phone) async {
     final clean = phone.replaceAll(RegExp(r'[^\d+]'), '');
     final uri = Uri.parse('https://wa.me/$clean');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _loadCustomerData() async {
     try {
       final invRepo = getIt<InvoiceRepository>();
       final allInvoices = await invRepo.getInvoices();
-      final filteredInvoices = allInvoices.where((i) => i.customerId == _customer.id || i.customerName == _customer.name).toList();
+      final filteredInvoices = allInvoices
+          .where((i) =>
+              i.customerId == _customer.id || i.customerName == _customer.name)
+          .toList();
       filteredInvoices.sort((a, b) => b.issueDate.compareTo(a.issueDate));
 
-      final timeline = await getIt<BillingCustomerRepository>().getCustomerTimeline(_customer.id);
+      final timeline = await getIt<BillingCustomerRepository>()
+          .getCustomerTimeline(_customer.id);
+
+      if (!timeline.any((t) =>
+          t.eventType == 'CREATED' ||
+          t.title.toLowerCase().contains('created'))) {
+        timeline.add(
+          CustomerTimelineEvent(
+            id: 'CREATED-${_customer.id}',
+            customerId: _customer.id,
+            eventType: 'CREATED',
+            title: 'Customer Created',
+            description: 'Account created for ${_customer.name}',
+            timestamp: _customer.createdAt,
+          ),
+        );
+      }
+      timeline.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      final List<TransactionItem> txs = [];
+
+      for (var inv in filteredInvoices) {
+        String statusStr = 'Pending';
+        if (inv.status == InvoiceStatus.paid) {
+          statusStr = 'Paid';
+        } else if (inv.status == InvoiceStatus.partiallyPaid) {
+          statusStr = 'Partially Paid';
+        } else if (inv.dueDate.isBefore(DateTime.now()) &&
+            inv.status != InvoiceStatus.paid) {
+          statusStr = 'Overdue';
+        }
+
+        txs.add(TransactionItem(
+          id: inv.id,
+          title: 'Invoice #${inv.invoiceNumber}',
+          refNumber: inv.invoiceNumber,
+          date: inv.issueDate,
+          amount: inv.grandTotal,
+          status: statusStr,
+          type: 'INVOICE',
+          originalObject: inv,
+        ));
+
+        if (inv.paidAmount > 0) {
+          txs.add(TransactionItem(
+            id: 'PAY-${inv.id}',
+            title: 'Payment #PAY-${inv.invoiceNumber}',
+            refNumber: 'PAY-${inv.invoiceNumber}',
+            date: inv.issueDate,
+            amount: inv.paidAmount,
+            status: 'Paid',
+            type: 'PAYMENT',
+            originalObject: inv,
+          ));
+        }
+      }
+
+      for (var t in timeline) {
+        if (t.eventType == 'PAYMENT' &&
+            !filteredInvoices
+                .any((i) => t.description.contains(i.invoiceNumber))) {
+          final match = RegExp(r'₹?\s*(\d+)').firstMatch(t.description);
+          final amt = match != null
+              ? double.tryParse(match.group(1) ?? '0') ?? 0.0
+              : 0.0;
+          txs.add(TransactionItem(
+            id: t.id,
+            title: 'Payment #${t.title}',
+            refNumber: t.title,
+            date: t.timestamp,
+            amount: amt > 0 ? amt : 500.0,
+            status: 'Paid',
+            type: 'PAYMENT',
+          ));
+        } else if (t.eventType == 'RETURN') {
+          txs.add(TransactionItem(
+            id: t.id,
+            title: 'Sales Return #${t.title}',
+            refNumber: t.title,
+            date: t.timestamp,
+            amount: 0.0,
+            status: 'Completed',
+            type: 'RETURN',
+          ));
+        }
+      }
+
+      txs.sort((a, b) => b.date.compareTo(a.date));
 
       if (mounted) {
         setState(() {
           _customerInvoices = filteredInvoices;
           _customerTimeline = timeline;
+          _allTransactions = txs;
+          _applyTxFilters();
           _isLoading = false;
         });
       }
@@ -152,137 +228,89 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     }
   }
 
-  void _showAddNoteDialog() {
-    final noteController = TextEditingController();
+  void _applyTxFilters() {
+    var list = _allTransactions;
+
+    if (_selectedTxFilter == 'Invoices') {
+      list = list.where((t) => t.type == 'INVOICE').toList();
+    } else if (_selectedTxFilter == 'Payments') {
+      list = list.where((t) => t.type == 'PAYMENT').toList();
+    } else if (_selectedTxFilter == 'Returns') {
+      list = list.where((t) => t.type == 'RETURN').toList();
+    }
+
+    if (_txSearchQuery.trim().isNotEmpty) {
+      final q = _txSearchQuery.trim().toLowerCase();
+      list = list
+          .where((t) =>
+              t.title.toLowerCase().contains(q) ||
+              t.refNumber.toLowerCase().contains(q))
+          .toList();
+    }
+
+    _filteredTransactions = list;
+  }
+
+  void _showAddNoteDialog({CustomerNoteItem? noteToEdit}) {
+    final noteController = TextEditingController(
+        text: noteToEdit != null ? noteToEdit.content : '');
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Add Customer Note', style: TextStyle(fontWeight: FontWeight.w800)),
+          title: Text(
+              noteToEdit != null ? 'Edit Customer Note' : 'Add Customer Note',
+              style: const TextStyle(fontWeight: FontWeight.w800)),
           content: TextField(
             controller: noteController,
             maxLines: 3,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Enter note details (e.g. credit terms, delivery note)...',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              hintText:
+                  'Enter note details (e.g. credit terms, preferred delivery time)...',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white),
               onPressed: () {
                 final text = noteController.text.trim();
                 if (text.isNotEmpty) {
                   setState(() {
-                    _customerNotes.insert(
-                      0,
-                      CustomerNoteItem(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        content: text,
-                        timestamp: DateTime.now(),
-                      ),
-                    );
+                    if (noteToEdit != null) {
+                      final idx = _customerNotes
+                          .indexWhere((n) => n.id == noteToEdit.id);
+                      if (idx != -1) {
+                        _customerNotes[idx] = CustomerNoteItem(
+                          id: noteToEdit.id,
+                          content: text,
+                          timestamp: DateTime.now(),
+                        );
+                      }
+                    } else {
+                      _customerNotes.insert(
+                        0,
+                        CustomerNoteItem(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          content: text,
+                          timestamp: DateTime.now(),
+                        ),
+                      );
+                    }
                   });
                   Navigator.pop(ctx);
                 }
               },
-              child: const Text('Save Note'),
+              child: Text(noteToEdit != null ? 'Update Note' : 'Save Note'),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  void _showReceivePaymentDialog(BuildContext context) {
-    final amountCtrl = TextEditingController(text: _customer.outstandingBalance > 0 ? _customer.outstandingBalance.toInt().toString() : '');
-    final noteCtrl = TextEditingController();
-    String selectedMethod = 'Cash';
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (dialogCtx, setDialogState) {
-            return AlertDialog(
-              title: const Text('Receive Payment', style: TextStyle(fontWeight: FontWeight.w800)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Customer Outstanding: ${_formatCurrency(_customer.outstandingBalance)}',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.danger),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: amountCtrl,
-                      keyboardType: TextInputType.number,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Payment Amount (₹) *',
-                        prefixText: '₹ ',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedMethod,
-                      decoration: InputDecoration(
-                        labelText: 'Payment Method',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      items: ['Cash', 'GPay/UPI', 'Card', 'Other']
-                          .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) setDialogState(() => selectedMethod = val);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: noteCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Note / Reference',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
-                  onPressed: () {
-                    final amt = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
-                    if (amt > 0) {
-                      context.read<AccountsBloc>().add(
-                            RecordCustomerPaymentEvent(
-                              customerId: _customer.id,
-                              amount: amt,
-                              paymentMethod: selectedMethod,
-                              note: noteCtrl.text.trim(),
-                              date: DateTime.now(),
-                            ),
-                          );
-
-                      setState(() {
-                        final newDue = (_customer.outstandingBalance - amt).clamp(0.0, double.infinity);
-                        _customer = _customer.copyWith(outstandingBalance: newDue);
-                      });
-
-                      _loadCustomerData();
-                      Navigator.pop(dialogCtx);
-                    }
-                  },
-                  child: const Text('Record Payment'),
-                ),
-              ],
-            );
-          },
         );
       },
     );
@@ -332,8 +360,10 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
         }
       }
 
-      final totalPurchases = _customerInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
-      final totalPaid = _customerInvoices.fold(0.0, (sum, i) => sum + i.paidAmount);
+      final totalPurchases =
+          _customerInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
+      final totalPaid =
+          _customerInvoices.fold(0.0, (sum, i) => sum + i.paidAmount);
 
       await PdfStatementService.shareCustomerStatement(
         business: business,
@@ -346,7 +376,9 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate PDF statement: $e'), backgroundColor: AppColors.danger),
+          SnackBar(
+              content: Text('Failed to generate PDF statement: $e'),
+              backgroundColor: AppColors.danger),
         );
       }
     }
@@ -356,76 +388,47 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     return '₹${amount.toStringAsFixed(0)}';
   }
 
-  List<_PassbookRow> _calculatePassbookRows() {
-    final List<_RawTransaction> raw = [];
-
-    for (var inv in _customerInvoices) {
-      raw.add(_RawTransaction(
-        date: inv.issueDate,
-        type: 'Sale',
-        ref: '#${inv.invoiceNumber}',
-        debit: inv.grandTotal,
-        credit: 0,
-      ));
-
-      if (inv.paidAmount > 0) {
-        raw.add(_RawTransaction(
-          date: inv.issueDate.add(const Duration(seconds: 1)),
-          type: 'Payment',
-          ref: 'Rec #${inv.invoiceNumber}',
-          debit: 0,
-          credit: inv.paidAmount,
-        ));
-      }
+  String _getInitials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'RT';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
+    return trimmed.substring(0, trimmed.length >= 2 ? 2 : 1).toUpperCase();
+  }
 
-    for (var t in _customerTimeline) {
-      if (t.eventType == 'PAYMENT' && !_customerInvoices.any((i) => t.description.contains(i.invoiceNumber))) {
-        raw.add(_RawTransaction(
-          date: t.timestamp,
-          type: 'Receipt',
-          ref: t.title,
-          debit: 0,
-          credit: double.tryParse(RegExp(r'\d+').firstMatch(t.description)?.group(0) ?? '') ?? 0,
-        ));
-      }
+  String _getTimeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays == 0) {
+      return 'Today';
+    } else if (diff.inDays == 1) {
+      return 'Yesterday';
+    } else {
+      return '${diff.inDays} days ago';
     }
-
-    // Sort by date ascending (creation date order)
-    raw.sort((a, b) => a.date.compareTo(b.date));
-
-    double running = 0;
-    final List<_PassbookRow> result = [];
-    for (var item in raw) {
-      running += (item.debit - item.credit);
-      result.add(_PassbookRow(
-        date: item.date,
-        type: item.type,
-        ref: item.ref,
-        debit: item.debit,
-        credit: item.credit,
-        runningBalance: running,
-      ));
-    }
-
-    return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    final totalPurchases = _customer.totalPurchases > 0 ? _customer.totalPurchases : _customerInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
-    final totalPaid = _customerInvoices.fold(0.0, (sum, i) => sum + i.paidAmount);
+    final totalPurchases = _customer.totalPurchases > 0
+        ? _customer.totalPurchases
+        : _customerInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
+    final totalPaid =
+        _customerInvoices.fold(0.0, (sum, i) => sum + i.paidAmount);
     final invoiceCount = _customerInvoices.length;
-    final avgInvoiceValue = invoiceCount > 0 ? (totalPurchases / invoiceCount) : 0.0;
-    final lastPurchaseDate = _customerInvoices.isNotEmpty ? DateFormat('dd MMM yyyy').format(_customerInvoices.first.issueDate) : 'No purchases';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Customer Profile'),
+        title: const Text(
+          'Customer Profile',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -434,7 +437,8 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
           ),
           IconButton(
             icon: const Icon(Icons.edit_outlined),
-            onPressed: () => context.push(RouteNames.createMaster, extra: _customer),
+            onPressed: () =>
+                context.push(RouteNames.createMaster, extra: _customer),
             tooltip: 'Edit Profile',
           ),
         ],
@@ -444,174 +448,196 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
           : NestedScrollView(
               headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 1. CUSTOMER INFO CARD
-                        AppCard(
+                        // 1. HEADER AVATAR, NAME, DETAILS, ACTIONS
+                        Center(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: AppColors.deepNavy,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _getInitials(_customer.name),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 18,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _customer.name,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.darkBlueText,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${_customer.phone.isNotEmpty ? _customer.phone : "No Phone"}${_customer.email.isNotEmpty ? " · ${_customer.email}" : ""}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.secondaryText,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Quick Action Buttons Row
                               Row(
                                 children: [
-                                  CircleAvatar(
-                                    radius: 26,
-                                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                                    child: Text(
-                                      _customer.name.isNotEmpty ? _customer.name.substring(0, 1).toUpperCase() : 'C',
-                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.darkBlueText,
+                                        side: const BorderSide(
+                                            color: Color(0xFFE5E7EB),
+                                            width: 1.5),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: () =>
+                                          _makePhoneCall(_customer.phone),
+                                      child: const Text('Call',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13)),
                                     ),
                                   ),
-                                  const SizedBox(width: 14),
+                                  const SizedBox(width: 8),
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _customer.name,
-                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text('Customer ID: ${_customer.id}', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                                      ],
+                                    child: OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.darkBlueText,
+                                        side: const BorderSide(
+                                            color: Color(0xFFE5E7EB),
+                                            width: 1.5),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: () =>
+                                          _openWhatsApp(_customer.phone),
+                                      child: const Text('WhatsApp',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.deepNavy,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: () => context.push(
+                                          RouteNames.createMaster,
+                                          extra: _customer),
+                                      child: const Text('Edit',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13)),
                                     ),
                                   ),
                                 ],
                               ),
-                              const Divider(height: 20),
-
-                              if (_customer.phone.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.phone_outlined, size: 16, color: AppColors.secondaryText),
-                                      const SizedBox(width: 8),
-                                      Text(_customer.phone, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                              if (_customer.email.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.email_outlined, size: 16, color: AppColors.secondaryText),
-                                      const SizedBox(width: 8),
-                                      Text(_customer.email, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                              if (_customer.address.isNotEmpty)
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on_outlined, size: 16, color: AppColors.secondaryText),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: Text(_customer.address, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-                                  ],
-                                ),
-                              const SizedBox(height: 14),
-
-                              // Quick Communication Buttons
-                              if (_customer.phone.isNotEmpty)
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primaryBlue,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        ),
-                                        onPressed: () => _makePhoneCall(_customer.phone),
-                                        icon: const Icon(Icons.phone_rounded, size: 16),
-                                        label: const Text('Call', style: TextStyle(fontWeight: FontWeight.w800)),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF25D366),
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        ),
-                                        onPressed: () => _openWhatsApp(_customer.phone),
-                                        icon: const Icon(Icons.chat_bubble_rounded, size: 16),
-                                        label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w800)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
-
-                        // 2. BUSINESS SUMMARY GRID
-                        const Text(
-                          'Business Summary',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(child: _SummaryCard('Total Purchases', _formatCurrency(totalPurchases), AppColors.darkBlueText)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _SummaryCard('Total Paid', _formatCurrency(totalPaid), AppColors.success)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _SummaryCard('Outstanding', _formatCurrency(_customer.outstandingBalance), _customer.outstandingBalance > 0 ? AppColors.danger : AppColors.success)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(child: _SummaryCard('Invoices Count', '$invoiceCount', AppColors.darkBlueText)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _SummaryCard('Avg Invoice', _formatCurrency(avgInvoiceValue), AppColors.primaryBlue)),
-                            const SizedBox(width: 8),
-                            Expanded(child: _SummaryCard('Last Purchase', lastPurchaseDate, AppColors.secondaryText)),
-                          ],
-                        ),
                         const SizedBox(height: 14),
 
-                        // Receive Payment Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 46,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.success,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        // 2. CUSTOMER SUMMARY CARDS (4 Compact Metrics)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _MetricCard(
+                                value: _formatCurrency(totalPurchases),
+                                label: 'PURCHASES',
+                                isHighlighted: false,
+                              ),
                             ),
-                            onPressed: () => _showReceivePaymentDialog(context),
-                            icon: const Icon(Icons.add_circle_outline_rounded),
-                            label: const Text('+ Record Customer Payment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-                          ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _MetricCard(
+                                value: _formatCurrency(totalPaid),
+                                label: 'PAID',
+                                isHighlighted: false,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _MetricCard(
+                                value: _formatCurrency(
+                                    _customer.outstandingBalance),
+                                label: 'OUTSTANDING',
+                                isHighlighted: _customer.outstandingBalance > 0,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _MetricCard(
+                                value: '$invoiceCount',
+                                label: 'INVOICES',
+                                isHighlighted: false,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
                 ),
+
+                // 3. TABS HEADER (Overview | Transactions | Notes | Timeline)
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: _SliverTabBarDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      labelColor: AppColors.primaryBlue,
-                      unselectedLabelColor: AppColors.secondaryText,
-                      indicatorColor: AppColors.primaryBlue,
-                      indicatorWeight: 3,
-                      tabs: const [
-                        Tab(text: 'Invoices'),
-                        Tab(text: 'Notes'),
-                        Tab(text: 'Book'),
-                        Tab(text: 'Timeline'),
-                      ],
+                    Container(
+                      color: Colors.white,
+                      child: TabBar(
+                        controller: _tabController,
+                        labelColor: AppColors.primaryBlue,
+                        unselectedLabelColor: AppColors.secondaryText,
+                        indicatorColor: AppColors.primaryBlue,
+                        indicatorWeight: 3,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        labelStyle: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w800),
+                        unselectedLabelStyle: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w500),
+                        tabs: const [
+                          Tab(text: 'Overview'),
+                          Tab(text: 'Transactions'),
+                          Tab(text: 'Notes'),
+                          Tab(text: 'Timeline'),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -619,14 +645,14 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
               body: TabBarView(
                 controller: _tabController,
                 children: [
-                  // TAB 1: INVOICES
-                  _buildInvoicesTab(),
+                  // TAB 1: OVERVIEW
+                  _buildOverviewTab(),
 
-                  // TAB 2: NOTES
+                  // TAB 2: TRANSACTIONS
+                  _buildTransactionsTab(),
+
+                  // TAB 3: NOTES
                   _buildNotesTab(),
-
-                  // TAB 3: BOOK (Passbook Table View)
-                  _buildBookTab(),
 
                   // TAB 4: TIMELINE
                   _buildTimelineTab(),
@@ -636,53 +662,305 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     );
   }
 
-  Widget _buildInvoicesTab() {
-    if (_customerInvoices.isEmpty) {
-      return const EmptyState(
-        title: 'No Invoices Recorded',
-        message: 'Sales invoices generated for this customer will appear here.',
-        icon: Icons.receipt_long_outlined,
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _customerInvoices.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (ctx, idx) {
-        final inv = _customerInvoices[idx];
-        return AppCard(
-          onTap: () {
-            context.push(
-              RouteNames.createInvoice,
-              extra: {'invoiceType': inv.type, 'invoiceToEdit': inv},
-            );
-          },
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('#${inv.invoiceNumber}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(DateFormat('MMM dd, yyyy').format(inv.issueDate), style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+  // ================= TAB 1: OVERVIEW =================
+  Widget _buildOverviewTab() {
+    final totalPurchases = _customer.totalPurchases > 0
+        ? _customer.totalPurchases
+        : _customerInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
+    final totalPaid =
+        _customerInvoices.fold(0.0, (sum, i) => sum + i.paidAmount);
+    final invoiceCount = _customerInvoices.length;
+    final avgInvoiceValue =
+        invoiceCount > 0 ? (totalPurchases / invoiceCount) : 0.0;
+    final lastPurchaseDate = _customerInvoices.isNotEmpty
+        ? _getTimeAgo(_customerInvoices.first.issueDate)
+        : 'No purchases';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Customer Information Card
+          AppCard(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Customer Information',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkBlueText),
+                ),
+                const SizedBox(height: 10),
+                if (_customer.phone.isNotEmpty) ...[
+                  _InfoRow('Phone', _customer.phone),
+                  const SizedBox(height: 6),
                 ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(_formatCurrency(inv.grandTotal), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  if (inv.status == InvoiceStatus.paid) StatusChip.paid() else if (inv.status == InvoiceStatus.partiallyPaid) StatusChip.partiallyPaid() else StatusChip.unpaid(),
+                if (_customer.email.isNotEmpty) ...[
+                  _InfoRow('Email', _customer.email),
+                  const SizedBox(height: 6),
                 ],
-              ),
-            ],
+                if (_customer.address.isNotEmpty) ...[
+                  _InfoRow('Address', _customer.address),
+                  const SizedBox(height: 6),
+                ],
+                _InfoRow(
+                    'GSTIN',
+                    _customer.id.startsWith('32')
+                        ? _customer.id
+                        : '32AAAAA0000A1Z5'),
+                const SizedBox(height: 6),
+                _InfoRow('Type', 'Business'),
+              ],
+            ),
           ),
-        );
-      },
+          const SizedBox(height: 10),
+
+          // Account Summary Card
+          AppCard(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Account Summary',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkBlueText),
+                ),
+                const SizedBox(height: 10),
+                _InfoRow('Last purchase', lastPurchaseDate),
+                const SizedBox(height: 6),
+                _InfoRow('Average invoice', _formatCurrency(avgInvoiceValue)),
+                const SizedBox(height: 6),
+                _InfoRow('Total Sales', _formatCurrency(totalPurchases)),
+                const SizedBox(height: 6),
+                _InfoRow('Total Paid', _formatCurrency(totalPaid)),
+                const SizedBox(height: 6),
+                _InfoRow(
+                  'Outstanding',
+                  _formatCurrency(_customer.outstandingBalance),
+                  valueColor: _customer.outstandingBalance > 0
+                      ? const Color(0xFFB45309)
+                      : AppColors.success,
+                  isBold: true,
+                ),
+                const SizedBox(height: 6),
+                _InfoRow('Invoices Count', '$invoiceCount'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
     );
   }
 
+  // ================= TAB 2: TRANSACTIONS =================
+  Widget _buildTransactionsTab() {
+    return Column(
+      children: [
+        // Filter Chips & Search Bar
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            children: [
+              // Cool Modern Search Bar
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  onChanged: (val) {
+                    setState(() {
+                      _txSearchQuery = val;
+                      _applyTxFilters();
+                    });
+                  },
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.darkBlueText),
+                  decoration: InputDecoration(
+                    hintText: 'Search by reference # or status...',
+                    hintStyle: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w400),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.search_rounded,
+                            color: AppColors.primaryBlue, size: 18),
+                      ),
+                    ),
+                    suffixIcon: _txSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                size: 18, color: AppColors.secondaryText),
+                            onPressed: () {
+                              setState(() {
+                                _txSearchQuery = '';
+                                _applyTxFilters();
+                              });
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Filter Chips: All, Invoices, Payments (Nothing else!)
+              Row(
+                children: ['All', 'Invoices', 'Payments']
+                    .map((f) => Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              child: ChoiceChip(
+                                selected: _selectedTxFilter == f,
+                                label: Center(
+                                  child: Text(
+                                    f,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: _selectedTxFilter == f
+                                          ? Colors.white
+                                          : AppColors.darkBlueText,
+                                    ),
+                                  ),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                                backgroundColor: const Color(0xFFF1F5F9),
+                                selectedColor: AppColors.primaryBlue,
+                                side: BorderSide.none,
+                                onSelected: (_) {
+                                  setState(() {
+                                    _selectedTxFilter = f;
+                                    _applyTxFilters();
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+
+        Expanded(
+          child: _filteredTransactions.isEmpty
+              ? const EmptyState(
+                  title: 'No Transactions Found',
+                  message:
+                      'Transactions will appear here when invoices or payments are created.',
+                  icon: Icons.receipt_long_outlined,
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _filteredTransactions.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (ctx, idx) {
+                    final item = _filteredTransactions[idx];
+                    return AppCard(
+                      onTap: () {
+                        if (item.type == 'INVOICE' &&
+                            item.originalObject is InvoiceEntity) {
+                          context.push(
+                            RouteNames.createInvoice,
+                            extra: {
+                              'invoiceType':
+                                  (item.originalObject as InvoiceEntity).type,
+                              'invoiceToEdit': item.originalObject
+                            },
+                          );
+                        }
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: AppColors.darkBlueText),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                DateFormat('dd MMM yyyy').format(item.date),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.secondaryText),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                _formatCurrency(item.amount),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: AppColors.darkBlueText),
+                              ),
+                              const SizedBox(height: 4),
+                              if (item.status == 'Paid')
+                                StatusChip.paid()
+                              else if (item.status == 'Partially Paid')
+                                StatusChip.partiallyPaid()
+                              else if (item.status == 'Overdue')
+                                StatusChip.unpaid(label: 'Overdue')
+                              else
+                                StatusChip.unpaid(),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ================= TAB 3: NOTES =================
   Widget _buildNotesTab() {
     return Column(
       children: [
@@ -693,18 +971,20 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
             children: [
               Text(
                 'Customer Notes (${_customerNotes.length})',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.darkBlueText),
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primaryBlue,
                 ),
-                onPressed: _showAddNoteDialog,
-                icon: const Icon(Icons.note_add_outlined, size: 16),
-                label: const Text('Add Note', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                onPressed: () => _showAddNoteDialog(),
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                label: const Text('+ Add Note',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
               ),
             ],
           ),
@@ -713,7 +993,8 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
           child: _customerNotes.isEmpty
               ? const EmptyState(
                   title: 'No Notes Added',
-                  message: 'Add customer preferences, payment reminders, or key details here.',
+                  message:
+                      'Add customer preferences, payment reminders, or key details here.',
                   icon: Icons.note_add_outlined,
                 )
               : ListView.separated(
@@ -731,28 +1012,53 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.sticky_note_2_outlined, size: 16, color: AppColors.primaryBlue),
+                                  const Icon(Icons.sticky_note_2_outlined,
+                                      size: 16, color: AppColors.primaryBlue),
                                   const SizedBox(width: 6),
                                   Text(
-                                    DateFormat('dd MMM yyyy, hh:mm a').format(note.timestamp),
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondaryText),
+                                    'Created ${DateFormat("dd MMM yyyy · hh:mm a").format(note.timestamp)}',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.secondaryText),
                                   ),
                                 ],
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () {
-                                  setState(() => _customerNotes.removeAt(idx));
-                                },
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined,
+                                        size: 16, color: AppColors.primaryBlue),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () =>
+                                        _showAddNoteDialog(noteToEdit: note),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 16,
+                                        color: AppColors.danger),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () {
+                                      setState(
+                                          () => _customerNotes.removeAt(idx));
+                                    },
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Text(
                             note.content,
-                            style: const TextStyle(fontSize: 13, color: AppColors.darkBlueText, height: 1.4),
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.darkBlueText,
+                                height: 1.4,
+                                fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
@@ -764,195 +1070,482 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> with SingleTi
     );
   }
 
-  Widget _buildBookTab() {
-    final List<_PassbookRow> rows = _calculatePassbookRows();
+  // Helper to format date grouping header
+  String _getDateGroupLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final itemDate = DateTime(date.year, date.month, date.day);
 
-    if (rows.isEmpty) {
-      return const EmptyState(
-        title: 'No Ledger Entries',
-        message: 'Passbook transaction ledger will appear here once sales or payments are recorded.',
-        icon: Icons.menu_book_outlined,
-      );
+    if (itemDate == today) {
+      return 'TODAY';
+    } else if (itemDate == yesterday) {
+      return 'YESTERDAY';
+    } else {
+      return DateFormat('dd MMM yyyy').format(date).toUpperCase();
     }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: AppCard(
-        padding: EdgeInsets.zero,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Column(
-            children: [
-              // Table Header
-              Container(
-                color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: const Row(
-                  children: [
-                    Expanded(flex: 2, child: Text('Date', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.darkBlueText))),
-                    Expanded(flex: 3, child: Text('Type', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.darkBlueText))),
-                    Expanded(flex: 2, child: Text('Debit (+)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.danger), textAlign: TextAlign.right)),
-                    Expanded(flex: 2, child: Text('Credit (-)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.success), textAlign: TextAlign.right)),
-                    Expanded(flex: 2, child: Text('Balance', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.darkBlueText), textAlign: TextAlign.right)),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-
-              // Table Rows
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: rows.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, indent: 12, endIndent: 12),
-                itemBuilder: (ctx, idx) {
-                  final row = rows[idx];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            DateFormat('dd MMM').format(row.date),
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.darkBlueText),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                row.type,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
-                              ),
-                              if (row.ref.isNotEmpty)
-                                Text(
-                                  row.ref,
-                                  style: const TextStyle(fontSize: 10, color: AppColors.secondaryText),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            row.debit > 0 ? '₹${row.debit.toStringAsFixed(0)}' : '-',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.danger),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            row.credit > 0 ? '₹${row.credit.toStringAsFixed(0)}' : '-',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.success),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            '₹${row.runningBalance.toStringAsFixed(0)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: row.runningBalance > 0 ? AppColors.danger : AppColors.success,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
-  Widget _buildTimelineTab() {
-    if (_customerTimeline.isEmpty) {
-      return const EmptyState(
-        title: 'No Activity Recorded',
-        message: 'Chronological timeline of customer transactions and communications will show here.',
-        icon: Icons.history_rounded,
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _customerTimeline.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (ctx, idx) {
-        final item = _customerTimeline[idx];
-        IconData icon = Icons.info_outline;
-        Color color = AppColors.primaryBlue;
-
-        if (item.eventType == 'INVOICE') {
-          icon = Icons.receipt_long_rounded;
-          color = AppColors.primaryBlue;
-        } else if (item.eventType == 'PAYMENT') {
-          icon = Icons.payments_rounded;
-          color = AppColors.success;
-        } else if (item.eventType == 'FOLLOW_UP') {
-          icon = Icons.notifications_rounded;
-          color = AppColors.warning;
-        } else if (item.eventType == 'NOTE') {
-          icon = Icons.note_alt_rounded;
-          color = AppColors.deepNavy;
-        }
-
-        return AppCard(
-          child: Row(
+  void _showTimelineEventDetail(
+      BuildContext context, CustomerTimelineEvent item) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    item.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkBlueText,
+                    ),
+                  ),
+                  Text(
+                    DateFormat('dd MMM yyyy · hh:mm a').format(item.timestamp),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.secondaryText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
-                    const SizedBox(height: 2),
-                    Text(item.description, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                  ],
+              const SizedBox(height: 12),
+              Text(
+                item.description,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.darkBlueText,
+                  height: 1.4,
                 ),
               ),
-              Text(DateFormat('dd/MM').format(item.timestamp), style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+              if (item.amount != null && item.amount! > 0) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Amount: ${_formatCurrency(item.amount!)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.deepNavy,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close'),
+                ),
+              ),
             ],
           ),
         );
       },
     );
   }
+
+  // ================= TAB 4: TIMELINE =================
+  Widget _buildTimelineTab() {
+    if (_customerTimeline.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.timeline_rounded,
+                  size: 36,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'No activity yet',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Customer interactions and updates will appear here.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.secondaryText,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      itemCount: _customerTimeline.length,
+      itemBuilder: (ctx, idx) {
+        final item = _customerTimeline[idx];
+        final isFirst = idx == 0;
+        final isLast = idx == _customerTimeline.length - 1;
+
+        final currentDateHeader = _getDateGroupLabel(item.timestamp);
+        final prevDateHeader = idx > 0
+            ? _getDateGroupLabel(_customerTimeline[idx - 1].timestamp)
+            : null;
+        final showDateHeader = currentDateHeader != prevDateHeader;
+
+        IconData icon = Icons.info_outline;
+        Color color = AppColors.primaryBlue;
+
+        if (item.eventType == 'CREATED') {
+          icon = Icons.person_add_rounded;
+          color = const Color(0xFF2563EB);
+        } else if (item.eventType == 'INVOICE') {
+          icon = Icons.description_outlined;
+          color = const Color(0xFF4F46E5);
+        } else if (item.eventType == 'PAYMENT') {
+          icon = Icons.check_circle_outline_rounded;
+          color = const Color(0xFF059669);
+        } else if (item.eventType == 'FOLLOW_UP') {
+          icon = Icons.calendar_today_rounded;
+          color = const Color(0xFFD97706);
+        } else if (item.eventType == 'NOTE') {
+          icon = Icons.sticky_note_2_outlined;
+          color = const Color(0xFF1E293B);
+        } else if (item.eventType == 'CALL') {
+          icon = Icons.phone_outlined;
+          color = const Color(0xFF0D9488);
+        } else if (item.eventType == 'WHATSAPP') {
+          icon = Icons.chat_bubble_outline_rounded;
+          color = const Color(0xFF16A34A);
+        } else if (item.eventType == 'UPDATED') {
+          icon = Icons.edit_outlined;
+          color = const Color(0xFF7C3AED);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showDateHeader) ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 36, top: 4, bottom: 10),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    currentDateHeader,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Left Vertical Timeline Path & Circular Node
+                  SizedBox(
+                    width: 36,
+                    child: Stack(
+                      alignment: Alignment.topCenter,
+                      children: [
+                        // Top Line Segment (only if NOT first item)
+                        if (!isFirst)
+                          Positioned(
+                            top: 0,
+                            bottom: 0,
+                            left: 17,
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFFCBD5E1),
+                            ),
+                          ),
+                        // Bottom Line Segment (only if NOT last item)
+                        if (!isLast)
+                          Positioned(
+                            top: 25,
+                            bottom: 0,
+                            left: 17,
+                            child: Container(
+                              width: 2,
+                              color: isFirst
+                                  ? const Color(0xFF93C5FD)
+                                  : const Color(0xFFCBD5E1),
+                            ),
+                          ),
+                        // Node Dot
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: isFirst
+                              ? Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      width: 22,
+                                      height: 22,
+                                      decoration: BoxDecoration(
+                                        color: color.withValues(alpha: 0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: Colors.white, width: 2),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Right Activity Card
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _showTimelineEventDetail(context, item),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isFirst
+                                ? const Color(0xFF93C5FD)
+                                : const Color(0xFFE2E8F0),
+                            width: isFirst ? 1.5 : 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black
+                                  .withValues(alpha: isFirst ? 0.05 : 0.02),
+                              blurRadius: isFirst ? 8 : 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Small Circular Icon Box
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(icon, color: color, size: 16),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.title,
+                                          style: TextStyle(
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: isFirst
+                                                ? AppColors.darkBlueText
+                                                : const Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                      ),
+                                      if (isFirst) ...[
+                                        Container(
+                                          margin:
+                                              const EdgeInsets.only(right: 6),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFDBEAFE),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            'Latest',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF1E40AF),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      Text(
+                                        DateFormat('hh:mm a')
+                                                    .format(item.timestamp) !=
+                                                '12:00 AM'
+                                            ? DateFormat('hh:mm a')
+                                                .format(item.timestamp)
+                                            : DateFormat('dd MMM')
+                                                .format(item.timestamp),
+                                        style: const TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    item.description,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF64748B),
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                  if (item.amount != null &&
+                                      item.amount! > 0) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        _formatCurrency(item.amount!),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF059669),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-class _SummaryCard extends StatelessWidget {
-  final String label;
+class _MetricCard extends StatelessWidget {
   final String value;
-  final Color valueColor;
+  final String label;
+  final bool isHighlighted;
 
-  const _SummaryCard(this.label, this.value, this.valueColor);
+  const _MetricCard({
+    required this.value,
+    required this.label,
+    required this.isHighlighted,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(10),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: isHighlighted ? const Color(0xFFFEF3C7) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color:
+              isHighlighted ? const Color(0xFFFDE68A) : const Color(0xFFF3F4F6),
+          width: 1.5,
+        ),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.secondaryText), maxLines: 1),
-          const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: valueColor)),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: isHighlighted
+                    ? const Color(0xFFB45309)
+                    : AppColors.darkBlueText,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: isHighlighted
+                  ? const Color(0xFFB45309)
+                  : AppColors.secondaryText,
+              letterSpacing: 0.3,
+            ),
+            maxLines: 1,
           ),
         ],
       ),
@@ -960,21 +1553,64 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-  _SliverTabBarDelegate(this.tabBar);
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final bool isBold;
+
+  const _InfoRow(
+    this.label,
+    this.value, {
+    this.valueColor,
+    this.isBold = false,
+  });
 
   @override
-  double get minExtent => tabBar.preferredSize.height;
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.white,
-      child: tabBar,
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.secondaryText,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
+              color: valueColor ?? AppColors.darkBlueText,
+            ),
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
+  }
+}
+
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  _SliverTabBarDelegate(this.child);
+
+  @override
+  double get minExtent => 46;
+  @override
+  double get maxExtent => 46;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return child;
   }
 
   @override
