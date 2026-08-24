@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
-import '../../domain/entities/lead_entity.dart';
+
 import '../../domain/entities/product_entity.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../presentation/authentication/pages/login_page.dart';
@@ -19,6 +19,7 @@ import '../../presentation/customers/pages/customer_timeline_page.dart';
 import '../../presentation/customers/pages/expense_account_details_page.dart';
 
 import '../../presentation/dashboard/pages/dashboard_page.dart';
+import '../../presentation/dashboard/pages/global_search_page.dart';
 import '../../presentation/invoices/pages/add_products_page.dart';
 import '../../presentation/invoices/pages/create_invoice_page.dart';
 import '../../presentation/invoices/pages/daily_ledger_page.dart';
@@ -31,18 +32,7 @@ import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
-import '../../presentation/leads/pages/add_lead_page.dart';
-import '../../presentation/leads/pages/import_leads_page.dart';
 
-import '../../domain/entities/crm_customer_entity.dart';
-import '../../presentation/crm/pages/crm_customer_details_page.dart';
-import '../../presentation/crm/pages/crm_dashboard_page.dart';
-import '../../presentation/crm/pages/crm_shell_page.dart';
-import '../../presentation/crm/pages/crm_settings_page.dart';
-import '../../presentation/crm/pages/outstanding_customers_page.dart';
-import '../../presentation/leads/pages/followups_page.dart';
-import '../../presentation/leads/pages/lead_details_page.dart';
-import '../../presentation/leads/pages/lead_pipeline_page.dart';
 import '../../presentation/main/pages/main_shell_page.dart';
 import '../../presentation/main/pages/create_master_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
@@ -113,16 +103,18 @@ Widget _buildCreateMasterPage(GoRouterState state) {
 }
 
 class AppRouter {
-  static final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNavKey');
-  static final GlobalKey<NavigatorState> shellHomeNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellHomeNavKey');
-  static final GlobalKey<NavigatorState> shellSalesNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellSalesNavKey');
-  static final GlobalKey<NavigatorState> shellAccountsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellAccountsNavKey');
-  static final GlobalKey<NavigatorState> shellStockNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellStockNavKey');
-  static final GlobalKey<NavigatorState> shellMoreNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellMoreNavKey');
-  static final GlobalKey<NavigatorState> shellCrmDashboardNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmDashboardNavKey');
-  static final GlobalKey<NavigatorState> shellCrmLeadsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmLeadsNavKey');
-  static final GlobalKey<NavigatorState> shellCrmOutstandingNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmOutstandingNavKey');
-  static final GlobalKey<NavigatorState> shellCrmSettingsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shellCrmSettingsNavKey');
+  static final GlobalKey<NavigatorState> rootNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'rootNavKey');
+  static final GlobalKey<NavigatorState> shellHomeNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'shellHomeNavKey');
+  static final GlobalKey<NavigatorState> shellSalesNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'shellSalesNavKey');
+  static final GlobalKey<NavigatorState> shellAccountsNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'shellAccountsNavKey');
+  static final GlobalKey<NavigatorState> shellStockNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'shellStockNavKey');
+  static final GlobalKey<NavigatorState> shellMoreNavigatorKey =
+      GlobalKey<NavigatorState>(debugLabel: 'shellMoreNavKey');
 
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -214,9 +206,14 @@ class AppRouter {
 
       // Standalone / Pushed Detail Sub-Routes
       GoRoute(
+        path: RouteNames.globalSearch,
+        builder: (context, state) => const GlobalSearchPage(),
+      ),
+      GoRoute(
         path: RouteNames.subscription,
         builder: (context, state) => const SubscriptionPaywallPage(),
       ),
+
       GoRoute(
         path: RouteNames.customerDetails,
         builder: (context, state) {
@@ -313,7 +310,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.invoiceDetails,
-        builder: (context, state) => const InvoiceDetailsPage(),
+        builder: (context, state) {
+          final inv = state.extra as InvoiceEntity?;
+          return InvoiceDetailsPage(invoice: inv);
+        },
       ),
       GoRoute(
         path: RouteNames.salesReturns,
@@ -335,7 +335,9 @@ class AppRouter {
             if (map['returnType'] is ReturnType) {
               rType = map['returnType'] as ReturnType;
             } else if (map['type'] is InvoiceType) {
-              rType = (map['type'] as InvoiceType) == InvoiceType.purchase ? ReturnType.purchaseReturn : ReturnType.salesReturn;
+              rType = (map['type'] as InvoiceType) == InvoiceType.purchase
+                  ? ReturnType.purchaseReturn
+                  : ReturnType.salesReturn;
             }
             existingReturn = map['existingReturn'];
           } else if (state.extra is ReturnType) {
@@ -352,7 +354,8 @@ class AppRouter {
         builder: (context, state) {
           dynamic existing;
           if (state.extra is Map<String, dynamic>) {
-            existing = (state.extra as Map<String, dynamic>)['existingTransaction'];
+            existing =
+                (state.extra as Map<String, dynamic>)['existingTransaction'];
           } else {
             existing = state.extra;
           }
@@ -367,7 +370,8 @@ class AppRouter {
         builder: (context, state) {
           dynamic existing;
           if (state.extra is Map<String, dynamic>) {
-            existing = (state.extra as Map<String, dynamic>)['existingTransaction'];
+            existing =
+                (state.extra as Map<String, dynamic>)['existingTransaction'];
           } else {
             existing = state.extra;
           }
@@ -422,84 +426,7 @@ class AppRouter {
           return AddProductsPage(initialItems: initialItems);
         },
       ),
-      // Dedicated Shell Route for CRM Module Navigation
-      StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) {
-          return CrmShellPage(navigationShell: navigationShell);
-        },
-        branches: [
-          // Branch 0: Dashboard
-          StatefulShellBranch(
-            navigatorKey: shellCrmDashboardNavigatorKey,
-            routes: [
-              GoRoute(
-                path: RouteNames.crmDashboard,
-                builder: (context, state) => const CrmDashboardPage(),
-              ),
-            ],
-          ),
-          // Branch 1: Leads & Pipeline
-          StatefulShellBranch(
-            navigatorKey: shellCrmLeadsNavigatorKey,
-            routes: [
-              GoRoute(
-                path: RouteNames.leadPipeline,
-                builder: (context, state) => const LeadPipelinePage(),
-              ),
-            ],
-          ),
-          // Branch 2: Outstanding
-          StatefulShellBranch(
-            navigatorKey: shellCrmOutstandingNavigatorKey,
-            routes: [
-              GoRoute(
-                path: RouteNames.crmOutstanding,
-                builder: (context, state) => const OutstandingCustomersPage(),
-              ),
-            ],
-          ),
-          // Branch 3: Settings
-          StatefulShellBranch(
-            navigatorKey: shellCrmSettingsNavigatorKey,
-            routes: [
-              GoRoute(
-                path: RouteNames.crmSettings,
-                builder: (context, state) => const CrmSettingsPage(),
-              ),
-            ],
-          ),
-        ],
-      ),
-      GoRoute(
-        path: RouteNames.crmCustomerDetails,
-        builder: (context, state) {
-          final cust = state.extra as CrmCustomerEntity;
-          return CrmCustomerDetailsPage(customer: cust);
-        },
-      ),
-      GoRoute(
-        path: RouteNames.addLead,
-        builder: (context, state) {
-          final lead = state.extra as LeadEntity?;
-          return AddLeadPage(lead: lead);
-        },
-      ),
-      GoRoute(
-        path: RouteNames.importLeads,
-        builder: (context, state) => const ImportLeadsPage(),
-      ),
 
-      GoRoute(
-        path: RouteNames.leadDetails,
-        builder: (context, state) {
-          final lead = state.extra as LeadEntity?;
-          return LeadDetailsPage(lead: lead);
-        },
-      ),
-      GoRoute(
-        path: RouteNames.followUps,
-        builder: (context, state) => const FollowUpsPage(),
-      ),
       GoRoute(
         path: RouteNames.reports,
         builder: (context, state) => const ReportsPage(),

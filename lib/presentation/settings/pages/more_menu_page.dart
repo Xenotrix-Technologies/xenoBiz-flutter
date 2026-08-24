@@ -57,6 +57,12 @@ class MoreMenuPage extends StatelessWidget {
                   color: AppColors.primaryBlue,
                 ),
                 const _MenuItem(
+                  icon: Icons.people_alt_outlined,
+                  title: 'Customers',
+                  route: RouteNames.customers,
+                  color: AppColors.primaryBlue,
+                ),
+                const _MenuItem(
                   icon: Icons.assignment_return_outlined,
                   title: 'Sales Returns',
                   route: RouteNames.salesReturns,
@@ -158,44 +164,7 @@ class MoreMenuPage extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
 
-            const Text(
-              'CRM & Communication',
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText),
-            ),
-            const SizedBox(height: 10),
-            _MenuGrid(
-              items: [
-                const _MenuItem(
-                  icon: Icons.dashboard_customize_outlined,
-                  title: 'CRM Dashboard',
-                  route: RouteNames.crmDashboard,
-                  color: AppColors.primaryBlue,
-                ),
-                const _MenuItem(
-                  icon: Icons.leaderboard_outlined,
-                  title: 'Lead Pipeline',
-                  route: RouteNames.leadPipeline,
-                  color: AppColors.success,
-                ),
-                const _MenuItem(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Follow-ups',
-                  route: RouteNames.followUps,
-                  color: AppColors.warning,
-                ),
-                const _MenuItem(
-                  icon: Icons.people_rounded,
-                  title: 'Customers',
-                  route: RouteNames.crmOutstanding,
-                  color: AppColors.primaryBlue,
-                ),
-              ],
-            ),
             const SizedBox(height: 20),
 
             const Text(

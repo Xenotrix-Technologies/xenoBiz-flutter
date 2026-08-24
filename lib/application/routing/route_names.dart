@@ -7,6 +7,7 @@ abstract class RouteNames {
   static const String trialWelcome = '/trial-welcome';
   static const String plansAndPricing = '/plans-and-pricing';
   static const String dashboard = '/dashboard';
+  static const String globalSearch = '/global-search';
   static const String subscription = '/subscription';
 
   // Customers
@@ -29,19 +30,6 @@ abstract class RouteNames {
   static const String salesOverview = '/sales-overview';
   static const String payment = '/payment';
   static const String addProducts = '/add-products';
-
-  // CRM
-  static const String crmShell = '/crm';
-  static const String crmDashboard = '/crm-dashboard';
-  static const String crmOutstanding = '/crm-outstanding';
-  static const String crmCustomerDetails = '/crm-customer-details';
-  static const String leadPipeline = '/lead-pipeline';
-  static const String addLead = '/add-lead';
-  static const String importLeads = '/import-leads';
-  static const String leadDetails = '/lead-details';
-
-  static const String followUps = '/follow-ups';
-  static const String crmSettings = '/crm-settings';
 
   // Analytics & Reports
   static const String salesAnalytics = '/sales-analytics';

@@ -2,7 +2,7 @@ import '../domain/entities/business_entity.dart';
 import '../domain/entities/customer_entity.dart';
 import '../domain/entities/expense_entity.dart';
 import '../domain/entities/invoice_entity.dart';
-import '../domain/entities/lead_entity.dart';
+
 import '../domain/entities/payment_entity.dart';
 import '../domain/entities/product_entity.dart';
 import '../domain/entities/purchase_entity.dart';
@@ -312,32 +312,7 @@ class DummyData {
     ),
   ];
 
-  static final List<LeadEntity> leads = [
-    LeadEntity(
-      id: 'lead_biz_novatech_1',
-      title: 'Bulk MacBook Procurement for CyberTech',
-      contactName: 'CyberTech Solutions',
-      phone: '+91 97453 45678',
-      email: 'cybertech.solutions@example.com',
-      estimatedValue: 1500000.0,
-      stage: LeadStage.negotiating,
-      notes: 'Client interested in buying 10 MacBook Pro units for engineering team.',
-      createdAt: DateTime.now().subtract(const Duration(days: 15)),
-      nextFollowUpDate: DateTime.now().add(const Duration(days: 2)),
-    ),
-    LeadEntity(
-      id: 'lead_biz_novatech_2',
-      title: 'Smartphones setup for Infensys',
-      contactName: 'Infensys Systems',
-      phone: '+91 97455 67890',
-      email: 'infensys.systems@example.com',
-      estimatedValue: 650000.0,
-      stage: LeadStage.proposalSent,
-      notes: 'Sent quote for iPhone 15 Pro units.',
-      createdAt: DateTime.now().subtract(const Duration(days: 10)),
-      nextFollowUpDate: DateTime.now().add(const Duration(days: 1)),
-    ),
-  ];
+
 
   static final List<SupplierEntity> suppliers = [
     SupplierEntity(

@@ -42,9 +42,6 @@ class XenoBizApp extends StatelessWidget {
               recordPaymentUseCase: getIt(),
             ),
           ),
-          BlocProvider<LeadBloc>(
-            create: (_) => LeadBloc(leadRepository: getIt()),
-          ),
           BlocProvider<SyncBloc>(
             create: (_) => SyncBloc(
               syncRepository: getIt(),
@@ -65,6 +62,8 @@ class XenoBizApp extends StatelessWidget {
               invoiceRepository: getIt(),
               expenseRepository: getIt(),
               customerRepository: getIt(),
+              returnsRepository: getIt(),
+              hiveService: getIt(),
             )..add(FetchSalesOverviewDataEvent()),
           ),
           BlocProvider<DailyLedgerBloc>(
@@ -83,15 +82,15 @@ class XenoBizApp extends StatelessWidget {
               hiveService: getIt(),
             )..add(const FetchAccountsEvent()),
           ),
-          BlocProvider<CrmBloc>(
-            create: (_) => CrmBloc(
-              crmService: getIt(),
-            )..add(const FetchCrmDataEvent()),
-          ),
-          BlocProvider<CrmCustomerBloc>(
-            create: (_) => CrmCustomerBloc(
-              repository: getIt(),
-            )..add(const FetchCrmCustomersEvent()),
+          BlocProvider<GlobalSearchBloc>(
+            create: (_) => GlobalSearchBloc(
+              customerRepository: getIt(),
+              invoiceRepository: getIt(),
+              productRepository: getIt(),
+              expenseRepository: getIt(),
+              purchaseRepository: getIt(),
+              hiveService: getIt(),
+            )..add(LoadRecentSearchesEvent()),
           ),
         ],
 

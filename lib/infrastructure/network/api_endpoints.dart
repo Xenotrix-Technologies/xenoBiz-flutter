@@ -38,10 +38,6 @@ abstract class ApiEndpoints {
   static const String invoices = '/invoices';
   static const String payments = '/payments';
 
-  // CRM
-  static const String leads = '/leads';
-  static const String followUps = '/follow-ups';
-
   // Purchases & Expenses
   static const String suppliers = '/suppliers';
   static const String purchases = '/purchases';

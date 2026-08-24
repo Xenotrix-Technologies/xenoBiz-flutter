@@ -4,7 +4,6 @@ import '../../application/routing/route_names.dart';
 import '../../const/colors.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../invoices/pages/return_voucher_screen.dart';
-import '../leads/widgets/quick_add_lead_dialog.dart';
 
 class QuickActionsBottomSheet extends StatelessWidget {
   const QuickActionsBottomSheet({super.key});
@@ -134,38 +133,6 @@ class QuickActionsBottomSheet extends StatelessWidget {
                 },
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-
-          // Wide full-width button: Add Lead
-          InkWell(
-            onTap: () {
-              Navigator.pop(context);
-              showQuickAddLeadDialog(context);
-            },
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                color: creamBg,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.person_search_rounded, size: 24, color: darkText),
-                  SizedBox(width: 14),
-                  Text(
-                    'Add Lead',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: darkText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
           const SizedBox(height: 8),
         ],

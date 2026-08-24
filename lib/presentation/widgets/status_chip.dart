@@ -70,6 +70,30 @@ class StatusChip extends StatelessWidget {
     );
   }
 
+  factory StatusChip.overdue({String label = 'Overdue'}) {
+    return StatusChip(
+      label: label,
+      color: AppColors.error,
+      backgroundColor: AppColors.errorContainer,
+    );
+  }
+
+  factory StatusChip.cancelled({String label = 'Cancelled'}) {
+    return StatusChip(
+      label: label,
+      color: AppColors.secondaryText,
+      backgroundColor: const Color(0xFFE2E8F0),
+    );
+  }
+
+  factory StatusChip.returned({String label = 'Returned'}) {
+    return StatusChip(
+      label: label,
+      color: const Color(0xFF8B5CF6),
+      backgroundColor: const Color(0xFFF3E8FF),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(

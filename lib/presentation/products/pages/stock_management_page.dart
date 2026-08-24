@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -8,8 +7,7 @@ import '../../../application/bloc/product_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/product_entity.dart';
-import '../../../infrastructure/services/stock_import_service.dart';
-import '../../widgets/app_card.dart';
+
 import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
 
@@ -36,22 +34,33 @@ class _StockManagementPageState extends State<StockManagementPage> {
   }
 
   String _formatCurrency(double amount) {
-    final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
+    final formatter =
+        NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
     return formatter.format(amount);
   }
 
-  void _showAddProductDialog(BuildContext context, {ProductEntity? productToEdit}) {
+  void _showAddProductDialog(BuildContext context,
+      {ProductEntity? productToEdit}) {
     final isEditing = productToEdit != null;
     final nameCtrl = TextEditingController(text: productToEdit?.name ?? '');
     final skuCtrl = TextEditingController(text: productToEdit?.sku ?? '');
-    final barcodeCtrl = TextEditingController(text: productToEdit?.barcode ?? '');
-    final categoryCtrl = TextEditingController(text: productToEdit?.category ?? 'General');
-    final sellingPriceCtrl = TextEditingController(text: isEditing ? productToEdit.sellingPrice.toStringAsFixed(0) : '');
-    final purchasePriceCtrl = TextEditingController(text: isEditing && productToEdit.purchasePrice > 0 ? productToEdit.purchasePrice.toStringAsFixed(0) : '');
-    final stockCtrl = TextEditingController(text: isEditing ? productToEdit.stockQuantity.toString() : '10');
+    final barcodeCtrl =
+        TextEditingController(text: productToEdit?.barcode ?? '');
+    final categoryCtrl =
+        TextEditingController(text: productToEdit?.category ?? 'General');
+    final sellingPriceCtrl = TextEditingController(
+        text: isEditing ? productToEdit.sellingPrice.toStringAsFixed(0) : '');
+    final purchasePriceCtrl = TextEditingController(
+        text: isEditing && productToEdit.purchasePrice > 0
+            ? productToEdit.purchasePrice.toStringAsFixed(0)
+            : '');
+    final stockCtrl = TextEditingController(
+        text: isEditing ? productToEdit.stockQuantity.toString() : '10');
     final unitCtrl = TextEditingController(text: productToEdit?.unit ?? 'Pcs');
-    final thresholdCtrl = TextEditingController(text: isEditing ? productToEdit.reorderLevel.toString() : '5');
-    final descriptionCtrl = TextEditingController(text: productToEdit?.description ?? '');
+    final thresholdCtrl = TextEditingController(
+        text: isEditing ? productToEdit.reorderLevel.toString() : '5');
+    final descriptionCtrl =
+        TextEditingController(text: productToEdit?.description ?? '');
 
     showDialog(
       context: context,
@@ -59,7 +68,8 @@ class _StockManagementPageState extends State<StockManagementPage> {
         return AlertDialog(
           title: Text(
             isEditing ? 'Edit Product' : 'Add New Product',
-            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+            style: const TextStyle(
+                fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -80,14 +90,20 @@ class _StockManagementPageState extends State<StockManagementPage> {
                     Expanded(
                       child: TextField(
                         controller: skuCtrl,
-                        decoration: const InputDecoration(labelText: 'SKU', hintText: 'CC500', prefixIcon: Icon(Icons.qr_code)),
+                        decoration: const InputDecoration(
+                            labelText: 'SKU',
+                            hintText: 'CC500',
+                            prefixIcon: Icon(Icons.qr_code)),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         controller: barcodeCtrl,
-                        decoration: const InputDecoration(labelText: 'Barcode', hintText: '890123...', prefixIcon: Icon(Icons.barcode_reader)),
+                        decoration: const InputDecoration(
+                            labelText: 'Barcode',
+                            hintText: '890123...',
+                            prefixIcon: Icon(Icons.barcode_reader)),
                       ),
                     ),
                   ],
@@ -95,7 +111,10 @@ class _StockManagementPageState extends State<StockManagementPage> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: categoryCtrl,
-                  decoration: const InputDecoration(labelText: 'Category', hintText: 'Beverages, Food, etc.', prefixIcon: Icon(Icons.category_outlined)),
+                  decoration: const InputDecoration(
+                      labelText: 'Category',
+                      hintText: 'Beverages, Food, etc.',
+                      prefixIcon: Icon(Icons.category_outlined)),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -104,7 +123,9 @@ class _StockManagementPageState extends State<StockManagementPage> {
                       child: TextField(
                         controller: sellingPriceCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Selling Price (₹) *', prefixIcon: Icon(Icons.currency_rupee)),
+                        decoration: const InputDecoration(
+                            labelText: 'Selling Price (₹) *',
+                            prefixIcon: Icon(Icons.currency_rupee)),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -112,7 +133,9 @@ class _StockManagementPageState extends State<StockManagementPage> {
                       child: TextField(
                         controller: purchasePriceCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Cost Price (₹)', prefixIcon: Icon(Icons.sell_outlined)),
+                        decoration: const InputDecoration(
+                            labelText: 'Cost Price (₹)',
+                            prefixIcon: Icon(Icons.sell_outlined)),
                       ),
                     ),
                   ],
@@ -135,7 +158,10 @@ class _StockManagementPageState extends State<StockManagementPage> {
                     Expanded(
                       child: TextField(
                         controller: unitCtrl,
-                        decoration: const InputDecoration(labelText: 'Unit', hintText: 'Pcs, Kg, Box', prefixIcon: Icon(Icons.straighten)),
+                        decoration: const InputDecoration(
+                            labelText: 'Unit',
+                            hintText: 'Pcs, Kg, Box',
+                            prefixIcon: Icon(Icons.straighten)),
                       ),
                     ),
                   ],
@@ -154,57 +180,81 @@ class _StockManagementPageState extends State<StockManagementPage> {
                 TextField(
                   controller: descriptionCtrl,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Description', prefixIcon: Icon(Icons.notes)),
+                  decoration: const InputDecoration(
+                      labelText: 'Description', prefixIcon: Icon(Icons.notes)),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white),
               onPressed: () {
                 if (nameCtrl.text.trim().isNotEmpty) {
-                  final sellingPrice = double.tryParse(sellingPriceCtrl.text.trim()) ?? 0.0;
-                  final costPrice = double.tryParse(purchasePriceCtrl.text.trim()) ?? 0.0;
+                  final sellingPrice =
+                      double.tryParse(sellingPriceCtrl.text.trim()) ?? 0.0;
+                  final costPrice =
+                      double.tryParse(purchasePriceCtrl.text.trim()) ?? 0.0;
                   final stock = int.tryParse(stockCtrl.text.trim()) ?? 0;
-                  final threshold = int.tryParse(thresholdCtrl.text.trim()) ?? 5;
+                  final threshold =
+                      int.tryParse(thresholdCtrl.text.trim()) ?? 5;
 
                   if (isEditing) {
                     final updated = productToEdit.copyWith(
                       name: nameCtrl.text.trim(),
                       sku: skuCtrl.text.trim(),
                       barcode: barcodeCtrl.text.trim(),
-                      category: categoryCtrl.text.trim().isNotEmpty ? categoryCtrl.text.trim() : 'General',
+                      category: categoryCtrl.text.trim().isNotEmpty
+                          ? categoryCtrl.text.trim()
+                          : 'General',
                       sellingPrice: sellingPrice,
                       purchasePrice: costPrice,
-                      unit: unitCtrl.text.trim().isNotEmpty ? unitCtrl.text.trim() : 'Pcs',
+                      unit: unitCtrl.text.trim().isNotEmpty
+                          ? unitCtrl.text.trim()
+                          : 'Pcs',
                       reorderLevel: threshold,
                       description: descriptionCtrl.text.trim(),
                       updatedAt: DateTime.now(),
                     );
-                    context.read<ProductBloc>().add(UpdateProductEvent(updated));
+                    context
+                        .read<ProductBloc>()
+                        .add(UpdateProductEvent(updated));
                   } else {
                     final newProd = ProductEntity(
                       id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
                       name: nameCtrl.text.trim(),
-                      sku: skuCtrl.text.trim().isNotEmpty ? skuCtrl.text.trim() : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+                      sku: skuCtrl.text.trim().isNotEmpty
+                          ? skuCtrl.text.trim()
+                          : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
                       barcode: barcodeCtrl.text.trim(),
-                      category: categoryCtrl.text.trim().isNotEmpty ? categoryCtrl.text.trim() : 'General',
+                      category: categoryCtrl.text.trim().isNotEmpty
+                          ? categoryCtrl.text.trim()
+                          : 'General',
                       sellingPrice: sellingPrice,
                       purchasePrice: costPrice,
                       stockQuantity: stock,
                       reorderLevel: threshold,
-                      unit: unitCtrl.text.trim().isNotEmpty ? unitCtrl.text.trim() : 'Pcs',
+                      unit: unitCtrl.text.trim().isNotEmpty
+                          ? unitCtrl.text.trim()
+                          : 'Pcs',
                       description: descriptionCtrl.text.trim(),
                       createdAt: DateTime.now(),
                     );
-                    context.read<ProductBloc>().add(CreateProductEvent(newProd));
+                    context
+                        .read<ProductBloc>()
+                        .add(CreateProductEvent(newProd));
                   }
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(isEditing ? 'Product updated successfully!' : 'Product added to inventory!'),
+                      content: Text(isEditing
+                          ? 'Product updated successfully!'
+                          : 'Product added to inventory!'),
                       backgroundColor: AppColors.success,
                     ),
                   );
@@ -245,38 +295,63 @@ class _StockManagementPageState extends State<StockManagementPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Filter & Sort Inventory', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
-                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(sheetCtx)),
+                        const Text('Filter & Sort Inventory',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.darkBlueText)),
+                        IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(sheetCtx)),
                       ],
                     ),
                     const SizedBox(height: 14),
-
-                    Expanded(
+                    Flexible(
                       child: SingleChildScrollView(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Stock Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                            const Text('Stock Status',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.darkBlueText)),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
                               runSpacing: 6,
-                              children: ['All', 'In Stock', 'Low Stock', 'Out of Stock', 'Inactive'].map((st) {
+                              children: [
+                                'All',
+                                'In Stock',
+                                'Low Stock',
+                                'Out of Stock',
+                                'Inactive'
+                              ].map((st) {
                                 final isSelected = tempStockFilter == st;
                                 return ChoiceChip(
                                   label: Text(st),
                                   selected: isSelected,
                                   selectedColor: AppColors.primaryBlue,
-                                  labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
+                                  labelStyle: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.darkBlueText,
+                                      fontWeight: FontWeight.w700),
                                   onSelected: (val) {
-                                    if (val) setSheetState(() => tempStockFilter = st);
+                                    if (val) {
+                                      setSheetState(() => tempStockFilter = st);
+                                    }
                                   },
                                 );
                               }).toList(),
                             ),
                             const SizedBox(height: 16),
-
-                            const Text('Category', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                            const Text('Category',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.darkBlueText)),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
@@ -287,29 +362,50 @@ class _StockManagementPageState extends State<StockManagementPage> {
                                   label: Text(cat),
                                   selected: isSelected,
                                   selectedColor: AppColors.primaryBlue,
-                                  labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
+                                  labelStyle: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.darkBlueText,
+                                      fontWeight: FontWeight.w700),
                                   onSelected: (val) {
-                                    if (val) setSheetState(() => tempCategory = cat);
+                                    if (val) {
+                                      setSheetState(() => tempCategory = cat);
+                                    }
                                   },
                                 );
                               }).toList(),
                             ),
                             const SizedBox(height: 16),
-
-                            const Text('Sort By', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                            const Text('Sort By',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.darkBlueText)),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
                               runSpacing: 6,
-                              children: ['Name', 'Stock Quantity', 'Price', 'Low Stock First', 'Recently Updated'].map((sortOpt) {
+                              children: [
+                                'Name',
+                                'Stock Quantity',
+                                'Price',
+                                'Low Stock First',
+                                'Recently Updated'
+                              ].map((sortOpt) {
                                 final isSelected = tempSort == sortOpt;
                                 return ChoiceChip(
                                   label: Text(sortOpt),
                                   selected: isSelected,
                                   selectedColor: AppColors.primaryBlue,
-                                  labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w700),
+                                  labelStyle: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.darkBlueText,
+                                      fontWeight: FontWeight.w700),
                                   onSelected: (val) {
-                                    if (val) setSheetState(() => tempSort = sortOpt);
+                                    if (val) {
+                                      setSheetState(() => tempSort = sortOpt);
+                                    }
                                   },
                                 );
                               }).toList(),
@@ -320,7 +416,6 @@ class _StockManagementPageState extends State<StockManagementPage> {
                       ),
                     ),
                     const SizedBox(height: 14),
-
                     SizedBox(
                       width: double.infinity,
                       height: 48,
@@ -328,7 +423,8 @@ class _StockManagementPageState extends State<StockManagementPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryBlue,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                         onPressed: () {
                           context.read<ProductBloc>().add(
@@ -341,7 +437,9 @@ class _StockManagementPageState extends State<StockManagementPage> {
                               );
                           Navigator.pop(sheetCtx);
                         },
-                        child: const Text('Apply Inventory Filter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        child: const Text('Apply Inventory Filter',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w800)),
                       ),
                     ),
                   ],
@@ -359,360 +457,29 @@ class _StockManagementPageState extends State<StockManagementPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Deactivate Product?'),
-        content: Text('This product "${product.name}" will no longer appear in active product lists or new sales. Past sales & invoice history will remain safe.'),
+        content: Text(
+            'This product "${product.name}" will no longer appear in active product lists or new sales. Past sales & invoice history will remain safe.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white),
             onPressed: () {
-              context.read<ProductBloc>().add(DeleteProductEvent(productId: product.id, permanent: false));
+              context.read<ProductBloc>().add(
+                  DeleteProductEvent(productId: product.id, permanent: false));
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Product "${product.name}" deactivated.'), backgroundColor: AppColors.warning),
+                SnackBar(
+                    content: Text('Product "${product.name}" deactivated.'),
+                    backgroundColor: AppColors.warning),
               );
             },
             child: const Text('Deactivate'),
           ),
         ],
       ),
-    );
-  }
-
-  void _showImportStockDialog(BuildContext context, ProductsLoadedState state) {
-    final textController = TextEditingController(
-      text: StockImportService.generateSampleCsvTemplate(),
-    );
-    StockImportAnalysis analysis = StockImportService.parseAndValidateCsv(
-      textController.text,
-      state.allProducts,
-    );
-    DuplicateImportStrategy strategy = DuplicateImportStrategy.addStock;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (sheetCtx, setSheetState) {
-            void reanalyze() {
-              setSheetState(() {
-                analysis = StockImportService.parseAndValidateCsv(
-                  textController.text,
-                  state.allProducts,
-                );
-              });
-            }
-
-            return SafeArea(
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(sheetCtx).size.height * 0.88,
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.file_upload_outlined, color: AppColors.primaryBlue, size: 22),
-                            ),
-                            const SizedBox(width: 10),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Import Stock (Excel / CSV)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
-                                Text('Upload or paste CSV stock data', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                              ],
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(sheetCtx),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primaryBlue,
-                        side: const BorderSide(color: AppColors.primaryBlue),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: StockImportService.generateSampleCsvTemplate()));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Sample CSV template copied to clipboard! Paste it into Excel or CSV file.'),
-                            backgroundColor: AppColors.primaryBlue,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text('Download / Copy Excel Template', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(height: 12),
-
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Paste or Edit CSV Stock Data:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: textController,
-                              maxLines: 5,
-                              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                              decoration: InputDecoration(
-                                hintText: 'Product Name,SKU,Barcode,Category,Selling Price,Cost Price,Opening Stock,Unit,Low Stock Threshold,Description',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                contentPadding: const EdgeInsets.all(10),
-                              ),
-                              onChanged: (_) => reanalyze(),
-                            ),
-                            const SizedBox(height: 14),
-
-                            const Text('Validation Results:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                _ImportMetricChip(label: 'Total Rows', count: analysis.totalRows, color: AppColors.darkBlueText),
-                                _ImportMetricChip(label: 'Valid', count: analysis.validRows, color: AppColors.success),
-                                _ImportMetricChip(label: 'Invalid', count: analysis.invalidRows, color: analysis.invalidRows > 0 ? AppColors.danger : AppColors.secondaryText),
-                                _ImportMetricChip(label: 'Duplicates', count: analysis.duplicateRows, color: analysis.duplicateRows > 0 ? AppColors.warning : AppColors.secondaryText),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            if (analysis.errorSummary.isNotEmpty) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.errorContainer,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Row Errors:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.danger)),
-                                    const SizedBox(height: 4),
-                                    ...analysis.errorSummary.take(3).map((err) => Text('• $err', style: const TextStyle(fontSize: 11, color: AppColors.danger))),
-                                    if (analysis.errorSummary.length > 3)
-                                      Text('+ ${analysis.errorSummary.length - 3} more errors...', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.danger)),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-
-                            if (analysis.duplicateRows > 0) ...[
-                              const Text('Duplicate Product Handling Strategy:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
-                              const SizedBox(height: 6),
-                              Column(
-                                children: [
-                                  ListTile(
-                                    title: const Text('Add Stock (Recommended)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                    subtitle: const Text('Add imported stock to existing product stock level', style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy == DuplicateImportStrategy.addStock ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                                      color: strategy == DuplicateImportStrategy.addStock ? AppColors.primaryBlue : AppColors.secondaryText,
-                                    ),
-                                    onTap: () => setSheetState(() => strategy = DuplicateImportStrategy.addStock),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                  ListTile(
-                                    title: const Text('Update Existing', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                    subtitle: const Text('Update price, category & overwrite stock level', style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy == DuplicateImportStrategy.updateExisting ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                                      color: strategy == DuplicateImportStrategy.updateExisting ? AppColors.primaryBlue : AppColors.secondaryText,
-                                    ),
-                                    onTap: () => setSheetState(() => strategy = DuplicateImportStrategy.updateExisting),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                  ListTile(
-                                    title: const Text('Skip Duplicates', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                    subtitle: const Text('Ignore duplicate rows and do not import', style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy == DuplicateImportStrategy.skip ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                                      color: strategy == DuplicateImportStrategy.skip ? AppColors.primaryBlue : AppColors.secondaryText,
-                                    ),
-                                    onTap: () => setSheetState(() => strategy = DuplicateImportStrategy.skip),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-
-                            const Text('Parsed Rows Preview:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 180,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: AppColors.border),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.vertical,
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    columnSpacing: 16,
-                                    headingRowHeight: 32,
-                                    dataRowMinHeight: 32,
-                                    dataRowMaxHeight: 36,
-                                    columns: const [
-                                      DataColumn(label: Text('Row', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                                      DataColumn(label: Text('Product Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                                      DataColumn(label: Text('SKU', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                                      DataColumn(label: Text('Selling Price', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                                      DataColumn(label: Text('Opening Stock', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                                      DataColumn(label: Text('Status', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
-                                    ],
-                                    rows: analysis.rows.map((row) {
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text('#${row.rowIndex}', style: const TextStyle(fontSize: 11))),
-                                          DataCell(Text(row.productName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
-                                          DataCell(Text(row.sku, style: const TextStyle(fontSize: 11))),
-                                          DataCell(Text('₹${row.sellingPrice.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11))),
-                                          DataCell(Text('${row.openingStock} ${row.unit}', style: const TextStyle(fontSize: 11))),
-                                          DataCell(
-                                            Text(
-                                              !row.isValid
-                                                  ? 'INVALID'
-                                                  : (row.isDuplicate ? 'DUPLICATE' : 'NEW'),
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w800,
-                                                color: !row.isValid
-                                                    ? AppColors.danger
-                                                    : (row.isDuplicate ? AppColors.warning : AppColors.success),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: analysis.validRows == 0
-                            ? null
-                            : () {
-                                int importedCount = 0;
-                                for (var r in analysis.rows) {
-                                  if (!r.isValid) continue;
-
-                                  if (r.isDuplicate) {
-                                    if (strategy == DuplicateImportStrategy.skip) {
-                                      continue;
-                                    } else if (strategy == DuplicateImportStrategy.addStock && r.existingProductId != null) {
-                                      context.read<ProductBloc>().add(
-                                            AdjustStockEvent(
-                                              productId: r.existingProductId!,
-                                              change: r.openingStock,
-                                              reason: 'Excel/CSV Import',
-                                            ),
-                                          );
-                                      importedCount++;
-                                    } else if (strategy == DuplicateImportStrategy.updateExisting && r.existingProductId != null) {
-                                      final updated = ProductEntity(
-                                        id: r.existingProductId!,
-                                        name: r.productName,
-                                        sku: r.sku,
-                                        barcode: r.barcode,
-                                        category: r.category,
-                                        sellingPrice: r.sellingPrice,
-                                        purchasePrice: r.costPrice,
-                                        stockQuantity: r.openingStock,
-                                        unit: r.unit,
-                                        reorderLevel: r.reorderLevel,
-                                        description: r.description,
-                                        createdAt: DateTime.now(),
-                                      );
-                                      context.read<ProductBloc>().add(UpdateProductEvent(updated));
-                                      importedCount++;
-                                    }
-                                  } else {
-                                    final newProd = ProductEntity(
-                                      id: 'prod_imp_${DateTime.now().millisecondsSinceEpoch}_$importedCount',
-                                      name: r.productName,
-                                      sku: r.sku,
-                                      barcode: r.barcode,
-                                      category: r.category,
-                                      sellingPrice: r.sellingPrice,
-                                      purchasePrice: r.costPrice,
-                                      stockQuantity: r.openingStock,
-                                      unit: r.unit,
-                                      reorderLevel: r.reorderLevel,
-                                      description: r.description,
-                                      createdAt: DateTime.now(),
-                                    );
-                                    context.read<ProductBloc>().add(CreateProductEvent(newProd));
-                                    importedCount++;
-                                  }
-                                }
-
-                                Navigator.pop(sheetCtx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Successfully imported $importedCount products into Hive inventory!'),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
-                              },
-                        child: Text(
-                          'Confirm & Import ${analysis.validRows} Products',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
@@ -725,29 +492,6 @@ class _StockManagementPageState extends State<StockManagementPage> {
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          BlocBuilder<ProductBloc, ProductState>(
-            builder: (context, state) {
-              if (state is ProductsLoadedState) {
-                return IconButton(
-                  icon: const Icon(Icons.file_download_outlined),
-                  tooltip: 'Import Stock (Excel / CSV)',
-                  onPressed: () => _showImportStockDialog(context, state),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: null,
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: Colors.white,
-        onPressed: () => context.push(RouteNames.createMaster, extra: 0),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Product', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: BlocBuilder<ProductBloc, ProductState>(
         builder: (context, state) {
@@ -758,24 +502,19 @@ class _StockManagementPageState extends State<StockManagementPage> {
           if (state is ProductErrorState) {
             return ErrorState(
               message: state.message,
-              onRetry: () => context.read<ProductBloc>().add(const FetchProductsEvent()),
+              onRetry: () =>
+                  context.read<ProductBloc>().add(const FetchProductsEvent()),
             );
           }
 
           if (state is ProductsLoadedState) {
             return Column(
               children: [
-                // Top Stock Metrics Summary Bar
-                _buildTopSummaryBar(context, state),
-                const Divider(height: 1, color: AppColors.border),
-
-                // Stock Health Breakdown Bar
-                _buildStockHealthBar(state),
-
                 // Search Bar + Filter Button Row
                 Container(
                   color: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
                       Expanded(
@@ -792,28 +531,37 @@ class _StockManagementPageState extends State<StockManagementPage> {
                                 );
                           },
                           decoration: InputDecoration(
-                            hintText: 'Search products by name, SKU, or barcode...',
-                            hintStyle: const TextStyle(fontSize: 13, color: AppColors.secondaryText),
-                            prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText, size: 20),
+                            hintText:
+                                'Search products by name, SKU, or barcode...',
+                            hintStyle: const TextStyle(
+                                fontSize: 13, color: AppColors.secondaryText),
+                            prefixIcon: const Icon(Icons.search,
+                                color: AppColors.secondaryText, size: 20),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide:
+                                  const BorderSide(color: AppColors.border),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       IconButton(
                         style: IconButton.styleFrom(
-                          backgroundColor: (state.selectedStockFilter != 'All' || state.selectedCategory != 'All')
+                          backgroundColor: (state.selectedStockFilter !=
+                                      'All' ||
+                                  state.selectedCategory != 'All')
                               ? AppColors.primaryBlue.withValues(alpha: 0.15)
                               : AppColors.surfaceContainerLow,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         icon: Icon(
                           Icons.filter_list,
-                          color: (state.selectedStockFilter != 'All' || state.selectedCategory != 'All')
+                          color: (state.selectedStockFilter != 'All' ||
+                                  state.selectedCategory != 'All')
                               ? AppColors.primaryBlue
                               : AppColors.darkBlueText,
                         ),
@@ -841,115 +589,6 @@ class _StockManagementPageState extends State<StockManagementPage> {
     );
   }
 
-  // TOP SUMMARY BAR
-  Widget _buildTopSummaryBar(BuildContext context, ProductsLoadedState state) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _SummaryBox(
-                  label: 'Total Products',
-                  value: '${state.totalProducts}',
-                  subText: '${state.totalItems} Total Items',
-                  valueColor: AppColors.darkBlueText,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    context.read<ProductBloc>().add(
-                          FetchProductsEvent(
-                            query: state.searchQuery,
-                            stockFilter: 'Low Stock',
-                            category: state.selectedCategory,
-                            sortBy: state.sortBy,
-                          ),
-                        );
-                  },
-                  child: _SummaryBox(
-                    label: 'Low Stock',
-                    value: '${state.lowStockCount}',
-                    subText: 'Running Low',
-                    valueColor: state.lowStockCount > 0 ? AppColors.warning : AppColors.secondaryText,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    context.read<ProductBloc>().add(
-                          FetchProductsEvent(
-                            query: state.searchQuery,
-                            stockFilter: 'Out of Stock',
-                            category: state.selectedCategory,
-                            sortBy: state.sortBy,
-                          ),
-                        );
-                  },
-                  child: _SummaryBox(
-                    label: 'Out of Stock',
-                    value: '${state.outOfStockCount}',
-                    subText: 'Empty Stock',
-                    valueColor: state.outOfStockCount > 0 ? AppColors.danger : AppColors.secondaryText,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.secondaryText),
-                    const SizedBox(width: 6),
-                    const Text('Stock Value', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryText)),
-                  ],
-                ),
-                Text(
-                  _formatCurrency(state.stockValue),
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // COMPACT STOCK HEALTH BAR
-  Widget _buildStockHealthBar(ProductsLoadedState state) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      child: Row(
-        children: [
-          const Text('Stock Health: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondaryText)),
-          _HealthBadge(label: 'Healthy ${state.healthyCount}', color: AppColors.success, bg: AppColors.successContainer),
-          const SizedBox(width: 6),
-          _HealthBadge(label: 'Low ${state.lowStockCount}', color: AppColors.warning, bg: AppColors.warningContainer),
-          const SizedBox(width: 6),
-          _HealthBadge(label: 'Out ${state.outOfStockCount}', color: AppColors.danger, bg: AppColors.errorContainer),
-        ],
-      ),
-    );
-  }
-
   // HORIZONTALLY SCROLLABLE FILTER CHIPS
   Widget _buildFilterChipsBar(BuildContext context, ProductsLoadedState state) {
     final filters = ['All', 'In Stock', 'Low Stock', 'Out of Stock'];
@@ -965,7 +604,8 @@ class _StockManagementPageState extends State<StockManagementPage> {
         itemBuilder: (ctx, idx) {
           if (idx < filters.length) {
             final f = filters[idx];
-            final isSelected = state.selectedStockFilter == f && state.selectedCategory == 'All';
+            final isSelected = state.selectedStockFilter == f &&
+                state.selectedCategory == 'All';
             return ChoiceChip(
               label: Text(f),
               selected: isSelected,
@@ -1026,140 +666,269 @@ class _StockManagementPageState extends State<StockManagementPage> {
     if (state.filteredProducts.isEmpty) {
       return EmptyState(
         title: 'No Products Found',
-        message: state.searchQuery.isNotEmpty || state.selectedStockFilter != 'All'
-            ? 'Try changing your search or filters.'
-            : 'Add your first product to start managing your inventory.',
+        message:
+            state.searchQuery.isNotEmpty || state.selectedStockFilter != 'All'
+                ? 'Try changing your search or filters.'
+                : 'Add your first product to start managing your inventory.',
         icon: Icons.inventory_2_outlined,
       );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: state.filteredProducts.length + (state.outOfStockCount > 0 || state.lowStockCount > 0 ? 1 : 0),
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      itemCount: state.filteredProducts.length +
+          (state.outOfStockCount > 0 || state.lowStockCount > 0 ? 1 : 0),
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (ctx, idx) {
         // Render Stock Alerts Banner as first item if issues exist
-        if ((state.outOfStockCount > 0 || state.lowStockCount > 0) && idx == 0) {
+        if ((state.outOfStockCount > 0 || state.lowStockCount > 0) &&
+            idx == 0) {
           return _buildStockAlertsCard(context, state);
         }
 
-        final productIdx = (state.outOfStockCount > 0 || state.lowStockCount > 0) ? idx - 1 : idx;
+        final productIdx =
+            (state.outOfStockCount > 0 || state.lowStockCount > 0)
+                ? idx - 1
+                : idx;
         final p = state.filteredProducts[productIdx];
         final isLow = p.isLowStock;
         final isOut = p.isOutOfStock;
 
-        return AppCard(
-          onTap: () => context.push(RouteNames.productDetails, extra: p),
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isOut
-                      ? AppColors.errorContainer
-                      : (isLow ? AppColors.warningContainer : AppColors.primaryBlue.withValues(alpha: 0.12)),
-                  shape: BoxShape.circle,
+        return Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
-                child: Icon(
-                  Icons.inventory_2_outlined,
-                  color: isOut ? AppColors.danger : (isLow ? AppColors.warning : AppColors.primaryBlue),
-                  size: 20,
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left Container Icon (Rounded Square matching Invoice Tile)
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isOut
+                        ? AppColors.errorContainer
+                        : (isLow
+                            ? AppColors.warningContainer
+                            : AppColors.primaryBlue.withValues(alpha: 0.08)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.inventory_2_outlined,
+                    color: isOut
+                        ? AppColors.danger
+                        : (isLow ? AppColors.warning : AppColors.primaryBlue),
+                    size: 20,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 12),
+
+                // Middle Column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Row 1: CATEGORY • Product Name
+                      Row(
+                        children: [
+                          Text(
+                            p.category.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'PlusJakartaSans',
+                              color: isOut
+                                  ? AppColors.danger
+                                  : (isLow
+                                      ? AppColors.warning
+                                      : AppColors.primaryBlue),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            '•',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.darkBlueText,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              p.name,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'PlusJakartaSans',
+                                color: AppColors.darkBlueText,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+
+                      // Row 2: SKU · Stock Count
+                      Text(
+                        '${p.sku.isNotEmpty ? p.sku : "SKU-N/A"} · Stock: ${p.stockQuantity} ${p.unit}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'PlusJakartaSans',
+                          color: AppColors.secondaryText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Right Column: Price top row, Status Chip bottom row
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Text(
-                            p.name,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.darkBlueText,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        if (isOut)
-                          StatusChip.outOfStock()
-                        else if (isLow)
-                          StatusChip.lowStock()
-                        else
-                          StatusChip.inStock(),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'SKU: ${p.sku.isNotEmpty ? p.sku : "N/A"} • ${p.category}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          'Stock: ${p.stockQuantity} ${p.unit}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isOut ? AppColors.danger : (isLow ? AppColors.warning : AppColors.darkBlueText),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
                         Text(
                           _formatCurrency(p.sellingPrice),
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'PlusJakartaSans',
+                            color: AppColors.primaryBlue,
+                          ),
                         ),
+                        const SizedBox(width: 2),
                       ],
                     ),
+                    const SizedBox(height: 3),
+                    if (isOut)
+                      StatusChip.outOfStock()
+                    else if (isLow)
+                      StatusChip.lowStock()
+                    else
+                      StatusChip.inStock(),
                   ],
                 ),
-              ),
-              if (isOut || isLow) ...[
-                const SizedBox(width: 6),
-                InkWell(
-                  onTap: () {
-                    context.push(RouteNames.stockAdjustment, extra: {'product': p, 'initialAddition': true});
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  color: Colors.white,
+                  elevation: 4,
+                  onSelected: (value) {
+                    if (value == 'view') {
+                      context.push(RouteNames.productDetails, extra: p);
+                    } else if (value == 'adjust') {
+                      context.push(RouteNames.stockAdjustment,
+                          extra: {'product': p});
+                    } else if (value == 'edit') {
+                      _showAddProductDialog(context, productToEdit: p);
+                    } else if (value == 'delete') {
+                      _confirmDeactivateProduct(context, p);
+                    }
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue,
-                      borderRadius: BorderRadius.circular(8),
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem<String>(
+                      value: 'view',
+                      height: 38,
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined,
+                              size: 18, color: AppColors.primaryBlue),
+                          SizedBox(width: 10),
+                          Text('View',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.darkBlueText)),
+                        ],
+                      ),
                     ),
-                    child: const Text('Restock', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    const PopupMenuItem<String>(
+                      value: 'adjust',
+                      height: 38,
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune,
+                              size: 18, color: AppColors.primaryBlue),
+                          SizedBox(width: 10),
+                          Text('Adjust',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.darkBlueText)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'edit',
+                      height: 38,
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined,
+                              size: 18, color: AppColors.primaryBlue),
+                          SizedBox(width: 10),
+                          Text('Edit',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.darkBlueText)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'delete',
+                      height: 38,
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline,
+                              size: 18, color: AppColors.danger),
+                          SizedBox(width: 10),
+                          Text('Delete',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.danger)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  child: const Padding(
+                    padding: EdgeInsets.only(
+                        left: 2.0, right: 0.0, top: 4.0, bottom: 4.0),
+                    child: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
                 ),
               ],
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.secondaryText),
-                onSelected: (val) {
-                  if (val == 'details') {
-                    context.push(RouteNames.productDetails, extra: p);
-                  } else if (val == 'adjust') {
-                    context.push(RouteNames.stockAdjustment, extra: {'product': p});
-                  } else if (val == 'edit') {
-                    _showAddProductDialog(context, productToEdit: p);
-                  } else if (val == 'deactivate') {
-                    _confirmDeactivateProduct(context, p);
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'details', child: Row(children: [Icon(Icons.visibility_outlined, size: 18), SizedBox(width: 8), Text('View Details')])),
-                  PopupMenuItem(value: 'adjust', child: Row(children: [Icon(Icons.tune, size: 18), SizedBox(width: 8), Text('Adjust Stock')])),
-                  PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit Product')])),
-                  PopupMenuItem(value: 'deactivate', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.red), SizedBox(width: 8), Text('Deactivate', style: TextStyle(color: Colors.red))])),
-                ],
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -1167,7 +936,8 @@ class _StockManagementPageState extends State<StockManagementPage> {
   }
 
   // STOCK ALERTS CARD BANNER
-  Widget _buildStockAlertsCard(BuildContext context, ProductsLoadedState state) {
+  Widget _buildStockAlertsCard(
+      BuildContext context, ProductsLoadedState state) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1180,9 +950,14 @@ class _StockManagementPageState extends State<StockManagementPage> {
         children: [
           const Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 18),
+              Icon(Icons.warning_amber_rounded,
+                  color: AppColors.warning, size: 18),
               SizedBox(width: 6),
-              Text('Stock Alerts', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.darkBlueText)),
+              Text('Stock Alerts',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: AppColors.darkBlueText)),
             ],
           ),
           const SizedBox(height: 6),
@@ -1200,8 +975,12 @@ class _StockManagementPageState extends State<StockManagementPage> {
               },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text('⚠ ${state.outOfStockCount} products are out of stock (Tap to view)',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                child: Text(
+                    '⚠ ${state.outOfStockCount} products are out of stock (Tap to view)',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.danger)),
               ),
             ),
           if (state.lowStockCount > 0)
@@ -1218,107 +997,14 @@ class _StockManagementPageState extends State<StockManagementPage> {
               },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text('⚠ ${state.lowStockCount} products are running low in stock (Tap to view)',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.warning)),
+                child: Text(
+                    '⚠ ${state.lowStockCount} products are running low in stock (Tap to view)',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning)),
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// SUMMARY BOX WIDGET
-class _SummaryBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final String subText;
-  final Color valueColor;
-
-  const _SummaryBox({
-    required this.label,
-    required this.value,
-    required this.subText,
-    required this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.secondaryText), maxLines: 1),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: valueColor),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(subText, style: const TextStyle(fontSize: 10, color: AppColors.secondaryText), maxLines: 1),
-        ],
-      ),
-    );
-  }
-}
-
-// HEALTH BADGE
-class _HealthBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color bg;
-
-  const _HealthBadge({required this.label, required this.color, required this.bg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
-}
-
-class _ImportMetricChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
-
-  const _ImportMetricChip({required this.label, required this.count, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
-            child: Text('$count', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
-          ),
         ],
       ),
     );
