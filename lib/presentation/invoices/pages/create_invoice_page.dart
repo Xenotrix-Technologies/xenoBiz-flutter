@@ -1196,6 +1196,18 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
   bool get _isInlineAddEnabled => _inlineSelectedProduct != null;
 
+  void _openInlineAddProductCard() {
+    setState(() {
+      _showInlineAddProduct = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _inlineSearchFocusNode.requestFocus();
+        _scrollToInlineCard();
+      }
+    });
+  }
+
   void _closeInlineAddProductCard() {
     _inlineSearchFocusNode.unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
@@ -2739,13 +2751,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                             children: [
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    setState(() {
-                                      _showInlineAddProduct = true;
-                                    });
-                                    _inlineSearchFocusNode.requestFocus();
-                                    _scrollToInlineCard();
-                                  },
+                                  onPressed: _openInlineAddProductCard,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
                                     foregroundColor: Colors.white,
