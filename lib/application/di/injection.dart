@@ -18,6 +18,7 @@ import '../../infrastructure/repositories/purchase_repository_impl.dart';
 import '../../infrastructure/repositories/returns_repository_impl.dart';
 import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
+import '../../infrastructure/repositories/accounting_repository.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
 
 
@@ -125,6 +126,10 @@ Future<void> configureDependencies() async {
       customerRepository: getIt(),
       purchaseRepository: getIt(),
     ),
+  );
+
+  getIt.registerLazySingleton<AccountingRepository>(
+    () => AccountingRepository(getIt()),
   );
 
 

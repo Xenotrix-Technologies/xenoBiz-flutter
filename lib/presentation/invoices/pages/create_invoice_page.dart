@@ -1,8 +1,8 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/bloc/tax_settings_bloc.dart';
@@ -24,6 +24,113 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 
+enum DocumentType {
+  sale,
+  purchase,
+  payment,
+  receipt,
+  salesReturn,
+  purchaseReturn,
+}
+
+extension DocumentTypeExt on DocumentType {
+  String get titlePrefix {
+    switch (this) {
+      case DocumentType.sale:
+        return 'Sale';
+      case DocumentType.purchase:
+        return 'Purchase';
+      case DocumentType.payment:
+        return 'Payment';
+      case DocumentType.receipt:
+        return 'Receipt';
+      case DocumentType.salesReturn:
+        return 'Sales Return';
+      case DocumentType.purchaseReturn:
+        return 'Purchase Return';
+    }
+  }
+
+  String get appBarTitle {
+    switch (this) {
+      case DocumentType.sale:
+        return 'Add Sale Invoice';
+      case DocumentType.purchase:
+        return 'Add Purchase Invoice';
+      case DocumentType.payment:
+        return 'Add Payment';
+      case DocumentType.receipt:
+        return 'Add Receipt';
+      case DocumentType.salesReturn:
+        return 'Add Sales Return';
+      case DocumentType.purchaseReturn:
+        return 'Add Purchase Return';
+    }
+  }
+
+  InvoiceType toInvoiceType() {
+    switch (this) {
+      case DocumentType.purchase:
+      case DocumentType.purchaseReturn:
+        return InvoiceType.purchase;
+      default:
+        return InvoiceType.sale;
+    }
+  }
+}
+
+class InvoiceWorkspaceTab {
+  final String id;
+  DocumentType docType;
+  String refNumber;
+  CustomerEntity? selectedCustomer;
+  List<InvoiceItemEntity> items;
+  bool gstEnabled;
+  double discountAmount;
+  bool discountIsPercentage;
+  double extraExpenseAmount;
+  String extraExpenseDescription;
+  String notes;
+  DateTime createdDateTime;
+  bool isEditMode;
+  InvoiceEntity? invoiceToEdit;
+
+  InvoiceWorkspaceTab({
+    required this.id,
+    required this.docType,
+    required this.refNumber,
+    this.selectedCustomer,
+    List<InvoiceItemEntity>? items,
+    this.gstEnabled = true,
+    this.discountAmount = 0.0,
+    this.discountIsPercentage = false,
+    this.extraExpenseAmount = 0.0,
+    this.extraExpenseDescription = '',
+    this.notes = 'Thank you for your business!',
+    DateTime? createdDateTime,
+    this.isEditMode = false,
+    this.invoiceToEdit,
+  })  : items = items ?? [],
+        createdDateTime = createdDateTime ?? DateTime.now();
+
+  bool get isUnfinished =>
+      items.isNotEmpty ||
+      selectedCustomer != null ||
+      discountAmount > 0 ||
+      extraExpenseAmount > 0;
+
+  String get shortRef {
+    if (refNumber.contains('-')) {
+      final parts = refNumber.split('-');
+      return parts.last;
+    }
+    return refNumber;
+  }
+
+  String get tabLabel => '${docType.titlePrefix} #$shortRef';
+  String get moreHeaderLabel => '${docType.titlePrefix} #$shortRef';
+}
+
 class CreateInvoicePage extends ConsumerStatefulWidget {
   final InvoiceType invoiceType;
   final InvoiceEntity? invoiceToEdit;
@@ -40,13 +147,33 @@ class CreateInvoicePage extends ConsumerStatefulWidget {
 
 class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     with WidgetsBindingObserver {
-  bool get isEditMode => widget.invoiceToEdit != null;
+  final List<InvoiceWorkspaceTab> _workspaceTabs = [];
+  int _activeTabIndex = 0;
+
+  InvoiceWorkspaceTab get _activeTab =>
+      _workspaceTabs.isNotEmpty && _activeTabIndex < _workspaceTabs.length
+          ? _workspaceTabs[_activeTabIndex]
+          : (_workspaceTabs.isNotEmpty
+              ? _workspaceTabs.first
+              : InvoiceWorkspaceTab(
+                  id: 'fallback',
+                  docType: DocumentType.sale,
+                  refNumber: '495236',
+                ));
+
+  bool get isEditMode => _activeTab.isEditMode;
   bool get isPurchase =>
-      (widget.invoiceToEdit?.type ?? widget.invoiceType) ==
+      (_activeTab.invoiceToEdit?.type ?? _activeTab.docType.toInvoiceType()) ==
       InvoiceType.purchase;
 
   bool get _isCashSale => _selectedCustomer == null;
-  late String _invoiceId;
+  CustomerEntity? get _selectedCustomer =>
+      ref.watch(createInvoiceFormProvider).selectedCustomer;
+  List<InvoiceItemEntity> get _items =>
+      ref.watch(createInvoiceFormProvider).items;
+  DateTime get _createdDateTime => _activeTab.createdDateTime;
+  String get _invoiceId => _activeTab.refNumber;
+
   final TextEditingController _customerSearchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   bool _showSearchOverlay = false;
@@ -91,11 +218,51 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
     _loadProducts();
 
-    _invoiceId = isEditMode
+    final initialDocType = widget.invoiceToEdit != null
+        ? (widget.invoiceToEdit!.type == InvoiceType.purchase
+            ? DocumentType.purchase
+            : DocumentType.sale)
+        : (widget.invoiceType == InvoiceType.purchase
+            ? DocumentType.purchase
+            : DocumentType.sale);
+
+    final initialRef = widget.invoiceToEdit != null
         ? widget.invoiceToEdit!.invoiceNumber
-        : (isPurchase
-            ? 'PUR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
-            : 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
+        : (widget.invoiceType == InvoiceType.purchase
+            ? 'PUR-${(100000 + Random().nextInt(899999))}'
+            : 'INV-${(100000 + Random().nextInt(899999))}');
+
+    final initialTab = InvoiceWorkspaceTab(
+      id: 'tab_${DateTime.now().millisecondsSinceEpoch}',
+      docType: initialDocType,
+      refNumber: initialRef,
+      isEditMode: widget.invoiceToEdit != null,
+      invoiceToEdit: widget.invoiceToEdit,
+      items: widget.invoiceToEdit != null ? widget.invoiceToEdit!.items : [],
+      gstEnabled:
+          widget.invoiceToEdit != null ? widget.invoiceToEdit!.gstEnabled : true,
+      discountAmount: widget.invoiceToEdit != null
+          ? widget.invoiceToEdit!.discountAmount
+          : 0.0,
+      discountIsPercentage: widget.invoiceToEdit != null
+          ? widget.invoiceToEdit!.discountIsPercentage
+          : false,
+      extraExpenseAmount: widget.invoiceToEdit != null
+          ? widget.invoiceToEdit!.extraExpenseAmount
+          : 0.0,
+      extraExpenseDescription: widget.invoiceToEdit != null
+          ? widget.invoiceToEdit!.extraExpenseDescription
+          : '',
+      notes: widget.invoiceToEdit != null
+          ? widget.invoiceToEdit!.notes
+          : 'Thank you for your business!',
+      createdDateTime: widget.invoiceToEdit != null
+          ? widget.invoiceToEdit!.issueDate
+          : DateTime.now(),
+    );
+
+    _workspaceTabs.add(initialTab);
+    _activeTabIndex = 0;
 
     _loadParties();
 
@@ -108,7 +275,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isEditMode) {
+      if (widget.invoiceToEdit != null) {
         final inv = widget.invoiceToEdit!;
         final party = CustomerEntity(
           id: inv.customerId,
@@ -176,6 +343,397 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         }
       }
     } catch (_) {}
+  }
+
+  void _switchTab(int newIndex) {
+    if (newIndex < 0 ||
+        newIndex >= _workspaceTabs.length ||
+        newIndex == _activeTabIndex) {
+      return;
+    }
+
+    _saveCurrentTabState();
+    setState(() {
+      _activeTabIndex = newIndex;
+    });
+    _loadCurrentTabState();
+    _loadParties();
+  }
+
+  void _saveCurrentTabState() {
+    if (_activeTabIndex < 0 || _activeTabIndex >= _workspaceTabs.length) return;
+    final tab = _workspaceTabs[_activeTabIndex];
+    final formState = ref.read(createInvoiceFormProvider);
+
+    tab.items = List.from(formState.items);
+    tab.selectedCustomer = formState.selectedCustomer;
+    tab.gstEnabled = formState.gstEnabled;
+    tab.discountAmount =
+        double.tryParse(_discountCtrl.text.trim()) ?? formState.discountAmount;
+    tab.discountIsPercentage = formState.discountIsPercentage;
+    tab.extraExpenseAmount =
+        double.tryParse(_extraAmtCtrl.text.trim()) ?? formState.extraExpenseAmount;
+    tab.extraExpenseDescription = _extraDescCtrl.text.trim();
+    tab.notes = _notesCtrl.text;
+  }
+
+  void _loadCurrentTabState() {
+    if (_activeTabIndex < 0 || _activeTabIndex >= _workspaceTabs.length) return;
+    final tab = _workspaceTabs[_activeTabIndex];
+
+    ref.read(createInvoiceFormProvider.notifier).setItems(tab.items);
+    if (tab.selectedCustomer != null) {
+      ref
+          .read(createInvoiceFormProvider.notifier)
+          .selectCustomer(tab.selectedCustomer);
+    } else {
+      ref.read(createInvoiceFormProvider.notifier).selectCustomer(null);
+    }
+    ref.read(createInvoiceFormProvider.notifier).toggleGst(tab.gstEnabled);
+    ref
+        .read(createInvoiceFormProvider.notifier)
+        .updateDiscount(tab.discountAmount, tab.discountIsPercentage);
+    ref.read(createInvoiceFormProvider.notifier).updateExtraExpense(
+        tab.extraExpenseAmount, tab.extraExpenseDescription);
+
+    _notesCtrl.text = tab.notes;
+    _discountCtrl.text =
+        tab.discountAmount > 0 ? tab.discountAmount.toStringAsFixed(2) : '';
+    _extraAmtCtrl.text = tab.extraExpenseAmount > 0
+        ? tab.extraExpenseAmount.toStringAsFixed(2)
+        : '';
+    _extraDescCtrl.text = tab.extraExpenseDescription;
+    _customerSearchCtrl.clear();
+  }
+
+  void _createNewDocumentTab(DocumentType type) {
+    _saveCurrentTabState();
+    final randomRef = (100000 + Random().nextInt(899999)).toString();
+    final prefix = (type == DocumentType.purchase ||
+            type == DocumentType.purchaseReturn)
+        ? 'PUR'
+        : (type == DocumentType.payment
+            ? 'PMT'
+            : (type == DocumentType.receipt ? 'RCT' : 'INV'));
+    final newRef = '$prefix-$randomRef';
+
+    final newTab = InvoiceWorkspaceTab(
+      id: 'tab_${DateTime.now().millisecondsSinceEpoch}',
+      docType: type,
+      refNumber: newRef,
+    );
+
+    setState(() {
+      _workspaceTabs.add(newTab);
+      _activeTabIndex = _workspaceTabs.length - 1;
+    });
+    _loadCurrentTabState();
+    _loadParties();
+  }
+
+  void _closeTab(int index) {
+    final tabToClose = _workspaceTabs[index];
+    if (tabToClose.isUnfinished) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Close Tab?',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+          content: Text(
+              'Unfinished work in "${tabToClose.tabLabel}" will be discarded. Are you sure?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _performCloseTab(index);
+              },
+              child: const Text('Close Tab'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _performCloseTab(index);
+    }
+  }
+
+  void _performCloseTab(int index) {
+    if (_workspaceTabs.length <= 1) {
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      _workspaceTabs.removeAt(index);
+      if (_activeTabIndex >= _workspaceTabs.length) {
+        _activeTabIndex = _workspaceTabs.length - 1;
+      }
+    });
+    _loadCurrentTabState();
+    _loadParties();
+  }
+
+  void _showAddDocumentTypeSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Create New Document',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    color: AppColors.darkBlueText),
+              ),
+              const SizedBox(height: 14),
+              ...DocumentType.values.map((type) {
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      type == DocumentType.purchase ||
+                              type == DocumentType.purchaseReturn
+                          ? Icons.shopping_cart_outlined
+                          : (type == DocumentType.payment ||
+                                  type == DocumentType.receipt
+                              ? Icons.payment_outlined
+                              : Icons.receipt_long_outlined),
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    type.appBarTitle,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.darkBlueText),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios,
+                      size: 14, color: AppColors.outline),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _createNewDocumentTab(type);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMoreSheetTile({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color titleColor = AppColors.darkBlueText,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: titleColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: AppColors.secondaryText),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMoreBottomSheet() {
+    _saveCurrentTabState();
+    final activeTab = _activeTab;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'More',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                activeTab.moreHeaderLabel,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildMoreSheetTile(
+                icon: Icons.inventory_2_outlined,
+                iconColor: AppColors.primary,
+                iconBgColor: AppColors.primary.withValues(alpha: 0.1),
+                title: 'Add Item / Product',
+                subtitle: 'Create and add straight to this invoice',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _showInlineAddProduct = true;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildMoreSheetTile(
+                icon: isPurchase ? Icons.business_outlined : Icons.person_add_alt_1_outlined,
+                iconColor: AppColors.primary,
+                iconBgColor: AppColors.primary.withValues(alpha: 0.1),
+                title: isPurchase ? 'Add Party / Supplier' : 'Add Party / Customer',
+                subtitle: 'Create and select for this invoice',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCreateCustomerDialog();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildMoreSheetTile(
+                icon: Icons.delete_outline,
+                iconColor: AppColors.danger,
+                iconBgColor: AppColors.danger.withValues(alpha: 0.1),
+                title: 'Discard Invoice',
+                titleColor: AppColors.danger,
+                subtitle: 'Permanently remove this document',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDiscardInvoice(activeTab);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _confirmDiscardInvoice(InvoiceWorkspaceTab tab) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard Invoice?', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(
+            'Are you sure you want to discard "${tab.moreHeaderLabel}"? Any unsaved changes will be lost.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _performCloseTab(_activeTabIndex);
+            },
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -479,13 +1037,6 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   int? _focusedItemIndex;
-
-  List<InvoiceItemEntity> get _items =>
-      ref.watch(createInvoiceFormProvider).items;
-  CustomerEntity? get _selectedCustomer =>
-      ref.watch(createInvoiceFormProvider).selectedCustomer;
-  DateTime get _createdDateTime =>
-      ref.watch(createInvoiceFormProvider).createdDateTime;
 
   void _loadProducts() async {
     try {
@@ -867,9 +1418,6 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
   @override
   Widget build(BuildContext context) {
-    final formattedDateTime =
-        DateFormat('dd MMM, h:mm a').format(_createdDateTime);
-
     return BlocListener<InvoiceBloc, InvoiceState>(
       listener: (context, state) {
         if (state is InvoiceOperationSuccessState) {
@@ -893,7 +1441,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top Header Row
+                  // 1. App Bar Header Row
                   Row(
                     children: [
                       // Back Button Card
@@ -927,50 +1475,146 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                         ),
                       ),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isEditMode
-                                ? (isPurchase
-                                    ? 'Edit Purchase Invoice'
-                                    : 'Edit Sale Invoice')
-                                : (isPurchase
-                                    ? 'New Purchase Invoice'
-                                    : 'New Sale Invoice'),
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        isEditMode
+                            ? (isPurchase
+                                ? 'Edit Purchase Invoice'
+                                : 'Edit Sale Invoice')
+                            : _activeTab.docType.appBarTitle,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.onSurface,
+                        ),
                       ),
                       const Spacer(),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _invoiceId,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.darkBlueText,
-                            ),
+
+                      // Three-dot ⋮ More Button
+                      InkWell(
+                        onTap: _showMoreBottomSheet,
+                        borderRadius:
+                            BorderRadius.circular(AppSizes.radiusMedium),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceCard,
+                            borderRadius:
+                                BorderRadius.circular(AppSizes.radiusMedium),
+                            border: Border.all(
+                                color: AppColors.surfaceContainerHigh),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.06),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                          Text(
-                            formattedDateTime,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.outline,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          child: const Icon(
+                            Icons.more_vert,
+                            color: AppColors.onSurface,
+                            size: 22,
                           ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
+
+                  // 2. Scrollable Document Tabs Bar
+                  SizedBox(
+                    height: 38,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _workspaceTabs.length + 1,
+                      separatorBuilder: (ctx, i) => const SizedBox(width: 8),
+                      itemBuilder: (ctx, idx) {
+                        if (idx == _workspaceTabs.length) {
+                          // Plus '+' Tab Button
+                          return InkWell(
+                            onTap: _showAddDocumentTypeSheet,
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceCard,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              child: const Icon(Icons.add,
+                                  color: AppColors.primary, size: 20),
+                            ),
+                          );
+                        }
+
+                        final tab = _workspaceTabs[idx];
+                        final isActive = idx == _activeTabIndex;
+
+                        return InkWell(
+                          onTap: () => _switchTab(idx),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? AppColors.primary.withValues(alpha: 0.1)
+                                  : AppColors.surfaceCard,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isActive
+                                    ? AppColors.primary
+                                    : AppColors.surfaceContainerHigh,
+                                width: isActive ? 1.5 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (tab.isUnfinished) ...[
+                                  const Icon(Icons.star_rounded,
+                                      size: 14, color: Colors.amber),
+                                  const SizedBox(width: 4),
+                                ],
+                                Text(
+                                  tab.tabLabel,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isActive
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    color: isActive
+                                        ? AppColors.primary
+                                        : AppColors.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                InkWell(
+                                  onTap: () => _closeTab(idx),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2.0),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: isActive
+                                          ? AppColors.primary
+                                          : AppColors.outline,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
                   // Customer / Supplier Search Section
                   Column(

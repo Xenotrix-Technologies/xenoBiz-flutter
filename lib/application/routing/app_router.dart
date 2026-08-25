@@ -61,6 +61,17 @@ import '../../presentation/whatsapp/pages/automated_reminders_page.dart';
 import '../../presentation/whatsapp/pages/edit_rule_page.dart';
 import '../../presentation/whatsapp/pages/new_template_page.dart';
 import '../../presentation/whatsapp/pages/whatsapp_templates_page.dart';
+import '../../presentation/accounting/pages/journal_page.dart';
+import '../../presentation/accounting/pages/new_journal_entry_page.dart';
+import '../../presentation/accounting/pages/contra_page.dart';
+import '../../presentation/accounting/pages/new_contra_entry_page.dart';
+import '../../presentation/accounting/pages/daily_book_page.dart';
+import '../../presentation/accounting/pages/ledger_page.dart';
+import '../../presentation/accounting/pages/cash_bank_page.dart';
+import '../../presentation/accounting/pages/receivables_payables_pages.dart';
+import '../../presentation/accounting/pages/trial_balance_page.dart';
+import '../../presentation/gst/pages/gst_taxation_page.dart';
+import '../../presentation/tools/pages/business_tools_subpages.dart';
 import 'route_names.dart';
 
 Widget _buildCreateMasterPage(GoRouterState state) {
@@ -429,7 +440,209 @@ class AppRouter {
 
       GoRoute(
         path: RouteNames.reports,
-        builder: (context, state) => const ReportsPage(),
+        builder: (context, state) {
+          final catIdx = (state.extra as int?) ?? 0;
+          return ReportsPage(initialCategoryIndex: catIdx);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.journal,
+        builder: (context, state) => const JournalPage(),
+      ),
+      GoRoute(
+        path: RouteNames.newJournalEntry,
+        builder: (context, state) => const NewJournalEntryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.contra,
+        builder: (context, state) => const ContraPage(),
+      ),
+      GoRoute(
+        path: RouteNames.newContraEntry,
+        builder: (context, state) => const NewContraEntryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.dailyBook,
+        builder: (context, state) => const DailyBookPage(),
+      ),
+      GoRoute(
+        path: RouteNames.ledger,
+        builder: (context, state) {
+          final accName = state.extra as String?;
+          return LedgerPage(initialAccount: accName);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.cashBank,
+        builder: (context, state) => const CashBankPage(),
+      ),
+      GoRoute(
+        path: RouteNames.receivables,
+        builder: (context, state) => const ReceivablesPage(),
+      ),
+      GoRoute(
+        path: RouteNames.payables,
+        builder: (context, state) => const PayablesPage(),
+      ),
+      GoRoute(
+        path: RouteNames.trialBalance,
+        builder: (context, state) => const TrialBalancePage(),
+      ),
+      GoRoute(
+        path: RouteNames.gstTaxation,
+        builder: (context, state) => const GstTaxationPage(),
+      ),
+      GoRoute(
+        path: RouteNames.eInvoice,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'E-Invoice Portal',
+          icon: Icons.qr_code_2,
+          description: 'Generate IRN e-invoices with B2B QR code & JSON payload.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.eWayBill,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'E-Way Bill',
+          icon: Icons.local_shipping,
+          description: 'Generate & track e-way bills for transport of goods.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.inputTaxCredit,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Input Tax Credit',
+          icon: Icons.credit_score,
+          description: 'Track GSTR-2B ITC eligibility & claimed tax credit.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.quotations,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Quotations',
+          icon: Icons.request_quote,
+          description: 'Create & send price estimations and sales quotes.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.proformaInvoices,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Proforma Invoices',
+          icon: Icons.description,
+          description: 'Issue proforma invoices prior to final billing.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.deliveryChallans,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Delivery Challans',
+          icon: Icons.local_shipping_outlined,
+          description: 'Dispatch challans & delivery tracking documents.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.creditNotes,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Credit Notes',
+          icon: Icons.note_alt,
+          description: 'Sales return credit vouchers & customer balance adjustments.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.debitNotes,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Debit Notes',
+          icon: Icons.note_add,
+          description: 'Purchase return debit vouchers & vendor price adjustments.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.stockTransfer,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Stock Transfer',
+          icon: Icons.swap_horiz,
+          description: 'Transfer inventory items between warehouses & store branches.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.stockValuation,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Stock Valuation',
+          icon: Icons.assessment,
+          description: 'FIFO & average cost product inventory valuation.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.lowStockReport,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Low Stock Report',
+          icon: Icons.warning_amber,
+          description: 'Items below reorder point threshold.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.stockMovement,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Stock Movement',
+          icon: Icons.compare_arrows,
+          description: 'Inward, outward & stock adjustment log.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.recurringInvoices,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Recurring Invoices',
+          icon: Icons.repeat,
+          description: 'Automated subscription & recurring invoice schedules.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.importData,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Import Data',
+          icon: Icons.file_upload,
+          description: 'Bulk import products, customers & invoices from Excel/CSV.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.exportData,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Export Data',
+          icon: Icons.file_download,
+          description: 'Export sales, inventory & accounting data to Excel/PDF.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.documentTemplates,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Document Templates',
+          icon: Icons.article,
+          description: 'Customize thermal, A4 invoice themes & print headers.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.staffUsers,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Staff & Users',
+          icon: Icons.people_outline,
+          description: 'Manage staff access, cashier permissions & user roles.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.printerSettings,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Printer Settings',
+          icon: Icons.print,
+          description: 'Configure Bluetooth thermal printers & paper width.',
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.notificationSettings,
+        builder: (context, state) => const SecondaryModulePage(
+          title: 'Notification Settings',
+          icon: Icons.notifications_none,
+          description: 'Configure automated SMS, WhatsApp & app alert settings.',
+        ),
       ),
       GoRoute(
         path: RouteNames.salesAnalytics,
