@@ -188,8 +188,23 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   ProductEntity? _inlineSelectedProduct;
   late TextEditingController _inlineSearchCtrl;
   late TextEditingController _inlinePriceCtrl;
+  final FocusNode _inlineSearchFocusNode = FocusNode();
+  final GlobalKey _inlineCardKey = GlobalKey();
   int _inlineQuantity = 1;
   bool _showSearchResultsOverlay = false;
+
+  void _scrollToInlineCard() {
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted && _inlineCardKey.currentContext != null) {
+        Scrollable.ensureVisible(
+          _inlineCardKey.currentContext!,
+          alignment: 0.0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
 
   // Barcode Scanner controls & state
   MobileScannerController? _scannerController;
@@ -667,13 +682,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.inventory_2_outlined,
                 iconColor: AppColors.primary,
                 iconBgColor: AppColors.primary.withValues(alpha: 0.1),
-                title: 'Add Item / Product',
-                subtitle: 'Create and add straight to this invoice',
+                title: 'Add Item / Service',
+                subtitle: 'Create a new item or service in master catalog',
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() {
-                    _showInlineAddProduct = true;
-                  });
+                  context.push(RouteNames.createMaster, extra: 0);
                 },
               ),
               const SizedBox(height: 12),
@@ -681,11 +694,23 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: isPurchase ? Icons.business_outlined : Icons.person_add_alt_1_outlined,
                 iconColor: AppColors.primary,
                 iconBgColor: AppColors.primary.withValues(alpha: 0.1),
-                title: isPurchase ? 'Add Party / Supplier' : 'Add Party / Customer',
-                subtitle: 'Create and select for this invoice',
+                title: 'Add Party',
+                subtitle: isPurchase ? 'Create a new supplier account' : 'Create a new customer account',
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showCreateCustomerDialog();
+                  context.push(RouteNames.createMaster, extra: isPurchase ? 2 : 1);
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildMoreSheetTile(
+                icon: Icons.collections_bookmark_outlined,
+                iconColor: AppColors.primary,
+                iconBgColor: AppColors.primary.withValues(alpha: 0.1),
+                title: 'Product Catalogue',
+                subtitle: 'Browse & select items from catalog',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(RouteNames.products);
                 },
               ),
               const SizedBox(height: 12),
@@ -1221,7 +1246,14 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       _inlinePriceCtrl.clear();
       _inlineQuantity = 1;
       _showSearchResultsOverlay = false;
-      _showInlineAddProduct = false;
+      _showInlineAddProduct = true;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _inlineSearchFocusNode.requestFocus();
+        _scrollToInlineCard();
+      }
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -2677,6 +2709,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                     setState(() {
                                       _showInlineAddProduct = true;
                                     });
+                                    _inlineSearchFocusNode.requestFocus();
+                                    _scrollToInlineCard();
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
@@ -2735,6 +2769,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                           secondChild: Padding(
                             padding: const EdgeInsets.only(top: 14.0),
                             child: AppCard(
+                              key: _inlineCardKey,
                               padding: const EdgeInsets.all(16),
                               border: Border.all(
                                   color: AppColors.primary, width: 1.5),
@@ -2756,6 +2791,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                       ),
                                       GestureDetector(
                                         onTap: () {
+                                          _inlineSearchFocusNode.unfocus();
                                           setState(() {
                                             _showInlineAddProduct = false;
                                             _showSearchResultsOverlay = false;
@@ -2788,9 +2824,17 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                         height: AppSizes.inputHeight,
                                         child: TextField(
                                           controller: _inlineSearchCtrl,
-                                          onTapOutside: (_) => FocusManager
-                                              .instance.primaryFocus
-                                              ?.unfocus(),
+                                          focusNode: _inlineSearchFocusNode,
+                                          onTap: _scrollToInlineCard,
+                                          onTapOutside: (_) {
+                                            _inlineSearchFocusNode.unfocus();
+                                            FocusManager.instance.primaryFocus?.unfocus();
+                                            if (_inlineSearchCtrl.text.trim().isEmpty) {
+                                              setState(() {
+                                                _showSearchResultsOverlay = false;
+                                              });
+                                            }
+                                          },
                                           style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
@@ -3122,10 +3166,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                       Expanded(
                                         child: OutlinedButton(
                                           onPressed: () {
+                                            _inlineSearchFocusNode.unfocus();
                                             setState(() {
                                               _showInlineAddProduct = false;
-                                              _showSearchResultsOverlay =
-                                                  false;
+                                              _showSearchResultsOverlay = false;
                                               _inlineSelectedProduct = null;
                                               _inlineSearchCtrl.clear();
                                               _inlinePriceCtrl.clear();
