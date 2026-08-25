@@ -1186,20 +1186,40 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     }).toList();
   }
 
-  void _addInlineProductToInvoice() {
-    final String productName = _inlineSearchCtrl.text.trim();
-    if (productName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select or enter a product name'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+  bool get _isInlineAddEnabled => _inlineSelectedProduct != null;
+
+  void _closeInlineAddProductCard() {
+    _inlineSearchFocusNode.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (mounted) {
+      setState(() {
+        _showInlineAddProduct = false;
+        _showSearchResultsOverlay = false;
+        _inlineSelectedProduct = null;
+        _inlineSearchCtrl.clear();
+        _inlinePriceCtrl.clear();
+        _inlineQuantity = 1;
+      });
+    }
+  }
+
+  void _addInlineProductToInvoice({bool closeAfterAdd = false}) {
+    if (_inlineSelectedProduct == null) {
+      if (closeAfterAdd) {
+        _closeInlineAddProductCard();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select a valid product from search results'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
       return;
     }
 
     final double unitPrice = double.tryParse(_inlinePriceCtrl.text.trim()) ??
-        (_inlineSelectedProduct?.sellingPrice ?? 0.0);
+        _inlineSelectedProduct!.sellingPrice;
 
     final taxState = context.read<TaxSettingsBloc>().state;
     TaxSettingsEntity taxSettings = const TaxSettingsEntity();
@@ -1208,14 +1228,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     }
 
     final double effectiveTaxRate = taxSettings.isGstEnabled
-        ? (_inlineSelectedProduct?.taxPercentage ?? taxSettings.defaultGstRate)
+        ? (((_inlineSelectedProduct!.taxPercentage ?? 0.0) > 0)
+            ? _inlineSelectedProduct!.taxPercentage!
+            : taxSettings.defaultGstRate)
         : 0.0;
 
     final newItem = InvoiceItemEntity(
-      productId: _inlineSelectedProduct?.id ??
-          'custom_${DateTime.now().millisecondsSinceEpoch}',
-      productName: productName,
-      sku: _inlineSelectedProduct?.sku ?? '',
+      productId: _inlineSelectedProduct!.id,
+      productName: _inlineSelectedProduct!.name,
+      sku: _inlineSelectedProduct!.sku,
       quantity: _inlineQuantity,
       unitPrice: unitPrice,
       taxPercentage: effectiveTaxRate,
@@ -1240,29 +1261,34 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
     ref.read(createInvoiceFormProvider.notifier).setItems(currentItems);
 
-    setState(() {
-      _inlineSelectedProduct = null;
-      _inlineSearchCtrl.clear();
-      _inlinePriceCtrl.clear();
-      _inlineQuantity = 1;
-      _showSearchResultsOverlay = false;
-      _showInlineAddProduct = true;
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _inlineSearchFocusNode.requestFocus();
-        _scrollToInlineCard();
-      }
-    });
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$productName added to invoice'),
+        content: Text('Added "${newItem.productName}"'),
         backgroundColor: AppColors.darkBlueText,
         duration: const Duration(seconds: 2),
       ),
     );
+
+    if (closeAfterAdd) {
+      _closeInlineAddProductCard();
+    } else {
+      // Continuous Product Entry Mode: keep card visible & active, reset search & price, focus search field
+      setState(() {
+        _inlineSelectedProduct = null;
+        _inlineSearchCtrl.clear();
+        _inlinePriceCtrl.clear();
+        _inlineQuantity = 1;
+        _showSearchResultsOverlay = false;
+        _showInlineAddProduct = true;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _inlineSearchFocusNode.requestFocus();
+          _scrollToInlineCard();
+        }
+      });
+    }
   }
 
 
@@ -3076,6 +3102,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                 keyboardType: const TextInputType
                                                     .numberWithOptions(
                                                     decimal: true),
+                                                textInputAction: TextInputAction.done,
+                                                onEditingComplete: () {
+                                                  _closeInlineAddProductCard();
+                                                },
+                                                onSubmitted: (_) {
+                                                  _closeInlineAddProductCard();
+                                                },
                                                 onTapOutside: (_) =>
                                                     FocusManager
                                                         .instance.primaryFocus
@@ -3165,17 +3198,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                     children: [
                                       Expanded(
                                         child: OutlinedButton(
-                                          onPressed: () {
-                                            _inlineSearchFocusNode.unfocus();
-                                            setState(() {
-                                              _showInlineAddProduct = false;
-                                              _showSearchResultsOverlay = false;
-                                              _inlineSelectedProduct = null;
-                                              _inlineSearchCtrl.clear();
-                                              _inlinePriceCtrl.clear();
-                                              _inlineQuantity = 1;
-                                            });
-                                          },
+                                          onPressed: _closeInlineAddProductCard,
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor:
                                                 AppColors.darkBlueText,
@@ -3201,10 +3224,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: ElevatedButton(
-                                          onPressed: _addInlineProductToInvoice,
+                                          onPressed: _isInlineAddEnabled
+                                              ? () => _addInlineProductToInvoice(closeAfterAdd: false)
+                                              : null,
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: AppColors.primary,
                                             foregroundColor: Colors.white,
+                                            disabledBackgroundColor:
+                                                AppColors.surfaceContainerHigh,
+                                            disabledForegroundColor:
+                                                AppColors.outline,
                                             elevation: 0,
                                             padding: const EdgeInsets.symmetric(
                                                 vertical: 12),
