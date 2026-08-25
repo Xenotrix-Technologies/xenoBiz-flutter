@@ -111,39 +111,41 @@ class ProductsLoadedState extends ProductState {
 
   // Backward compatibility alias for single-list widgets
   List<ProductEntity> get products => filteredProducts;
+  List<ProductEntity> get inventoryProducts => filteredProducts.where((p) => p.isProduct).toList();
+  List<ProductEntity> get services => allProducts.where((p) => p.isService && p.isActive).toList();
 
   List<String> get categories {
     final set = <String>{'All'};
     for (final p in allProducts) {
-      if (p.isActive && p.category.isNotEmpty) set.add(p.category);
+      if (p.isActive && p.isProduct && p.category.isNotEmpty) set.add(p.category);
     }
     return set.toList();
   }
 
-  int get totalProducts => allProducts.where((p) => p.isActive).length;
+  int get totalProducts => allProducts.where((p) => p.isActive && p.isProduct).length;
 
   int get totalItems => allProducts
-      .where((p) => p.isActive)
+      .where((p) => p.isActive && p.isProduct)
       .fold(0, (sum, p) => sum + p.stockQuantity);
 
   int get lowStockCount => allProducts
-      .where((p) => p.isActive && p.isLowStock)
+      .where((p) => p.isActive && p.isProduct && p.isLowStock)
       .length;
 
   int get outOfStockCount => allProducts
-      .where((p) => p.isActive && p.isOutOfStock)
+      .where((p) => p.isActive && p.isProduct && p.isOutOfStock)
       .length;
 
   int get healthyCount => allProducts
-      .where((p) => p.isActive && p.isHealthy)
+      .where((p) => p.isActive && p.isProduct && p.isHealthy)
       .length;
 
   double get stockValue => allProducts
-      .where((p) => p.isActive)
+      .where((p) => p.isActive && p.isProduct)
       .fold(0.0, (sum, p) => sum + (p.stockQuantity * (p.purchasePrice > 0 ? p.purchasePrice : p.sellingPrice)));
 
   double get potentialSalesValue => allProducts
-      .where((p) => p.isActive)
+      .where((p) => p.isActive && p.isProduct)
       .fold(0.0, (sum, p) => sum + (p.stockQuantity * p.sellingPrice));
 
   @override

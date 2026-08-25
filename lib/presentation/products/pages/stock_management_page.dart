@@ -39,235 +39,6 @@ class _StockManagementPageState extends State<StockManagementPage> {
     return formatter.format(amount);
   }
 
-  void _showAddProductDialog(BuildContext context,
-      {ProductEntity? productToEdit}) {
-    final isEditing = productToEdit != null;
-    final nameCtrl = TextEditingController(text: productToEdit?.name ?? '');
-    final skuCtrl = TextEditingController(text: productToEdit?.sku ?? '');
-    final barcodeCtrl =
-        TextEditingController(text: productToEdit?.barcode ?? '');
-    final categoryCtrl =
-        TextEditingController(text: productToEdit?.category ?? 'General');
-    final sellingPriceCtrl = TextEditingController(
-        text: isEditing ? productToEdit.sellingPrice.toStringAsFixed(0) : '');
-    final purchasePriceCtrl = TextEditingController(
-        text: isEditing && productToEdit.purchasePrice > 0
-            ? productToEdit.purchasePrice.toStringAsFixed(0)
-            : '');
-    final stockCtrl = TextEditingController(
-        text: isEditing ? productToEdit.stockQuantity.toString() : '10');
-    final unitCtrl = TextEditingController(text: productToEdit?.unit ?? 'Pcs');
-    final thresholdCtrl = TextEditingController(
-        text: isEditing ? productToEdit.reorderLevel.toString() : '5');
-    final descriptionCtrl =
-        TextEditingController(text: productToEdit?.description ?? '');
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text(
-            isEditing ? 'Edit Product' : 'Add New Product',
-            style: const TextStyle(
-                fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Product Name *',
-                    hintText: 'e.g. Coca Cola 500ml',
-                    prefixIcon: Icon(Icons.shopping_bag_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: skuCtrl,
-                        decoration: const InputDecoration(
-                            labelText: 'SKU',
-                            hintText: 'CC500',
-                            prefixIcon: Icon(Icons.qr_code)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: barcodeCtrl,
-                        decoration: const InputDecoration(
-                            labelText: 'Barcode',
-                            hintText: '890123...',
-                            prefixIcon: Icon(Icons.barcode_reader)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: categoryCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Category',
-                      hintText: 'Beverages, Food, etc.',
-                      prefixIcon: Icon(Icons.category_outlined)),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: sellingPriceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                            labelText: 'Selling Price (₹) *',
-                            prefixIcon: Icon(Icons.currency_rupee)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: purchasePriceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                            labelText: 'Cost Price (₹)',
-                            prefixIcon: Icon(Icons.sell_outlined)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: stockCtrl,
-                        keyboardType: TextInputType.number,
-                        enabled: !isEditing,
-                        decoration: InputDecoration(
-                          labelText: isEditing ? 'Stock' : 'Opening Stock',
-                          prefixIcon: const Icon(Icons.inventory),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: unitCtrl,
-                        decoration: const InputDecoration(
-                            labelText: 'Unit',
-                            hintText: 'Pcs, Kg, Box',
-                            prefixIcon: Icon(Icons.straighten)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: thresholdCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Low Stock Threshold',
-                    hintText: 'Default 5',
-                    prefixIcon: Icon(Icons.warning_amber_rounded),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: descriptionCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                      labelText: 'Description', prefixIcon: Icon(Icons.notes)),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  foregroundColor: Colors.white),
-              onPressed: () {
-                if (nameCtrl.text.trim().isNotEmpty) {
-                  final sellingPrice =
-                      double.tryParse(sellingPriceCtrl.text.trim()) ?? 0.0;
-                  final costPrice =
-                      double.tryParse(purchasePriceCtrl.text.trim()) ?? 0.0;
-                  final stock = int.tryParse(stockCtrl.text.trim()) ?? 0;
-                  final threshold =
-                      int.tryParse(thresholdCtrl.text.trim()) ?? 5;
-
-                  if (isEditing) {
-                    final updated = productToEdit.copyWith(
-                      name: nameCtrl.text.trim(),
-                      sku: skuCtrl.text.trim(),
-                      barcode: barcodeCtrl.text.trim(),
-                      category: categoryCtrl.text.trim().isNotEmpty
-                          ? categoryCtrl.text.trim()
-                          : 'General',
-                      sellingPrice: sellingPrice,
-                      purchasePrice: costPrice,
-                      unit: unitCtrl.text.trim().isNotEmpty
-                          ? unitCtrl.text.trim()
-                          : 'Pcs',
-                      reorderLevel: threshold,
-                      description: descriptionCtrl.text.trim(),
-                      updatedAt: DateTime.now(),
-                    );
-                    context
-                        .read<ProductBloc>()
-                        .add(UpdateProductEvent(updated));
-                  } else {
-                    final newProd = ProductEntity(
-                      id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
-                      name: nameCtrl.text.trim(),
-                      sku: skuCtrl.text.trim().isNotEmpty
-                          ? skuCtrl.text.trim()
-                          : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-                      barcode: barcodeCtrl.text.trim(),
-                      category: categoryCtrl.text.trim().isNotEmpty
-                          ? categoryCtrl.text.trim()
-                          : 'General',
-                      sellingPrice: sellingPrice,
-                      purchasePrice: costPrice,
-                      stockQuantity: stock,
-                      reorderLevel: threshold,
-                      unit: unitCtrl.text.trim().isNotEmpty
-                          ? unitCtrl.text.trim()
-                          : 'Pcs',
-                      description: descriptionCtrl.text.trim(),
-                      createdAt: DateTime.now(),
-                    );
-                    context
-                        .read<ProductBloc>()
-                        .add(CreateProductEvent(newProd));
-                  }
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isEditing
-                          ? 'Product updated successfully!'
-                          : 'Product added to inventory!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
-              },
-              child: Text(isEditing ? 'Update Product' : 'Save Product'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _showFilterBottomSheet(BuildContext context, ProductsLoadedState state) {
     String tempStockFilter = state.selectedStockFilter;
     String tempCategory = state.selectedCategory;
@@ -663,7 +434,9 @@ class _StockManagementPageState extends State<StockManagementPage> {
 
   // PRODUCT LIST CONTENT
   Widget _buildProductList(BuildContext context, ProductsLoadedState state) {
-    if (state.filteredProducts.isEmpty) {
+    final physicalProducts = state.filteredProducts.where((p) => p.isProduct).toList();
+
+    if (physicalProducts.isEmpty) {
       return EmptyState(
         title: 'No Products Found',
         message:
@@ -676,7 +449,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: state.filteredProducts.length +
+      itemCount: physicalProducts.length +
           (state.outOfStockCount > 0 || state.lowStockCount > 0 ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (ctx, idx) {
@@ -690,7 +463,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
             (state.outOfStockCount > 0 || state.lowStockCount > 0)
                 ? idx - 1
                 : idx;
-        final p = state.filteredProducts[productIdx];
+        final p = physicalProducts[productIdx];
         final isLow = p.isLowStock;
         final isOut = p.isOutOfStock;
 
@@ -785,9 +558,11 @@ class _StockManagementPageState extends State<StockManagementPage> {
                       ),
                       const SizedBox(height: 3),
 
-                      // Row 2: SKU · Stock Count
+                      // Row 2: Stock Count & optional SKU
                       Text(
-                        '${p.sku.isNotEmpty ? p.sku : "SKU-N/A"} · Stock: ${p.stockQuantity} ${p.unit}',
+                        p.sku.trim().isNotEmpty
+                            ? 'SKU: ${p.sku} · Stock: ${p.stockQuantity} ${p.unit}'
+                            : 'Stock: ${p.stockQuantity} ${p.unit}',
                         style: const TextStyle(
                           fontSize: 12,
                           fontFamily: 'PlusJakartaSans',
@@ -842,11 +617,8 @@ class _StockManagementPageState extends State<StockManagementPage> {
                   onSelected: (value) {
                     if (value == 'view') {
                       context.push(RouteNames.productDetails, extra: p);
-                    } else if (value == 'adjust') {
-                      context.push(RouteNames.stockAdjustment,
-                          extra: {'product': p});
                     } else if (value == 'edit') {
-                      _showAddProductDialog(context, productToEdit: p);
+                      context.push(RouteNames.createMaster, extra: p);
                     } else if (value == 'delete') {
                       _confirmDeactivateProduct(context, p);
                     }
@@ -861,22 +633,6 @@ class _StockManagementPageState extends State<StockManagementPage> {
                               size: 18, color: AppColors.primaryBlue),
                           SizedBox(width: 10),
                           Text('View',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.darkBlueText)),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'adjust',
-                      height: 38,
-                      child: Row(
-                        children: [
-                          Icon(Icons.tune,
-                              size: 18, color: AppColors.primaryBlue),
-                          SizedBox(width: 10),
-                          Text('Adjust',
                               style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,

@@ -285,33 +285,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // Quick Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: AppColors.primaryBlue),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => context.push(
-                            RouteNames.stockAdjustment,
-                            extra: {'product': product}),
-                        icon: const Icon(Icons.tune,
-                            size: 18, color: AppColors.primaryBlue),
-                        label: const Text('Adjust Stock',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryBlue)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // Stock Movement History
                 Row(

@@ -62,7 +62,6 @@ abstract class AppStrings {
   static const String inventoryTitle = 'Inventory & Stock';
   static const String addProduct = 'Add Product';
   static const String stockManagement = 'Stock Management';
-  static const String stockAdjustment = 'Stock Adjustment';
   static const String lowStockAlert = 'Low Stock Alert';
 
   // Invoices & Billing

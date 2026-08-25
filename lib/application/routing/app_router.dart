@@ -37,8 +37,8 @@ import '../../presentation/main/pages/main_shell_page.dart';
 import '../../presentation/main/pages/create_master_page.dart';
 import '../../presentation/products/pages/product_details_page.dart';
 import '../../presentation/products/pages/product_list_page.dart';
-import '../../presentation/products/pages/stock_adjustment_page.dart';
 import '../../presentation/products/pages/stock_management_page.dart';
+import '../../presentation/services/pages/services_list_page.dart';
 import '../../presentation/purchases/pages/create_purchase_order_page.dart';
 import '../../presentation/purchases/pages/purchase_management_page.dart';
 import '../../presentation/reports/pages/financial_analytics_page.dart';
@@ -80,6 +80,7 @@ Widget _buildCreateMasterPage(GoRouterState state) {
   CustomerEntity? customer;
   SupplierEntity? supplier;
   ExpenseAccountSummary? expense;
+  bool isService = false;
 
   final extra = state.extra;
   if (extra is int) {
@@ -102,6 +103,7 @@ Widget _buildCreateMasterPage(GoRouterState state) {
     customer = extra['customer'] as CustomerEntity?;
     supplier = extra['supplier'] as SupplierEntity?;
     expense = extra['expense'] as ExpenseAccountSummary?;
+    isService = (extra['isService'] as bool?) ?? false;
   }
 
   return CreateMasterPage(
@@ -110,6 +112,7 @@ Widget _buildCreateMasterPage(GoRouterState state) {
     customerToEdit: customer,
     supplierToEdit: supplier,
     expenseToEdit: expense,
+    initialIsService: isService,
   );
 }
 
@@ -249,27 +252,17 @@ class AppRouter {
         builder: (context, state) => const ProductListPage(),
       ),
       GoRoute(
+        path: RouteNames.services,
+        builder: (context, state) => const ServicesListPage(),
+      ),
+      GoRoute(
         path: RouteNames.productDetails,
         builder: (context, state) {
           final prod = state.extra as ProductEntity?;
           return ProductDetailsPage(product: prod);
         },
       ),
-      GoRoute(
-        path: RouteNames.stockAdjustment,
-        builder: (context, state) {
-          if (state.extra is ProductEntity) {
-            return StockAdjustmentPage(product: state.extra as ProductEntity);
-          } else if (state.extra is Map<String, dynamic>) {
-            final args = state.extra as Map<String, dynamic>;
-            final prod = args['product'] as ProductEntity?;
-            final initialAddition = (args['initialAddition'] as bool?) ?? true;
-            return StockAdjustmentPage(
-                product: prod, initialAddition: initialAddition);
-          }
-          return const StockAdjustmentPage();
-        },
-      ),
+
 
       GoRoute(
         path: RouteNames.invoices,

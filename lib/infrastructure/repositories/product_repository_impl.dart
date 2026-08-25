@@ -25,13 +25,14 @@ class ProductRepositoryImpl implements ProductRepository {
       'name': p.name,
       'sku': p.sku,
       'barcode': p.barcode,
-      'category': p.category,
+      'category': p.category.isNotEmpty ? p.category : 'General',
       'sellingPrice': p.sellingPrice,
       'purchasePrice': p.purchasePrice,
       'stockQuantity': p.stockQuantity,
       'reorderLevel': p.reorderLevel,
       'unit': p.unit,
       'taxPercentage': p.taxPercentage,
+      'hsnCode': p.hsnCode,
       'description': p.description,
       'isActive': p.isActive,
       'createdAt': p.createdAt.toIso8601String(),
@@ -41,12 +42,13 @@ class ProductRepositoryImpl implements ProductRepository {
   }
 
   ProductEntity _mapToProduct(Map<dynamic, dynamic> map) {
+    final catRaw = map['category']?.toString() ?? '';
     return ProductEntity(
       id: map['id']?.toString() ?? '',
-      name: map['name']?.toString() ?? 'Unnamed Product',
-      sku: map['sku']?.toString() ?? 'SKU-000',
+      name: map['name']?.toString() ?? 'Unnamed Item',
+      sku: map['sku']?.toString() ?? '',
       barcode: map['barcode']?.toString() ?? '',
-      category: map['category']?.toString() ?? 'General',
+      category: catRaw.isNotEmpty ? catRaw : 'General',
       sellingPrice: (map['sellingPrice'] as num?)?.toDouble() ??
           (map['selling_price'] as num?)?.toDouble() ?? 0.0,
       purchasePrice: (map['purchasePrice'] as num?)?.toDouble() ??
@@ -57,6 +59,7 @@ class ProductRepositoryImpl implements ProductRepository {
           (map['min_stock_level'] as num?)?.toInt() ?? 5,
       unit: map['unit']?.toString() ?? 'Pcs',
       taxPercentage: (map['taxPercentage'] as num?)?.toDouble(),
+      hsnCode: map['hsnCode']?.toString() ?? map['hsn_code']?.toString() ?? '',
       description: map['description']?.toString() ?? '',
       isActive: (map['isActive'] as bool?) ?? true,
       createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? map['created_at']?.toString() ?? '') ??

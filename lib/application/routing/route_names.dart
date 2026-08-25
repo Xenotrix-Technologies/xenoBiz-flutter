@@ -19,7 +19,9 @@ abstract class RouteNames {
   static const String products = '/products';
   static const String productDetails = '/product-details';
   static const String stockManagement = '/stock-management';
-  static const String stockAdjustment = '/stock-adjustment';
+
+  // Services
+  static const String services = '/services';
 
   // Invoices & Sales
   static const String invoices = '/invoices';

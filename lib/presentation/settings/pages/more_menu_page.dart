@@ -33,6 +33,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
         _MenuItem(icon: Icons.request_quote_outlined, title: 'Quotations', route: RouteNames.quotations, color: AppColors.primaryBlue, subtitle: 'Price estimates & quotes'),
         _MenuItem(icon: Icons.description_outlined, title: 'Proforma Invoices', route: RouteNames.proformaInvoices, color: AppColors.primaryBlue, subtitle: 'Preliminary invoices'),
         _MenuItem(icon: Icons.local_shipping_outlined, title: 'Delivery Challans', route: RouteNames.deliveryChallans, color: AppColors.primaryBlue, subtitle: 'Goods dispatch notes'),
+        _MenuItem(icon: Icons.design_services_outlined, title: 'Services', route: RouteNames.services, color: AppColors.primaryBlue, subtitle: 'Service catalog & pricing'),
         _MenuItem(icon: Icons.note_alt_outlined, title: 'Credit Notes', route: RouteNames.creditNotes, color: AppColors.danger, subtitle: 'Return credit vouchers'),
         _MenuItem(icon: Icons.note_add_outlined, title: 'Debit Notes', route: RouteNames.debitNotes, color: AppColors.warning, subtitle: 'Vendor debit vouchers'),
       ],
@@ -41,7 +42,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
       categoryTitle: 'Inventory & Purchasing',
       items: [
         _MenuItem(icon: Icons.inventory_2_outlined, title: 'Product Catalog', route: RouteNames.products, color: AppColors.deepNavy, subtitle: 'SKU inventory list'),
-        _MenuItem(icon: Icons.tune_outlined, title: 'Stock Adjustment', route: RouteNames.stockAdjustment, color: AppColors.deepNavy, subtitle: 'Manual stock correction'),
         _MenuItem(icon: Icons.shopping_cart_outlined, title: 'Purchases', route: RouteNames.invoices, extra: {'initialType': InvoiceType.purchase}, color: AppColors.primaryBlue, subtitle: 'Vendor purchase bills'),
         _MenuItem(icon: Icons.store_outlined, title: 'Suppliers', route: RouteNames.supplierDirectory, color: AppColors.primaryBlue, subtitle: 'Supplier directory'),
         _MenuItem(icon: Icons.settings_backup_restore_outlined, title: 'Purchase Returns', route: RouteNames.purchaseReturns, color: AppColors.danger, subtitle: 'Goods returned to vendor'),

@@ -36,17 +36,6 @@ class _ProductListPageState extends State<ProductListPage> {
         title: const Text(AppStrings.inventoryTitle),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.tune),
-            onPressed: () async {
-              await context.push(RouteNames.stockAdjustment);
-              if (context.mounted) {
-                context.read<ProductBloc>().add(const FetchProductsEvent());
-              }
-            },
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: null,
@@ -82,7 +71,8 @@ class _ProductListPageState extends State<ProductListPage> {
                   return const ProductListSkeleton();
                 }
                 if (state is ProductsLoadedState) {
-                  if (state.products.isEmpty) {
+                  final physicalProducts = state.products.where((p) => p.isProduct).toList();
+                  if (physicalProducts.isEmpty) {
                     return const EmptyState(
                       title: 'No Products Found',
                       message: 'Create your inventory catalog to start billing & tracking stock.',
@@ -90,10 +80,10 @@ class _ProductListPageState extends State<ProductListPage> {
                   }
                   return ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: state.products.length,
+                    itemCount: physicalProducts.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, idx) {
-                      final p = state.products[idx];
+                      final p = physicalProducts[idx];
                       return AppCard(
                         onTap: () async {
                           await context.push(RouteNames.productDetails, extra: p);
@@ -131,7 +121,9 @@ class _ProductListPageState extends State<ProductListPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${p.sku} • ${p.category}',
+                                    p.sku.trim().isNotEmpty
+                                        ? 'SKU: ${p.sku} • ${p.category.isNotEmpty ? p.category : "General"}'
+                                        : (p.category.isNotEmpty ? p.category : 'General'),
                                     style: const TextStyle(fontSize: 13, color: AppColors.outline),
                                   ),
                                 ],
