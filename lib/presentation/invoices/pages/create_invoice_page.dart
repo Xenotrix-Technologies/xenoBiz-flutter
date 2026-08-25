@@ -1169,9 +1169,17 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     setState(() {
       _inlineSelectedProduct = prod;
       _inlineSearchCtrl.text = prod.name;
+      _inlineSearchCtrl.selection =
+          TextSelection.collapsed(offset: prod.name.length);
       _inlinePriceCtrl.text = prod.sellingPrice.toStringAsFixed(0);
       _inlineQuantity = 1;
       _showSearchResultsOverlay = false;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _inlineSearchFocusNode.requestFocus();
+      }
     });
   }
 
@@ -2794,41 +2802,42 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                               width: double.infinity, height: 0),
                           secondChild: Padding(
                             padding: const EdgeInsets.only(top: 14.0),
-                            child: AppCard(
-                              key: _inlineCardKey,
-                              padding: const EdgeInsets.all(16),
-                              border: Border.all(
-                                  color: AppColors.primary, width: 1.5),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        'ADD PRODUCT',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.secondaryText,
-                                          letterSpacing: 0.5,
+                            child: TapRegion(
+                              groupId: 'inline_add_product_card_group',
+                              onTapOutside: (_) {
+                                if (_showInlineAddProduct) {
+                                  _closeInlineAddProductCard();
+                                }
+                              },
+                              child: AppCard(
+                                key: _inlineCardKey,
+                                padding: const EdgeInsets.all(16),
+                                border: Border.all(
+                                    color: AppColors.primary, width: 1.5),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'ADD PRODUCT',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.secondaryText,
+                                            letterSpacing: 0.5,
+                                          ),
                                         ),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          _inlineSearchFocusNode.unfocus();
-                                          setState(() {
-                                            _showInlineAddProduct = false;
-                                            _showSearchResultsOverlay = false;
-                                          });
-                                        },
-                                        child: const Icon(Icons.close,
-                                            size: 18,
-                                            color: AppColors.secondaryText),
-                                      ),
-                                    ],
-                                  ),
+                                        GestureDetector(
+                                          onTap: _closeInlineAddProductCard,
+                                          child: const Icon(Icons.close,
+                                              size: 18,
+                                              color: AppColors.secondaryText),
+                                        ),
+                                      ],
+                                    ),
                                   const SizedBox(height: 10),
 
                                   // Search / Product Name Field with Dropdown Overlay
@@ -2851,13 +2860,23 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                         child: TextField(
                                           controller: _inlineSearchCtrl,
                                           focusNode: _inlineSearchFocusNode,
-                                          onTap: _scrollToInlineCard,
-                                          onTapOutside: (_) {
+                                          textInputAction: TextInputAction.next,
+                                          onEditingComplete: () {
                                             _inlineSearchFocusNode.unfocus();
                                             FocusManager.instance.primaryFocus?.unfocus();
-                                            if (_inlineSearchCtrl.text.trim().isEmpty) {
+                                            setState(() {
+                                              _showSearchResultsOverlay = false;
+                                            });
+                                          },
+                                          onSubmitted: (_) {
+                                            _closeInlineAddProductCard();
+                                          },
+                                          onTap: () {
+                                            _scrollToInlineCard();
+                                            if (_inlineSearchCtrl.text.trim().isNotEmpty &&
+                                                _inlineSelectedProduct == null) {
                                               setState(() {
-                                                _showSearchResultsOverlay = false;
+                                                _showSearchResultsOverlay = true;
                                               });
                                             }
                                           },
@@ -2906,8 +2925,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                           ),
                                           onChanged: (val) {
                                             setState(() {
+                                              if (_inlineSelectedProduct != null &&
+                                                  val.trim() !=
+                                                      _inlineSelectedProduct!.name) {
+                                                _inlineSelectedProduct = null;
+                                              }
                                               _showSearchResultsOverlay =
-                                                  val.trim().isNotEmpty;
+                                                  val.trim().isNotEmpty &&
+                                                      _inlineSelectedProduct ==
+                                                          null;
                                             });
                                           },
                                         ),
@@ -2915,7 +2941,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
                                       // Floating Search Results Dropdown Overlay
                                       if (_showSearchResultsOverlay &&
-                                          _inlineSearchResults.isNotEmpty)
+                                          _inlineSearchCtrl.text.trim().isNotEmpty &&
+                                          _inlineSelectedProduct == null)
                                         Container(
                                           margin: const EdgeInsets.only(top: 4),
                                           constraints: const BoxConstraints(
@@ -2935,52 +2962,65 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                               ),
                                             ],
                                           ),
-                                          child: ListView.separated(
-                                            shrinkWrap: true,
-                                            padding: EdgeInsets.zero,
-                                            itemCount:
-                                                _inlineSearchResults.length,
-                                            separatorBuilder: (_, __) =>
-                                                const Divider(
-                                                    height: 1,
-                                                    color: AppColors.border),
-                                            itemBuilder: (context, idx) {
-                                              final prod =
-                                                  _inlineSearchResults[idx];
-                                              return ListTile(
-                                                dense: true,
-                                                title: Text(
-                                                  prod.name,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 14,
-                                                    color:
-                                                        AppColors.darkBlueText,
-                                                  ),
-                                                ),
-                                                subtitle: prod.sku.isNotEmpty
-                                                    ? Text(
-                                                        'SKU: ${prod.sku}',
+                                          child: _inlineSearchResults.isNotEmpty
+                                              ? ListView.separated(
+                                                  shrinkWrap: true,
+                                                  padding: EdgeInsets.zero,
+                                                  itemCount:
+                                                      _inlineSearchResults.length,
+                                                  separatorBuilder: (_, __) =>
+                                                      const Divider(
+                                                          height: 1,
+                                                          color: AppColors.border),
+                                                  itemBuilder: (context, idx) {
+                                                    final prod =
+                                                        _inlineSearchResults[idx];
+                                                    return ListTile(
+                                                      dense: true,
+                                                      title: Text(
+                                                        prod.name,
                                                         style: const TextStyle(
-                                                          fontSize: 12,
-                                                          color: AppColors
-                                                              .secondaryText,
+                                                          fontWeight: FontWeight.w700,
+                                                          fontSize: 14,
+                                                          color:
+                                                              AppColors.darkBlueText,
                                                         ),
-                                                      )
-                                                    : null,
-                                                trailing: Text(
-                                                  '₹${prod.sellingPrice.toStringAsFixed(2)}',
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 14,
-                                                    color: AppColors.primary,
+                                                      ),
+                                                      subtitle: prod.sku.isNotEmpty
+                                                          ? Text(
+                                                              'SKU: ${prod.sku}',
+                                                              style: const TextStyle(
+                                                                fontSize: 12,
+                                                                color: AppColors
+                                                                    .secondaryText,
+                                                              ),
+                                                            )
+                                                          : null,
+                                                      trailing: Text(
+                                                        '₹${prod.sellingPrice.toStringAsFixed(2)}',
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.w800,
+                                                          fontSize: 14,
+                                                          color: AppColors.primary,
+                                                        ),
+                                                      ),
+                                                      onTap: () =>
+                                                          _selectInlineProduct(prod),
+                                                    );
+                                                  },
+                                                )
+                                              : const Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 14, vertical: 12),
+                                                  child: Text(
+                                                    'No products found',
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: AppColors.secondaryText,
+                                                    ),
                                                   ),
                                                 ),
-                                                onTap: () =>
-                                                    _selectInlineProduct(prod),
-                                              );
-                                            },
-                                          ),
                                         ),
                                     ],
                                   ),
@@ -3258,7 +3298,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                               ),
                             ),
                           ),
-                          crossFadeState: _showInlineAddProduct
+                        ),
+                        crossFadeState: _showInlineAddProduct
                               ? CrossFadeState.showSecond
                               : CrossFadeState.showFirst,
                           duration: const Duration(milliseconds: 250),
