@@ -16,6 +16,7 @@ import '../../../domain/repositories/customer_repository.dart';
 import '../../../domain/repositories/expense_repository.dart';
 import '../../../domain/repositories/income_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
+import '../../../infrastructure/services/voucher_sequence_service.dart';
 import '../../widgets/app_button.dart';
 import '../widgets/common_voucher_app_bar.dart';
 import '../widgets/voucher_summary_card.dart';
@@ -105,14 +106,29 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       if (isEditMode) {
         _populateData();
-      } else if (_categories.isNotEmpty) {
-        _selectedCategory = _categories.first;
-        _selectedCategoryId = _selectedCategory!.id;
-        _customCategoryName = _selectedCategory!.name;
+      } else {
+        _loadVoucherId();
+        if (_categories.isNotEmpty) {
+          _selectedCategory = _categories.first;
+          _selectedCategoryId = _selectedCategory!.id;
+          _customCategoryName = _selectedCategory!.name;
+        }
       }
     } catch (_) {}
     if (mounted) {
       setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  String _generatedVoucherId = '';
+
+  Future<void> _loadVoucherId() async {
+    final type = isExpense ? VoucherType.payment : VoucherType.receipt;
+    final generated = await VoucherSequenceService.instance.generateNextVoucherId(type);
+    if (mounted) {
+      setState(() {
+        _generatedVoucherId = generated;
+      });
     }
   }
 
@@ -294,6 +310,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           await getIt<ExpenseRepository>().updateExpense(expense);
         } else {
           await getIt<ExpenseRepository>().createExpense(expense);
+          await VoucherSequenceService.instance.incrementSequence(VoucherType.payment);
         }
       } else {
         final existing = widget.existingTransaction as IncomeEntity?;
@@ -314,6 +331,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           await getIt<IncomeRepository>().updateIncome(income);
         } else {
           await getIt<IncomeRepository>().createIncome(income);
+          await VoucherSequenceService.instance.incrementSequence(VoucherType.receipt);
         }
       }
 
@@ -426,6 +444,56 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildVoucherIdBanner(String voucherId) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.confirmation_number_outlined,
+                  color: AppColors.primaryBlue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Voucher / Transaction ID',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              voucherId.isEmpty
+                  ? (isExpense ? 'PMT-#00-0001' : 'RCT-#00-0001')
+                  : voucherId,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -717,6 +785,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             const SizedBox(height: 20),
 
             // SECTION 2: CUSTOMER / SUPPLIER SELECTION (Optional)
+            _buildVoucherIdBanner(_generatedVoucherId),
             Row(
               children: [
                 Text(
@@ -1034,15 +1103,24 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 );
               }).toList(),
             ),
+            const SizedBox(height: 20),
+            VoucherSummaryCard(
+              subtotal: amount,
+              totalTax: 0.0,
+              discountAmount: 0.0,
+              extraCharges: 0.0,
+              grandTotal: amount,
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
       bottomNavigationBar: Container(
         padding: EdgeInsets.only(
-          left: 20.0,
-          right: 20.0,
-          top: 14.0,
-          bottom: 14.0 + MediaQuery.of(context).padding.bottom,
+          left: 16.0,
+          right: 16.0,
+          top: 12.0,
+          bottom: 12.0 + MediaQuery.of(context).padding.bottom,
         ),
         decoration: BoxDecoration(
           color: AppColors.surfaceCard,
@@ -1054,23 +1132,48 @@ class _TransactionScreenState extends State<TransactionScreen> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            VoucherSummaryCard(
-              subtotal: amount,
-              totalTax: 0.0,
-              discountAmount: 0.0,
-              extraCharges: 0.0,
-              grandTotal: amount,
+            Expanded(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Total Amount',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Total = ₹${amount.toStringAsFixed(2)} /-',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            AppButton(
-              text: isEditMode
-                  ? (isExpense ? 'Update Payment' : 'Update Receipt')
-                  : (isExpense ? 'Save Payment' : 'Save Receipt'),
-              onPressed: _submit,
-              isLoading: _isSaving,
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 5,
+              child: AppButton(
+                text: isEditMode
+                    ? (isExpense ? 'Update Payment' : 'Update Receipt')
+                    : (isExpense ? 'Save Payment' : 'Save Receipt'),
+                onPressed: _submit,
+                isLoading: _isSaving,
+              ),
             ),
           ],
         ),

@@ -23,6 +23,7 @@ import '../../domain/repositories/billing_customer_repository.dart';
 import '../../infrastructure/repositories/billing_customer_repository_impl.dart';
 
 import '../../infrastructure/database/app_database.dart';
+import '../../infrastructure/services/voucher_sequence_service.dart';
 import '../../infrastructure/storage/secure_storage_service.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -40,6 +41,10 @@ Future<void> configureDependencies() async {
 
   final networkChecker = NetworkChecker();
   getIt.registerSingleton<NetworkChecker>(networkChecker);
+
+  getIt.registerLazySingleton<VoucherSequenceService>(
+    () => VoucherSequenceService(db),
+  );
 
   // 2. Sync Repository
   getIt.registerLazySingleton<SyncRepository>(

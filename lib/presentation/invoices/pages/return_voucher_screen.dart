@@ -16,6 +16,7 @@ import '../../../domain/repositories/income_repository.dart';
 import '../../../domain/repositories/invoice_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
 import '../../../domain/repositories/returns_repository.dart';
+import '../../../infrastructure/services/voucher_sequence_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
@@ -113,6 +114,22 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
 
     if (isEditMode) {
       _populateEditData();
+    } else {
+      _loadVoucherId();
+    }
+  }
+
+  String _generatedVoucherId = '';
+
+  Future<void> _loadVoucherId() async {
+    final type = isSalesReturn
+        ? VoucherType.salesReturn
+        : VoucherType.purchaseReturn;
+    final generated = await VoucherSequenceService.instance.generateNextVoucherId(type);
+    if (mounted) {
+      setState(() {
+        _generatedVoucherId = generated;
+      });
     }
   }
 
@@ -339,7 +356,9 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
       final returnId = isEditMode && existingRet != null ? existingRet.id : 'ret_${DateTime.now().millisecondsSinceEpoch}';
       final returnNum = isEditMode && existingRet != null
           ? existingRet.returnNumber
-          : 'RET-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+          : (_generatedVoucherId.isNotEmpty
+              ? _generatedVoucherId
+              : (isSalesReturn ? 'SR-#00-0001' : 'PR-#00-0001'));
 
       final retEntity = InvoiceReturnEntity(
         id: returnId,
@@ -360,6 +379,10 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
         await getIt<ReturnsRepository>().updateReturn(retEntity);
       } else {
         await getIt<ReturnsRepository>().createReturn(retEntity);
+        final type = isSalesReturn
+            ? VoucherType.salesReturn
+            : VoucherType.purchaseReturn;
+        await VoucherSequenceService.instance.incrementSequence(type);
       }
 
       // 2. Adjust Party Outstanding / Payable Balance
@@ -805,8 +828,8 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
         padding: EdgeInsets.only(
           left: 16.0,
           right: 16.0,
-          top: 14.0,
-          bottom: 14.0 + MediaQuery.of(context).padding.bottom,
+          top: 12.0,
+          bottom: 12.0 + MediaQuery.of(context).padding.bottom,
         ),
         decoration: BoxDecoration(
           color: AppColors.surfaceCard,
@@ -818,21 +841,46 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            VoucherSummaryCard(
-              subtotal: _totalReturnAmount,
-              totalTax: 0.0,
-              discountAmount: 0.0,
-              extraCharges: extraCharges,
-              grandTotal: _totalReturnAmount + extraCharges,
+            Expanded(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Total Amount',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Total = ₹${(_totalReturnAmount + extraCharges).toStringAsFixed(2)} /-',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            AppButton(
-              text: isEditMode ? 'Update Return' : 'Save Return',
-              onPressed: _submitReturn,
-              isLoading: _isSaving,
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 5,
+              child: AppButton(
+                text: isEditMode ? 'Update Return' : 'Save Return',
+                onPressed: _submitReturn,
+                isLoading: _isSaving,
+              ),
             ),
           ],
         ),
@@ -871,10 +919,61 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
     );
   }
 
+  Widget _buildVoucherIdBanner(String voucherId) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.confirmation_number_outlined,
+                  color: AppColors.primaryBlue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Voucher / Return ID',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              voucherId.isEmpty
+                  ? (isSalesReturn ? 'SR-#00-0001' : 'PR-#00-0001')
+                  : voucherId,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPartySelectorSection(String partyLabel) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildVoucherIdBanner(_generatedVoucherId),
         Row(
           children: [
             const Icon(Icons.person_search_outlined, size: 18, color: AppColors.primary),
@@ -1442,6 +1541,20 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
               },
             ),
           ],
+          const SizedBox(height: 20),
+          Builder(builder: (context) {
+            final extra = _hasAdditionalExpense
+                ? (double.tryParse(_expenseAmountCtrl.text) ?? 0.0)
+                : 0.0;
+            return VoucherSummaryCard(
+              subtotal: _totalReturnAmount,
+              totalTax: 0.0,
+              discountAmount: 0.0,
+              extraCharges: extra,
+              grandTotal: _totalReturnAmount + extra,
+            );
+          }),
+          const SizedBox(height: 24),
         ],
       ),
     );

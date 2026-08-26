@@ -24,7 +24,7 @@ class VoucherSummaryCard extends StatelessWidget {
         ? '- ₹${discountAmount.toStringAsFixed(2)}'
         : (netDiscountOrCharges > 0
             ? '₹${extraCharges.toStringAsFixed(2)}'
-            : '₹0.00');
+            : '- ₹0.00');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),

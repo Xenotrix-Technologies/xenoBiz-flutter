@@ -33,6 +33,7 @@ import '../../presentation/invoices/pages/transaction_screen.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
+import '../../presentation/settings/pages/voucher_prefix_settings_page.dart';
 import '../../presentation/invoices/pages/sales_overview_page.dart';
 
 import '../../presentation/main/pages/main_shell_page.dart';
@@ -228,6 +229,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.subscription,
         builder: (context, state) => const SubscriptionPaywallPage(),
+      ),
+      GoRoute(
+        path: RouteNames.voucherPrefixSettings,
+        builder: (context, state) => const VoucherPrefixSettingsPage(),
       ),
 
       GoRoute(

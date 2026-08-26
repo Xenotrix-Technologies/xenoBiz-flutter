@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +19,7 @@ import '../../../domain/repositories/purchase_repository.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../../domain/repositories/product_repository.dart';
+import '../../../infrastructure/services/voucher_sequence_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
@@ -166,11 +166,14 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
             ? DocumentType.purchase
             : DocumentType.sale);
 
-    _invoiceId = widget.invoiceToEdit != null
-        ? widget.invoiceToEdit!.invoiceNumber
-        : (widget.invoiceType == InvoiceType.purchase
-            ? 'PUR-${(100000 + Random().nextInt(899999))}'
-            : 'INV-${(100000 + Random().nextInt(899999))}');
+    if (widget.invoiceToEdit != null) {
+      _invoiceId = widget.invoiceToEdit!.invoiceNumber;
+    } else {
+      _invoiceId = widget.invoiceType == InvoiceType.purchase
+          ? 'PUR-#00-0001'
+          : 'INV-#00-0001';
+      _loadVoucherIdFromService();
+    }
 
     _createdDateTime = widget.invoiceToEdit != null
         ? widget.invoiceToEdit!.issueDate
@@ -224,6 +227,66 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         ref.read(createInvoiceFormProvider.notifier).reset();
       }
     });
+  }
+
+  Future<void> _loadVoucherIdFromService() async {
+    final type = widget.invoiceType == InvoiceType.purchase
+        ? VoucherType.purchase
+        : VoucherType.sale;
+    final generated = await VoucherSequenceService.instance.generateNextVoucherId(type);
+    if (mounted) {
+      setState(() {
+        _invoiceId = generated;
+      });
+    }
+  }
+
+  Widget _buildVoucherIdBanner(String voucherId) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.confirmation_number_outlined,
+                  color: AppColors.primaryBlue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Voucher / Invoice ID',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              voucherId,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _loadParties() async {
@@ -1370,6 +1433,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildVoucherIdBanner(_invoiceId),
                       Row(
                         children: [
                           Icon(
@@ -3585,6 +3649,14 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                       ],
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  VoucherSummaryCard(
+                    subtotal: rawSubtotal,
+                    totalTax: taxTotal,
+                    discountAmount: calculatedDiscountTotal,
+                    extraCharges: _extraExpenseAmount,
+                    grandTotal: grandTotal,
+                  ),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -3602,31 +3674,57 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
               ],
             ),
             padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 14,
-              bottom: 14 + MediaQuery.of(context).padding.bottom,
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: 12 + MediaQuery.of(context).padding.bottom,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
               children: [
-                VoucherSummaryCard(
-                  subtotal: rawSubtotal,
-                  totalTax: taxTotal,
-                  discountAmount: calculatedDiscountTotal,
-                  extraCharges: _extraExpenseAmount,
-                  grandTotal: grandTotal,
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Total Amount',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Total = ₹${grandTotal.toStringAsFixed(2)} /-',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryBlue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                BlocBuilder<InvoiceBloc, InvoiceState>(
-                  builder: (context, state) {
-                    return AppButton(
-                      text:
-                          isEditMode ? 'Update Invoice' : 'Proceed to Payment',
-                      onPressed: _onCreateInvoice,
-                      isLoading: state is InvoiceLoadingState,
-                    );
-                  },
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 5,
+                  child: BlocBuilder<InvoiceBloc, InvoiceState>(
+                    builder: (context, state) {
+                      return AppButton(
+                        text: isEditMode
+                            ? 'Update Invoice'
+                            : 'Proceed to Payment',
+                        onPressed: _onCreateInvoice,
+                        isLoading: state is InvoiceLoadingState,
+                      );
+                    },
+                  ),
                 ),
               ],
             ),

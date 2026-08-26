@@ -108,6 +108,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
         _MenuItem(icon: Icons.people_outline, title: 'Staff & Users', route: RouteNames.staffUsers, color: AppColors.primaryBlue, subtitle: 'Employee roles & access'),
         _MenuItem(icon: Icons.business_outlined, title: 'Business Settings', route: RouteNames.businessProfile, color: AppColors.primaryBlue, subtitle: 'Store profile & address'),
         _MenuItem(icon: Icons.receipt_outlined, title: 'Invoice Settings', route: RouteNames.invoiceSettings, color: AppColors.primaryBlue, subtitle: 'Prefix, Terms & Signatures'),
+        _MenuItem(icon: Icons.numbers_outlined, title: 'Voucher Prefix Settings', route: RouteNames.voucherPrefixSettings, color: AppColors.primaryBlue, subtitle: 'Edit voucher prefixes & sequence'),
         _MenuItem(icon: Icons.percent_outlined, title: 'Tax Settings', route: RouteNames.taxGstSettings, color: AppColors.primaryBlue, subtitle: 'GST & tax configuration'),
         _MenuItem(icon: Icons.print_outlined, title: 'Printer Settings', route: RouteNames.printerSettings, color: AppColors.primaryBlue, subtitle: 'Thermal & A4 printer setup'),
         _MenuItem(icon: Icons.notifications_none_outlined, title: 'Notification Settings', route: RouteNames.notificationSettings, color: AppColors.primaryBlue),
