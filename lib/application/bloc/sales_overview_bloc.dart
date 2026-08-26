@@ -9,7 +9,7 @@ import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/expense_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/repositories/returns_repository.dart';
-import '../../infrastructure/storage/hive_service.dart';
+import '../../infrastructure/database/app_database.dart';
 
 // Events
 abstract class SalesOverviewEvent extends Equatable {
@@ -239,14 +239,14 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
   final ExpenseRepository expenseRepository;
   final CustomerRepository customerRepository;
   final ReturnsRepository returnsRepository;
-  final HiveService hiveService;
+  final AppDatabase db;
 
   SalesOverviewBloc({
     required this.invoiceRepository,
     required this.expenseRepository,
     required this.customerRepository,
     required this.returnsRepository,
-    required this.hiveService,
+    required this.db,
   }) : super(SalesOverviewInitialState()) {
     on<FetchSalesOverviewDataEvent>(_onFetchSalesOverviewData);
     on<SearchSalesOverviewEvent>(_onSearchSalesOverview);
@@ -264,33 +264,23 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       final customers = await customerRepository.getCustomers();
       final salesReturns = await returnsRepository.getReturns(InvoiceType.sale);
 
-      // Extract payments from Hive boxPayments
-      final List<PaymentEntity> paymentsList = [];
-      try {
-        final box = hiveService.getBox(HiveService.boxPayments);
-        for (var key in box.keys) {
-          final val = box.get(key);
-          if (val is Map) {
-            paymentsList.add(PaymentEntity(
-              id: val['id']?.toString() ?? key.toString(),
-              invoiceId: val['invoiceId']?.toString() ?? '',
-              customerId: val['customerId']?.toString() ?? '',
-              customerName: val['customerName']?.toString() ?? 'General Customer',
-              amount: (val['amount'] as num?)?.toDouble() ?? 0.0,
-              paymentMode: val['paymentMode']?.toString() ?? 'CASH',
-              referenceNumber: val['referenceNumber']?.toString() ?? '',
-              paymentDate: val['paymentDate'] != null ? DateTime.tryParse(val['paymentDate'].toString()) ?? DateTime.now() : DateTime.now(),
-              notes: val['notes']?.toString() ?? '',
-            ));
-          }
-        }
-      } catch (_) {}
+      final paymentRows = await db.select(db.payments).get();
+      final List<PaymentEntity> paymentsList = paymentRows.map((val) => PaymentEntity(
+        id: val.id,
+        invoiceId: val.invoiceId,
+        customerId: val.customerId,
+        customerName: val.customerName,
+        amount: val.amount,
+        paymentMode: val.paymentMode,
+        referenceNumber: val.referenceNumber,
+        paymentDate: val.paymentDate,
+        notes: val.notes,
+      )).toList();
 
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
       final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
-      // Today Analytics
       final todayInvoices = invoices.where((i) {
         return i.issueDate.isAfter(todayStart.subtract(const Duration(seconds: 1))) &&
             i.issueDate.isBefore(todayEnd.add(const Duration(seconds: 1)));
@@ -317,7 +307,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
             .fold(0.0, (sum, i) => sum + i.dueAmount);
       }
 
-      // Weekly breakdown
       final monday = todayStart.subtract(Duration(days: now.weekday - 1));
       final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       final List<DailySalesExpenseData> weeklyBreakdown = [];
@@ -351,7 +340,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       final weeklyExpenses = weeklyBreakdown.fold(0.0, (sum, d) => sum + d.expenses);
       final weeklyNet = weeklySales - weeklyExpenses;
 
-      // Map Invoices into SalesTransactionWrapper
       final List<SalesTransactionWrapper> transactionsList = [];
 
       for (var inv in invoices) {
@@ -376,7 +364,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         ));
       }
 
-      // Map Sales Returns into SalesTransactionWrapper
       for (var ret in salesReturns) {
         transactionsList.add(SalesTransactionWrapper(
           id: ret.id,
@@ -392,7 +379,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         ));
       }
 
-      // Map Payments into SalesTransactionWrapper
       for (var pay in paymentsList) {
         transactionsList.add(SalesTransactionWrapper(
           id: pay.id,
@@ -408,7 +394,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         ));
       }
 
-      // Sort DESC by Date
       transactionsList.sort((a, b) => b.date.compareTo(a.date));
 
       final initialFiltered = _filterTransactions(
@@ -574,7 +559,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
   }) {
     List<SalesTransactionWrapper> result = List.from(allTransactions);
 
-    // Search Query
     if (query.trim().isNotEmpty) {
       final q = query.toLowerCase().trim();
       result = result.where((item) {
@@ -585,7 +569,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }).toList();
     }
 
-    // Transaction Type Filter (All, Invoices, Returns, Payments)
     if (typeFilter != 'All') {
       if (typeFilter == 'Invoices' || typeFilter == 'Invoice') {
         result = result.where((item) => item.isInvoice).toList();
@@ -596,7 +579,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
-    // Payment Status Filter (All, Paid, Partially Paid, Unpaid, Overdue)
     if (statusFilter != 'All') {
       final now = DateTime.now();
       if (statusFilter == 'Paid') {
@@ -617,7 +599,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
-    // Invoice Status Filter (Draft, Issued, Cancelled, Returned)
     if (invoiceStatusFilter != 'All') {
       if (invoiceStatusFilter == 'Draft') {
         result = result.where((item) => item.isInvoice && item.asInvoice?.status == InvoiceStatus.draft).toList();
@@ -630,13 +611,11 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
-    // Customer Filter
     if (customer != 'All' && customer.trim().isNotEmpty) {
       final cust = customer.toLowerCase().trim();
       result = result.where((item) => item.customerName.toLowerCase().contains(cust)).toList();
     }
 
-    // Date Range Filter
     if (dateRangeFilter != 'All') {
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
@@ -663,7 +642,6 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
-    // Sorting
     switch (sortOption) {
       case 'oldest':
         result.sort((a, b) => a.date.compareTo(b.date));

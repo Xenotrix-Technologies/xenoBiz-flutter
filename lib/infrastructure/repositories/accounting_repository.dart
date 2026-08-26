@@ -1,9 +1,9 @@
 import 'dart:convert';
 import '../../domain/entities/accounting_entities.dart';
-import '../storage/hive_service.dart';
+import '../database/app_database.dart';
 
 class AccountingRepository {
-  final HiveService _hiveService;
+  final AppDatabase db;
 
   static const String _journalBoxKey = 'journal_entries';
   static const String _contraBoxKey = 'contra_entries';
@@ -11,21 +11,20 @@ class AccountingRepository {
   final List<JournalEntryEntity> _memoryJournals = [];
   final List<ContraEntryEntity> _memoryContras = [];
 
-  AccountingRepository(this._hiveService) {
-    _loadFromHive();
+  AccountingRepository(this.db) {
+    _loadFromDatabase();
   }
 
-  void _loadFromHive() {
+  Future<void> _loadFromDatabase() async {
     try {
-      final box = _hiveService.getBox(HiveService.boxBusiness);
-      final rawJournals = box.get(_journalBoxKey);
+      final rawJournals = await db.getKeyValue(_journalBoxKey);
       if (rawJournals != null) {
         final List list = jsonDecode(rawJournals.toString());
         _memoryJournals.clear();
         _memoryJournals.addAll(list.map((e) => JournalEntryEntity.fromJson(Map<String, dynamic>.from(e))));
       }
 
-      final rawContras = box.get(_contraBoxKey);
+      final rawContras = await db.getKeyValue(_contraBoxKey);
       if (rawContras != null) {
         final List list = jsonDecode(rawContras.toString());
         _memoryContras.clear();
@@ -44,11 +43,10 @@ class AccountingRepository {
     }
   }
 
-  void _saveToHive() {
+  Future<void> _saveToDatabase() async {
     try {
-      final box = _hiveService.getBox(HiveService.boxBusiness);
-      box.put(_journalBoxKey, jsonEncode(_memoryJournals.map((j) => j.toJson()).toList()));
-      box.put(_contraBoxKey, jsonEncode(_memoryContras.map((c) => c.toJson()).toList()));
+      await db.putKeyValue(_journalBoxKey, jsonEncode(_memoryJournals.map((j) => j.toJson()).toList()));
+      await db.putKeyValue(_contraBoxKey, jsonEncode(_memoryContras.map((c) => c.toJson()).toList()));
     } catch (_) {}
   }
 
@@ -116,7 +114,7 @@ class AccountingRepository {
   Future<void> saveJournalEntry(JournalEntryEntity entry) async {
     _memoryJournals.removeWhere((j) => j.id == entry.id);
     _memoryJournals.add(entry);
-    _saveToHive();
+    await _saveToDatabase();
   }
 
   // Contra Operations
@@ -127,7 +125,7 @@ class AccountingRepository {
   Future<void> saveContraEntry(ContraEntryEntity entry) async {
     _memoryContras.removeWhere((c) => c.id == entry.id);
     _memoryContras.add(entry);
-    _saveToHive();
+    await _saveToDatabase();
   }
 
   // Daily Book Aggregated View
@@ -139,7 +137,6 @@ class AccountingRepository {
     final List<DailyBookTransactionEntity> list = [];
     final targetDate = date ?? DateTime.now();
 
-    // Mock realistic daily book stream
     list.addAll([
       DailyBookTransactionEntity(
         id: 'db-1',
@@ -209,13 +206,11 @@ class AccountingRepository {
       ),
     ]);
 
-    // Apply type filter
     var filtered = list;
     if (typeFilter != null) {
       filtered = filtered.where((tx) => tx.type == typeFilter).toList();
     }
 
-    // Apply search query
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final q = searchQuery.toLowerCase();
       filtered = filtered.where((tx) =>

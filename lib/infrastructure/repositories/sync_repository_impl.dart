@@ -1,91 +1,78 @@
+import 'dart:convert';
+import 'package:drift/drift.dart';
 import '../../domain/entities/sync_item_entity.dart';
 import '../../domain/repositories/sync_repository.dart';
+import '../database/app_database.dart';
 import '../network/dio_client.dart';
 import '../network/network_checker.dart';
-import '../storage/hive_service.dart';
 
 class SyncRepositoryImpl implements SyncRepository {
-  final HiveService hiveService;
+  final AppDatabase db;
   final DioClient dioClient;
   final NetworkChecker networkChecker;
 
   SyncRepositoryImpl({
-    required this.hiveService,
+    required this.db,
     required this.dioClient,
     required this.networkChecker,
   });
 
-  SyncAction _parseAction(String? actionStr) {
+  SyncAction _parseAction(String actionStr) {
     if (actionStr == 'update' || actionStr == 'SyncAction.update') return SyncAction.update;
     if (actionStr == 'delete' || actionStr == 'SyncAction.delete') return SyncAction.delete;
     return SyncAction.create;
   }
 
-  Map<String, dynamic> _syncItemToMap(SyncItemEntity item) {
-    return {
-      'id': item.id,
-      'entityType': item.entityType,
-      'action': item.action.name,
-      'payload': item.payload,
-      'createdAt': item.createdAt.toIso8601String(),
-      'retryCount': item.retryCount,
-      'status': item.status,
-    };
+  SyncItemEntity _rowToSyncItem(SyncQueueData row) {
+    Map<String, dynamic> payloadMap = {};
+    try {
+      payloadMap = Map<String, dynamic>.from(jsonDecode(row.payload));
+    } catch (_) {}
+
+    return SyncItemEntity(
+      id: row.id,
+      entityType: row.entityType,
+      action: _parseAction(row.action),
+      payload: payloadMap,
+      createdAt: row.createdAt,
+      retryCount: row.retryCount,
+      status: row.status,
+    );
   }
 
-  SyncItemEntity _mapToSyncItem(Map<dynamic, dynamic> map) {
-    return SyncItemEntity(
-      id: map['id']?.toString() ?? '',
-      entityType: map['entityType']?.toString() ?? 'UNKNOWN',
-      action: _parseAction(map['action']?.toString()),
-      payload: Map<String, dynamic>.from(map['payload'] is Map ? map['payload'] : {}),
-      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ?? DateTime.now(),
-      retryCount: (map['retryCount'] as num?)?.toInt() ?? 0,
-      status: map['status']?.toString() ?? 'PENDING',
+  SyncQueueCompanion _syncItemToCompanion(SyncItemEntity item) {
+    return SyncQueueCompanion(
+      id: Value(item.id),
+      entityType: Value(item.entityType),
+      action: Value(item.action.name),
+      payload: Value(jsonEncode(item.payload)),
+      createdAt: Value(item.createdAt),
+      retryCount: Value(item.retryCount),
+      status: Value(item.status),
     );
   }
 
   @override
   Future<List<SyncItemEntity>> getPendingSyncItems() async {
-    final box = hiveService.getBox(HiveService.boxSyncQueue);
-    final List<SyncItemEntity> list = [];
-
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        final item = _mapToSyncItem(val);
-        if (item.status == 'PENDING' || item.status == 'FAILED') {
-          list.add(item);
-        }
-      }
-    }
-    list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    return list;
+    final q = db.select(db.syncQueue)
+      ..where((t) => t.status.equals('PENDING') | t.status.equals('FAILED'))
+      ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]);
+    final rows = await q.get();
+    return rows.map(_rowToSyncItem).toList();
   }
 
   @override
   Future<void> enqueueSyncItem(SyncItemEntity item) async {
-    final box = hiveService.getBox(HiveService.boxSyncQueue);
-    await box.put(item.id, _syncItemToMap(item));
+    await db.into(db.syncQueue).insertOnConflictUpdate(_syncItemToCompanion(item));
   }
 
   @override
   Future<void> processSyncQueue() async {
-    // Cloud sync for business data is disabled in Local-First mode.
-    // Business data is managed locally on device in Hive.
     return;
   }
 
   @override
   Future<void> clearCompletedSyncItems() async {
-    final box = hiveService.getBox(HiveService.boxSyncQueue);
-    final List<dynamic> keysToRemove = [];
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map && val['status'] == 'COMPLETED') {
-        keysToRemove.add(key);
-      }
-    }
-    await box.deleteAll(keysToRemove);
+    await (db.delete(db.syncQueue)..where((t) => t.status.equals('COMPLETED'))).go();
   }
 }

@@ -6,7 +6,7 @@ import 'application/di/injection.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Dependency Injection & Hive local storage
+  // 1. Initialize Dependency Injection & Drift local storage
   await configureDependencies();
 
   // 2. Request & verify startup permissions: Camera, Storage, Photos

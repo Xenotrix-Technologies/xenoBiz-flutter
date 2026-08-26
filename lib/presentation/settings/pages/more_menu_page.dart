@@ -10,7 +10,7 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
-import '../../../infrastructure/storage/hive_service.dart';
+import '../../../infrastructure/database/app_database.dart';
 import '../../widgets/app_card.dart';
 
 class MoreMenuPage extends StatefulWidget {
@@ -125,11 +125,10 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     _loadRecentlyUsed();
   }
 
-  void _loadRecentlyUsed() {
+  Future<void> _loadRecentlyUsed() async {
     try {
-      final hive = getIt<HiveService>();
-      final box = hive.getBox(HiveService.boxBusiness);
-      final raw = box.get('recently_used_tools');
+      final db = getIt<AppDatabase>();
+      final raw = await db.getKeyValue('recently_used_tools');
       if (raw != null) {
         final List list = jsonDecode(raw.toString());
         final allItems = _allSections.expand((cat) => cat.items).toList();
@@ -149,7 +148,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     } catch (_) {}
   }
 
-  void _trackToolTap(_MenuItem item) {
+  Future<void> _trackToolTap(_MenuItem item) async {
     setState(() {
       _recentlyUsed.removeWhere((i) => i.title == item.title);
       _recentlyUsed.insert(0, item);
@@ -159,13 +158,14 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     });
 
     try {
-      final hive = getIt<HiveService>();
-      final box = hive.getBox(HiveService.boxBusiness);
+      final db = getIt<AppDatabase>();
       final titles = _recentlyUsed.map((i) => i.title).toList();
-      box.put('recently_used_tools', jsonEncode(titles));
+      await db.putKeyValue('recently_used_tools', jsonEncode(titles));
     } catch (_) {}
 
-    context.push(item.route, extra: item.extra);
+    if (mounted) {
+      context.push(item.route, extra: item.extra);
+    }
   }
 
   @override
@@ -601,24 +601,6 @@ class _UserProfileHeaderCardState extends State<_UserProfileHeaderCard> {
               state.business!.logoUrl!.trim().isNotEmpty) {
             fetchedLogo = state.business!.logoUrl!.trim();
           }
-        } else {
-          try {
-            final hive = getIt<HiveService>();
-            final bizBox = hive.getBox(HiveService.boxBusiness);
-            final cachedBiz = bizBox.get('name')?.toString();
-            final cachedCat = bizBox.get('category')?.toString();
-            final cachedLogo = bizBox.get('logoUrl')?.toString();
-
-            if (cachedBiz != null && cachedBiz.trim().isNotEmpty) {
-              fetchedName = cachedBiz.trim();
-            }
-            if (cachedCat != null && cachedCat.trim().isNotEmpty) {
-              fetchedCategory = cachedCat.trim();
-            }
-            if (cachedLogo != null && cachedLogo.trim().isNotEmpty) {
-              fetchedLogo = cachedLogo.trim();
-            }
-          } catch (_) {}
         }
 
         final displayBusinessName =

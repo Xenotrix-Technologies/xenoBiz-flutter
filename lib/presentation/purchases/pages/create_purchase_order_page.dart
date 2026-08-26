@@ -70,7 +70,7 @@ class _CreatePurchaseOrderPageState extends State<CreatePurchaseOrderPage> {
           .read<PurchaseBloc>()
           .add(CreatePurchaseOrderSubmittedEvent(purchase));
 
-      // Increase stock in Hive if product selected
+      // Increase stock in Drift if product selected
       if (_selectedProduct != null && purchasedQty > 0) {
         context.read<ProductBloc>().add(
               AdjustStockEvent(

@@ -7,7 +7,7 @@ import '../../../application/di/injection.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/repositories/auth_repository.dart';
-import '../../../infrastructure/storage/hive_service.dart';
+import '../../../infrastructure/database/app_database.dart';
 import '../../widgets/ui_state_widgets.dart';
 
 class BusinessProfilePage extends StatefulWidget {
@@ -102,24 +102,22 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   Future<void> _loadExistingProfile() async {
     setState(() => _isLoading = true);
     try {
-      final hive = getIt<HiveService>();
-      final bizBox = hive.getBox(HiveService.boxBusiness);
-      final authBox = hive.getBox(HiveService.boxAuth);
+      final db = getIt<AppDatabase>();
 
-      String name = bizBox.get('name')?.toString() ?? '';
-      String phone = bizBox.get('phone')?.toString() ?? '';
-      String email = bizBox.get('email')?.toString() ?? '';
-      String address = bizBox.get('address')?.toString() ?? '';
-      String gstin = bizBox.get('gstin')?.toString() ?? '';
-      String category = bizBox.get('category')?.toString() ?? 'General Store';
-      String currency = bizBox.get('currency')?.toString() ?? '₹';
-      String? logo = bizBox.get('logoUrl')?.toString();
+      String name = await db.getKeyValue('biz_name') ?? '';
+      String phone = await db.getKeyValue('biz_phone') ?? '';
+      String email = await db.getKeyValue('biz_email') ?? '';
+      String address = await db.getKeyValue('biz_address') ?? '';
+      String gstin = await db.getKeyValue('biz_gstin') ?? '';
+      String category = await db.getKeyValue('biz_category') ?? 'General Store';
+      String currency = await db.getKeyValue('biz_currency') ?? '₹';
+      String? logo = await db.getKeyValue('biz_logoUrl');
 
-      String ownerName = authBox.get('userName')?.toString() ?? '';
-      if (email.isEmpty) email = authBox.get('userEmail')?.toString() ?? '';
-      if (phone.isEmpty) phone = authBox.get('userPhone')?.toString() ?? '';
+      String ownerName = await db.getKeyValue('auth_userName') ?? '';
+      if (email.isEmpty) email = await db.getKeyValue('auth_userEmail') ?? '';
+      if (phone.isEmpty) phone = await db.getKeyValue('auth_userPhone') ?? '';
 
-      // If hive is empty, fetch from AuthRepository
+      // If database is empty, fetch from AuthRepository
       if (name.isEmpty) {
         final authRepo = getIt<AuthRepository>();
         final profile = await authRepo.getBusinessProfile();
@@ -372,10 +370,9 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     setState(() => _isLoading = true);
 
     try {
-      final hive = getIt<HiveService>();
-      final bizBox = hive.getBox(HiveService.boxBusiness);
+      final db = getIt<AppDatabase>();
 
-      final String updatedId = bizBox.get('id')?.toString() ?? 'biz_main';
+      final String updatedId = await db.getKeyValue('biz_id') ?? 'biz_main';
       final String name = _nameController.text.trim();
       final String ownerName = _ownerNameController.text.trim();
       final String phone = _phoneController.text.trim();
@@ -384,19 +381,19 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       final String gstin = _gstinController.text.trim();
       final String? logo = _logoUrl;
 
-      // 1. Write directly to Hive business box
-      await bizBox.put('id', updatedId);
-      await bizBox.put('name', name);
-      await bizBox.put('phone', phone);
-      await bizBox.put('email', email);
-      await bizBox.put('address', address);
-      await bizBox.put('gstin', gstin);
-      await bizBox.put('category', _selectedCategory);
-      await bizBox.put('currency', _selectedCurrency);
+      // 1. Write directly to Drift AppDatabase
+      await db.putKeyValue('biz_id', updatedId);
+      await db.putKeyValue('biz_name', name);
+      await db.putKeyValue('biz_phone', phone);
+      await db.putKeyValue('biz_email', email);
+      await db.putKeyValue('biz_address', address);
+      await db.putKeyValue('biz_gstin', gstin);
+      await db.putKeyValue('biz_category', _selectedCategory);
+      await db.putKeyValue('biz_currency', _selectedCurrency);
       if (logo != null && logo.isNotEmpty) {
-        await bizBox.put('logoUrl', logo);
+        await db.putKeyValue('biz_logoUrl', logo);
       } else {
-        await bizBox.delete('logoUrl');
+        await db.deleteKeyValue('biz_logoUrl');
       }
 
       final updatedEntity = BusinessEntity(

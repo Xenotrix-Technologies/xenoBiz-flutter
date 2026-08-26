@@ -1,89 +1,80 @@
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/billing_customer_entity.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/repositories/billing_customer_repository.dart';
 import '../../domain/repositories/sync_repository.dart';
+import '../database/app_database.dart';
 import '../network/dio_client.dart';
 import '../network/network_checker.dart';
-import '../storage/hive_service.dart';
 
 class BillingCustomerRepositoryImpl implements BillingCustomerRepository {
   final DioClient dioClient;
-  final HiveService hiveService;
+  final AppDatabase db;
   final NetworkChecker networkChecker;
   final SyncRepository syncRepository;
 
   BillingCustomerRepositoryImpl({
     required this.dioClient,
-    required this.hiveService,
+    required this.db,
     required this.networkChecker,
     required this.syncRepository,
   });
 
-  Map<String, dynamic> _customerToMap(BillingCustomerEntity c, {String syncStatus = 'synced'}) {
-    return {
-      'id': c.id,
-      'name': c.name,
-      'phone': c.phone,
-      'email': c.email,
-      'address': c.address,
-      'state': c.state,
-      'outstandingBalance': c.outstandingBalance,
-      'totalPurchases': c.totalPurchases,
-      'createdAt': c.createdAt.toIso8601String(),
-      'syncStatus': syncStatus,
-    };
+  BillingCustomerEntity _rowToCustomer(Customer row) {
+    return BillingCustomerEntity(
+      id: row.id,
+      name: row.name,
+      phone: row.phone,
+      email: row.email,
+      address: row.address,
+      state: row.state,
+      outstandingBalance: row.outstandingBalance,
+      totalPurchases: row.totalPurchases,
+      createdAt: row.createdAt,
+    );
   }
 
-  BillingCustomerEntity _mapToCustomer(Map<dynamic, dynamic> map) {
-    return BillingCustomerEntity(
-      id: map['id']?.toString() ?? '',
-      name: map['name']?.toString() ?? 'Unnamed Customer',
-      phone: map['phone']?.toString() ?? '',
-      email: map['email']?.toString() ?? '',
-      address: map['address']?.toString() ?? '',
-      state: map['state']?.toString(),
-      outstandingBalance: (map['outstandingBalance'] as num?)?.toDouble() ??
-          (map['outstanding_balance'] as num?)?.toDouble() ?? 0.0,
-      totalPurchases: (map['totalPurchases'] as num?)?.toDouble() ??
-          (map['total_purchases'] as num?)?.toDouble() ?? 0.0,
-      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? map['created_at']?.toString() ?? '') ??
-          DateTime.now(),
+  CustomersCompanion _customerToCompanion(BillingCustomerEntity c, {String syncStatus = 'synced'}) {
+    return CustomersCompanion(
+      id: Value(c.id),
+      name: Value(c.name),
+      phone: Value(c.phone),
+      email: Value(c.email),
+      address: Value(c.address),
+      state: Value(c.state),
+      outstandingBalance: Value(c.outstandingBalance),
+      totalPurchases: Value(c.totalPurchases),
+      createdAt: Value(c.createdAt),
+      syncStatus: Value(syncStatus),
     );
   }
 
   @override
   Future<List<BillingCustomerEntity>> getBillingCustomers({String? query}) async {
-    final box = hiveService.getBox(HiveService.boxBillingCustomers);
-    final List<BillingCustomerEntity> localCustomers = [];
+    final q = db.select(db.customers)..orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
+    final rows = await q.get();
 
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        localCustomers.add(_mapToCustomer(val));
-      }
-    }
-
-    localCustomers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final localCustomers = rows.map(_rowToCustomer).toList();
 
     if (query == null || query.isEmpty) {
       return localCustomers;
     }
 
-    final q = query.toLowerCase();
+    final lowerQ = query.toLowerCase();
     return localCustomers.where((c) {
-      return c.name.toLowerCase().contains(q) ||
-          c.phone.toLowerCase().contains(q) ||
-          c.email.toLowerCase().contains(q);
+      return c.name.toLowerCase().contains(lowerQ) ||
+          c.phone.toLowerCase().contains(lowerQ) ||
+          c.email.toLowerCase().contains(lowerQ);
     }).toList();
   }
 
   @override
   Future<BillingCustomerEntity> getBillingCustomer(String id) async {
-    final box = hiveService.getBox(HiveService.boxBillingCustomers);
-    final val = box.get(id);
-    if (val is Map) {
-      return _mapToCustomer(val);
+    final q = db.select(db.customers)..where((t) => t.id.equals(id));
+    final row = await q.getSingleOrNull();
+    if (row != null) {
+      return _rowToCustomer(row);
     }
     return BillingCustomerEntity(
       id: id,
@@ -97,25 +88,22 @@ class BillingCustomerRepositoryImpl implements BillingCustomerRepository {
 
   @override
   Future<BillingCustomerEntity> createBillingCustomer(BillingCustomerEntity customer) async {
-    final box = hiveService.getBox(HiveService.boxBillingCustomers);
     final String customerId = customer.id.isNotEmpty ? customer.id : const Uuid().v4();
     final localCustomer = customer.copyWith(id: customerId);
 
-    await box.put(customerId, _customerToMap(localCustomer, syncStatus: 'synced'));
+    await db.into(db.customers).insertOnConflictUpdate(_customerToCompanion(localCustomer));
     return localCustomer;
   }
 
   @override
   Future<BillingCustomerEntity> updateBillingCustomer(BillingCustomerEntity customer) async {
-    final box = hiveService.getBox(HiveService.boxBillingCustomers);
-    await box.put(customer.id, _customerToMap(customer, syncStatus: 'synced'));
+    await db.into(db.customers).insertOnConflictUpdate(_customerToCompanion(customer));
     return customer;
   }
 
   @override
   Future<void> deleteBillingCustomer(String id) async {
-    final box = hiveService.getBox(HiveService.boxBillingCustomers);
-    await box.delete(id);
+    await (db.delete(db.customers)..where((t) => t.id.equals(id))).go();
   }
 
   // Alias methods for backward compatibility

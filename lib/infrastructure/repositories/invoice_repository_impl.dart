@@ -1,26 +1,27 @@
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/entities/payment_entity.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/repositories/sync_repository.dart';
+import '../database/app_database.dart';
 import '../network/dio_client.dart';
 import '../network/network_checker.dart';
-import '../storage/hive_service.dart';
 
 class InvoiceRepositoryImpl implements InvoiceRepository {
   final DioClient dioClient;
-  final HiveService hiveService;
+  final AppDatabase db;
   final NetworkChecker networkChecker;
   final SyncRepository syncRepository;
 
   InvoiceRepositoryImpl({
     required this.dioClient,
-    required this.hiveService,
+    required this.db,
     required this.networkChecker,
     required this.syncRepository,
   });
 
-  InvoiceStatus _parseStatus(String? statusStr) {
+  InvoiceStatus _parseStatus(String statusStr) {
     if (statusStr == 'paid' || statusStr == 'InvoiceStatus.paid') return InvoiceStatus.paid;
     if (statusStr == 'partiallyPaid' || statusStr == 'partially_paid' || statusStr == 'InvoiceStatus.partiallyPaid') {
       return InvoiceStatus.partiallyPaid;
@@ -30,128 +31,108 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
     return InvoiceStatus.unpaid;
   }
 
-  Map<String, dynamic> _invoiceToMap(InvoiceEntity inv, {String syncStatus = 'synced'}) {
-    return {
-      'id': inv.id,
-      'invoiceNumber': inv.invoiceNumber,
-      'type': inv.type.name,
-      'customerId': inv.customerId,
-      'customerName': inv.customerName,
-      'customerPhone': inv.customerPhone,
-      'items': inv.items.map((i) => {
-        'productId': i.productId,
-        'productName': i.productName,
-        'sku': i.sku,
-        'quantity': i.quantity,
-        'unitPrice': i.unitPrice,
-        'taxPercentage': i.taxPercentage,
-      }).toList(),
-      'subtotal': inv.subtotal,
-      'taxTotal': inv.taxTotal,
-      'discountTotal': inv.discountTotal,
-      'grandTotal': inv.grandTotal,
-      'paidAmount': inv.paidAmount,
-      'status': inv.status.name,
-      'issueDate': inv.issueDate.toIso8601String(),
-      'dueDate': inv.dueDate.toIso8601String(),
-      'notes': inv.notes,
-      'syncStatus': syncStatus,
-    };
-  }
-
-  InvoiceEntity _mapToInvoice(Map<dynamic, dynamic> map) {
-    final List rawItems = map['items'] is List ? map['items'] : [];
-    final items = rawItems.map((itm) {
-      if (itm is Map) {
-        return InvoiceItemEntity(
-          productId: itm['productId']?.toString() ?? itm['product_id']?.toString() ?? '',
-          productName: itm['productName']?.toString() ?? itm['product_name']?.toString() ?? 'Item',
-          sku: itm['sku']?.toString() ?? '',
-          quantity: (itm['quantity'] as num?)?.toInt() ?? 1,
-          unitPrice: (itm['unitPrice'] as num?)?.toDouble() ??
-              (itm['unit_price'] as num?)?.toDouble() ?? 0.0,
-          taxPercentage: (itm['taxPercentage'] as num?)?.toDouble() ??
-              (itm['tax_percentage'] as num?)?.toDouble() ?? 0.0,
-        );
-      }
-      return const InvoiceItemEntity(productId: '', productName: '', quantity: 1, unitPrice: 0.0);
-    }).toList();
-
-    final typeStr = map['type']?.toString();
-    final type = typeStr == 'purchase' || typeStr == 'InvoiceType.purchase'
+  InvoiceEntity _rowToInvoice(Invoice row, List<InvoiceItem> itemRows) {
+    final type = row.type == 'purchase' || row.type == 'InvoiceType.purchase'
         ? InvoiceType.purchase
         : InvoiceType.sale;
 
+    final items = itemRows.map((i) => InvoiceItemEntity(
+      productId: i.productId,
+      productName: i.productName,
+      sku: i.sku,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      taxPercentage: i.taxPercentage,
+    )).toList();
+
     return InvoiceEntity(
-      id: map['id']?.toString() ?? '',
-      invoiceNumber: map['invoiceNumber']?.toString() ?? map['invoice_number']?.toString() ?? 'INV-000',
+      id: row.id,
+      invoiceNumber: row.invoiceNumber,
       type: type,
-      customerId: map['customerId']?.toString() ?? map['customer_id']?.toString() ?? '',
-      customerName: map['customerName']?.toString() ?? map['customer_name']?.toString() ?? 'Guest Customer',
-      customerPhone: map['customerPhone']?.toString() ?? map['customer_phone']?.toString() ?? '',
+      customerId: row.customerId,
+      customerName: row.customerName,
+      customerPhone: row.customerPhone,
       items: items,
-      subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
-      taxTotal: (map['taxTotal'] as num?)?.toDouble() ?? (map['tax_total'] as num?)?.toDouble() ?? 0.0,
-      discountTotal: (map['discountTotal'] as num?)?.toDouble() ?? (map['discount_total'] as num?)?.toDouble() ?? 0.0,
-      grandTotal: (map['grandTotal'] as num?)?.toDouble() ?? (map['grand_total'] as num?)?.toDouble() ?? 0.0,
-      paidAmount: (map['paidAmount'] as num?)?.toDouble() ?? (map['paid_amount'] as num?)?.toDouble() ?? 0.0,
-      status: _parseStatus(map['status']?.toString() ?? map['payment_status']?.toString()),
-      issueDate: DateTime.tryParse(map['issueDate']?.toString() ?? map['issue_date']?.toString() ?? '') ?? DateTime.now(),
-      dueDate: DateTime.tryParse(map['dueDate']?.toString() ?? map['due_date']?.toString() ?? '') ?? DateTime.now(),
-      notes: map['notes']?.toString() ?? '',
+      subtotal: row.subtotal,
+      taxTotal: row.taxTotal,
+      discountTotal: row.discountTotal,
+      grandTotal: row.grandTotal,
+      paidAmount: row.paidAmount,
+      status: _parseStatus(row.status),
+      issueDate: row.issueDate,
+      dueDate: row.dueDate,
+      notes: row.notes,
     );
   }
 
-  PaymentEntity _mapToPayment(Map<dynamic, dynamic> map) {
+  InvoicesCompanion _invoiceToCompanion(InvoiceEntity inv, {String syncStatus = 'synced'}) {
+    return InvoicesCompanion(
+      id: Value(inv.id),
+      invoiceNumber: Value(inv.invoiceNumber),
+      type: Value(inv.type.name),
+      customerId: Value(inv.customerId),
+      customerName: Value(inv.customerName),
+      customerPhone: Value(inv.customerPhone),
+      subtotal: Value(inv.subtotal),
+      taxTotal: Value(inv.taxTotal),
+      discountTotal: Value(inv.discountTotal),
+      grandTotal: Value(inv.grandTotal),
+      paidAmount: Value(inv.paidAmount),
+      status: Value(inv.status.name),
+      issueDate: Value(inv.issueDate),
+      dueDate: Value(inv.dueDate),
+      notes: Value(inv.notes),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  PaymentEntity _rowToPayment(Payment row) {
     return PaymentEntity(
-      id: map['id']?.toString() ?? '',
-      invoiceId: map['invoiceId']?.toString() ?? map['invoice_id']?.toString() ?? '',
-      customerId: map['customerId']?.toString() ?? map['customer_id']?.toString() ?? '',
-      customerName: map['customerName']?.toString() ?? map['customer_name']?.toString() ?? 'Customer',
-      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      paymentMode: map['paymentMode']?.toString() ?? map['payment_method']?.toString() ?? 'Cash',
-      paymentDate: DateTime.tryParse(map['paymentDate']?.toString() ?? map['payment_date']?.toString() ?? map['created_at']?.toString() ?? '') ?? DateTime.now(),
-      notes: map['notes']?.toString() ?? '',
+      id: row.id,
+      invoiceId: row.invoiceId,
+      customerId: row.customerId,
+      customerName: row.customerName,
+      amount: row.amount,
+      paymentMode: row.paymentMode,
+      paymentDate: row.paymentDate,
+      notes: row.notes,
     );
   }
 
-  Map<String, dynamic> _paymentToMap(PaymentEntity p, {String syncStatus = 'synced'}) {
-    return {
-      'id': p.id,
-      'invoiceId': p.invoiceId,
-      'customerId': p.customerId,
-      'customerName': p.customerName,
-      'amount': p.amount,
-      'paymentMode': p.paymentMode,
-      'paymentDate': p.paymentDate.toIso8601String(),
-      'notes': p.notes,
-      'syncStatus': syncStatus,
-    };
+  PaymentsCompanion _paymentToCompanion(PaymentEntity p, {String syncStatus = 'synced'}) {
+    return PaymentsCompanion(
+      id: Value(p.id),
+      invoiceId: Value(p.invoiceId),
+      customerId: Value(p.customerId),
+      customerName: Value(p.customerName),
+      amount: Value(p.amount),
+      paymentMode: Value(p.paymentMode),
+      paymentDate: Value(p.paymentDate),
+      notes: Value(p.notes),
+      syncStatus: Value(syncStatus),
+    );
   }
 
   @override
   Future<List<InvoiceEntity>> getInvoices({InvoiceStatus? status, String? query}) async {
-    final box = hiveService.getBox(HiveService.boxInvoices);
-    final List<InvoiceEntity> localInvoices = [];
+    final q = db.select(db.invoices)..orderBy([(t) => OrderingTerm.desc(t.issueDate)]);
+    final rows = await q.get();
 
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        localInvoices.add(_mapToInvoice(val));
-      }
+    final List<InvoiceEntity> list = [];
+    for (var row in rows) {
+      final itemRows = await (db.select(db.invoiceItems)..where((t) => t.invoiceId.equals(row.id))).get();
+      list.add(_rowToInvoice(row, itemRows));
     }
 
-    localInvoices.sort((a, b) => b.issueDate.compareTo(a.issueDate));
-
-    List<InvoiceEntity> filtered = localInvoices;
+    List<InvoiceEntity> filtered = list;
     if (status != null) {
       filtered = filtered.where((i) => i.status == status).toList();
     }
     if (query != null && query.isNotEmpty) {
-      final q = query.toLowerCase();
+      final lowerQ = query.toLowerCase();
       filtered = filtered.where((i) {
-        return i.invoiceNumber.toLowerCase().contains(q) ||
-            i.customerName.toLowerCase().contains(q);
+        return i.invoiceNumber.toLowerCase().contains(lowerQ) ||
+            i.customerName.toLowerCase().contains(lowerQ);
       }).toList();
     }
     return filtered;
@@ -159,10 +140,10 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
   @override
   Future<InvoiceEntity> getInvoice(String id) async {
-    final box = hiveService.getBox(HiveService.boxInvoices);
-    final val = box.get(id);
-    if (val is Map) {
-      return _mapToInvoice(val);
+    final row = await (db.select(db.invoices)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      final itemRows = await (db.select(db.invoiceItems)..where((t) => t.invoiceId.equals(id))).get();
+      return _rowToInvoice(row, itemRows);
     }
     return InvoiceEntity(
       id: id,
@@ -183,7 +164,6 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
   @override
   Future<InvoiceEntity> createInvoice(InvoiceEntity invoice) async {
-    final box = hiveService.getBox(HiveService.boxInvoices);
     final String invId = invoice.id.isNotEmpty ? invoice.id : const Uuid().v4();
     final String invNum = invoice.invoiceNumber.isNotEmpty && invoice.invoiceNumber != 'INV-000'
         ? invoice.invoiceNumber
@@ -191,21 +171,53 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
     final localInvoice = invoice.copyWith(id: invId, invoiceNumber: invNum);
 
-    // Save directly to Hive local storage (single source of truth)
-    await box.put(invId, _invoiceToMap(localInvoice, syncStatus: 'synced'));
+    await db.transaction(() async {
+      await db.into(db.invoices).insertOnConflictUpdate(_invoiceToCompanion(localInvoice));
+      await (db.delete(db.invoiceItems)..where((t) => t.invoiceId.equals(invId))).go();
+
+      for (var item in localInvoice.items) {
+        await db.into(db.invoiceItems).insert(
+          InvoiceItemsCompanion.insert(
+            invoiceId: invId,
+            productId: item.productId,
+            productName: item.productName,
+            sku: Value(item.sku),
+            quantity: Value(item.quantity),
+            unitPrice: Value(item.unitPrice),
+            taxPercentage: Value(item.taxPercentage),
+          ),
+        );
+      }
+    });
+
     return localInvoice;
   }
 
   @override
   Future<InvoiceEntity> updateInvoice(InvoiceEntity invoice) async {
-    final box = hiveService.getBox(HiveService.boxInvoices);
-    await box.put(invoice.id, _invoiceToMap(invoice, syncStatus: 'synced'));
+    await db.transaction(() async {
+      await db.into(db.invoices).insertOnConflictUpdate(_invoiceToCompanion(invoice));
+      await (db.delete(db.invoiceItems)..where((t) => t.invoiceId.equals(invoice.id))).go();
+
+      for (var item in invoice.items) {
+        await db.into(db.invoiceItems).insert(
+          InvoiceItemsCompanion.insert(
+            invoiceId: invoice.id,
+            productId: item.productId,
+            productName: item.productName,
+            sku: Value(item.sku),
+            quantity: Value(item.quantity),
+            unitPrice: Value(item.unitPrice),
+            taxPercentage: Value(item.taxPercentage),
+          ),
+        );
+      }
+    });
     return invoice;
   }
 
   @override
   Future<PaymentEntity> recordPayment(PaymentEntity payment) async {
-    final box = hiveService.getBox(HiveService.boxPayments);
     final String payId = payment.id.isNotEmpty ? payment.id : const Uuid().v4();
     final localPayment = PaymentEntity(
       id: payId,
@@ -218,25 +230,17 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       notes: payment.notes,
     );
 
-    // Save directly to Hive local storage (single source of truth)
-    await box.put(payId, _paymentToMap(localPayment, syncStatus: 'synced'));
+    await db.into(db.payments).insertOnConflictUpdate(_paymentToCompanion(localPayment));
     return localPayment;
   }
 
   @override
   Future<List<PaymentEntity>> getInvoicePayments(String invoiceId) async {
-    final box = hiveService.getBox(HiveService.boxPayments);
-    final List<PaymentEntity> list = [];
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        final p = _mapToPayment(val);
-        if (invoiceId.isEmpty || p.invoiceId == invoiceId) {
-          list.add(p);
-        }
-      }
+    final q = db.select(db.payments)..orderBy([(t) => OrderingTerm.desc(t.paymentDate)]);
+    if (invoiceId.isNotEmpty) {
+      q.where((t) => t.invoiceId.equals(invoiceId));
     }
-    list.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
-    return list;
+    final rows = await q.get();
+    return rows.map(_rowToPayment).toList();
   }
 }

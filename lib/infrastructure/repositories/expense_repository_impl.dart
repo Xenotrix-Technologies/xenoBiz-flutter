@@ -1,59 +1,61 @@
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/expense_entity.dart';
 import '../../domain/repositories/expense_repository.dart';
-import '../storage/hive_service.dart';
+import '../database/app_database.dart';
 
 class ExpenseRepositoryImpl implements ExpenseRepository {
-  final HiveService hiveService;
+  final AppDatabase db;
 
-  ExpenseRepositoryImpl({required this.hiveService});
+  ExpenseRepositoryImpl({required this.db});
 
-  ExpenseEntity _mapToExpense(Map<dynamic, dynamic> map) {
+  ExpenseEntity _rowToExpense(Expense row) {
     return ExpenseEntity(
-      id: map['id']?.toString() ?? '',
-      title: map['title']?.toString() ?? 'Expense',
-      category: map['category']?.toString() ?? 'OTHER',
-      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      paymentMode: map['paymentMode']?.toString() ?? 'Cash',
-      expenseDate: DateTime.tryParse(map['expenseDate']?.toString() ?? '') ??
-          DateTime.now(),
-      notes: map['notes']?.toString() ?? '',
+      id: row.id,
+      title: row.title,
+      category: row.category,
+      amount: row.amount,
+      paymentMode: row.paymentMode,
+      expenseDate: row.expenseDate,
+      notes: row.notes,
+    );
+  }
+
+  ExpensesCompanion _expenseToCompanion(ExpenseEntity e) {
+    return ExpensesCompanion(
+      id: Value(e.id),
+      title: Value(e.title),
+      category: Value(e.category),
+      amount: Value(e.amount),
+      paymentMode: Value(e.paymentMode),
+      expenseDate: Value(e.expenseDate),
+      notes: Value(e.notes),
     );
   }
 
   @override
   Future<List<ExpenseEntity>> getExpenses({String? category}) async {
-    final box = hiveService.getBox(HiveService.boxExpenses);
-    final List<ExpenseEntity> list = [];
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        final exp = _mapToExpense(val);
-        if (category == null ||
-            category.isEmpty ||
-            category == 'All' ||
-            exp.category == category) {
-          list.add(exp);
-        }
-      }
+    final q = db.select(db.expenses)..orderBy([(t) => OrderingTerm.desc(t.expenseDate)]);
+    final rows = await q.get();
+
+    final list = rows.map(_rowToExpense).toList();
+    if (category == null || category.isEmpty || category == 'All') {
+      return list;
     }
-    list.sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
-    return list;
+    return list.where((e) => e.category == category).toList();
   }
 
   @override
   Future<ExpenseEntity?> getExpense(String id) async {
-    final box = hiveService.getBox(HiveService.boxExpenses);
-    final map = box.get(id);
-    if (map is Map) {
-      return _mapToExpense(map);
+    final row = await (db.select(db.expenses)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      return _rowToExpense(row);
     }
     return null;
   }
 
   @override
   Future<ExpenseEntity> createExpense(ExpenseEntity expense) async {
-    final box = hiveService.getBox(HiveService.boxExpenses);
     final String id = expense.id.isNotEmpty ? expense.id : const Uuid().v4();
     final local = ExpenseEntity(
       id: id,
@@ -65,16 +67,7 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
       notes: expense.notes,
     );
 
-    await box.put(id, {
-      'id': local.id,
-      'title': local.title,
-      'category': local.category,
-      'amount': local.amount,
-      'paymentMode': local.paymentMode,
-      'expenseDate': local.expenseDate.toIso8601String(),
-      'notes': local.notes,
-    });
-
+    await db.into(db.expenses).insertOnConflictUpdate(_expenseToCompanion(local));
     return local;
   }
 

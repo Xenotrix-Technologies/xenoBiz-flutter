@@ -1,61 +1,79 @@
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/purchase_entity.dart';
 import '../../domain/repositories/purchase_repository.dart';
+import '../database/app_database.dart';
 import '../network/dio_client.dart';
-import '../storage/hive_service.dart';
 
 class PurchaseRepositoryImpl implements PurchaseRepository {
   final DioClient dioClient;
-  final HiveService hiveService;
+  final AppDatabase db;
 
   PurchaseRepositoryImpl({
     required this.dioClient,
-    required this.hiveService,
+    required this.db,
   });
 
-  SupplierEntity _mapToSupplier(Map<dynamic, dynamic> map) {
+  SupplierEntity _rowToSupplier(Supplier row) {
     return SupplierEntity(
-      id: map['id']?.toString() ?? '',
-      name: map['name']?.toString() ?? 'Supplier',
-      companyName: map['companyName']?.toString() ?? map['company']?.toString() ?? 'Company',
-      phone: map['phone']?.toString() ?? '',
-      email: map['email']?.toString() ?? '',
-      address: map['address']?.toString() ?? '',
-      payableBalance: (map['payableBalance'] as num?)?.toDouble() ??
-          (map['outstanding_payable'] as num?)?.toDouble() ?? 0.0,
-      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      id: row.id,
+      name: row.name,
+      companyName: row.companyName,
+      phone: row.phone,
+      email: row.email,
+      address: row.address,
+      payableBalance: row.payableBalance,
+      createdAt: row.createdAt,
     );
   }
 
-  PurchaseEntity _mapToPurchase(Map<dynamic, dynamic> map) {
+  SuppliersCompanion _supplierToCompanion(SupplierEntity s) {
+    return SuppliersCompanion(
+      id: Value(s.id),
+      name: Value(s.name),
+      companyName: Value(s.companyName),
+      phone: Value(s.phone),
+      email: Value(s.email),
+      address: Value(s.address),
+      payableBalance: Value(s.payableBalance),
+      createdAt: Value(s.createdAt),
+    );
+  }
+
+  PurchaseEntity _rowToPurchase(Purchase row) {
     return PurchaseEntity(
-      id: map['id']?.toString() ?? '',
-      poNumber: map['poNumber']?.toString() ?? map['invoice_number']?.toString() ?? 'PO-000',
-      supplierId: map['supplierId']?.toString() ?? map['supplier_id']?.toString() ?? '',
-      supplierName: map['supplierName']?.toString() ?? map['supplier_name']?.toString() ?? 'Supplier',
-      totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? (map['grand_total'] as num?)?.toDouble() ?? 0.0,
-      status: map['status']?.toString() ?? 'RECEIVED',
-      orderDate: DateTime.tryParse(map['orderDate']?.toString() ?? map['order_date']?.toString() ?? map['purchase_date']?.toString() ?? '') ?? DateTime.now(),
-      notes: map['notes']?.toString() ?? '',
+      id: row.id,
+      poNumber: row.poNumber,
+      supplierId: row.supplierId,
+      supplierName: row.supplierName,
+      totalAmount: row.totalAmount,
+      status: row.status,
+      orderDate: row.orderDate,
+      notes: row.notes,
+    );
+  }
+
+  PurchasesCompanion _purchaseToCompanion(PurchaseEntity p) {
+    return PurchasesCompanion(
+      id: Value(p.id),
+      poNumber: Value(p.poNumber),
+      supplierId: Value(p.supplierId),
+      supplierName: Value(p.supplierName),
+      totalAmount: Value(p.totalAmount),
+      status: Value(p.status),
+      orderDate: Value(p.orderDate),
+      notes: Value(p.notes),
     );
   }
 
   @override
   Future<List<SupplierEntity>> getSuppliers() async {
-    final box = hiveService.getBox(HiveService.boxSuppliers);
-    final List<SupplierEntity> list = [];
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        list.add(_mapToSupplier(val));
-      }
-    }
-    return list;
+    final rows = await db.select(db.suppliers).get();
+    return rows.map(_rowToSupplier).toList();
   }
 
   @override
   Future<SupplierEntity> createSupplier(SupplierEntity supplier) async {
-    final box = hiveService.getBox(HiveService.boxSuppliers);
     final String id = supplier.id.isNotEmpty ? supplier.id : const Uuid().v4();
     final local = SupplierEntity(
       id: id,
@@ -68,55 +86,25 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       createdAt: supplier.createdAt,
     );
 
-    // Save directly to Hive local storage (single source of truth)
-    await box.put(id, {
-      'id': local.id,
-      'name': local.name,
-      'companyName': local.companyName,
-      'phone': local.phone,
-      'email': local.email,
-      'address': local.address,
-      'payableBalance': local.payableBalance,
-      'createdAt': local.createdAt.toIso8601String(),
-    });
-
+    await db.into(db.suppliers).insertOnConflictUpdate(_supplierToCompanion(local));
     return local;
   }
 
   @override
   Future<SupplierEntity> updateSupplier(SupplierEntity supplier) async {
-    final box = hiveService.getBox(HiveService.boxSuppliers);
-    await box.put(supplier.id, {
-      'id': supplier.id,
-      'name': supplier.name,
-      'companyName': supplier.companyName,
-      'phone': supplier.phone,
-      'email': supplier.email,
-      'address': supplier.address,
-      'payableBalance': supplier.payableBalance,
-      'createdAt': supplier.createdAt.toIso8601String(),
-    });
+    await db.into(db.suppliers).insertOnConflictUpdate(_supplierToCompanion(supplier));
     return supplier;
   }
 
-
   @override
   Future<List<PurchaseEntity>> getPurchaseOrders() async {
-    final box = hiveService.getBox(HiveService.boxPurchases);
-    final List<PurchaseEntity> list = [];
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        list.add(_mapToPurchase(val));
-      }
-    }
-    list.sort((a, b) => b.orderDate.compareTo(a.orderDate));
-    return list;
+    final q = db.select(db.purchases)..orderBy([(t) => OrderingTerm.desc(t.orderDate)]);
+    final rows = await q.get();
+    return rows.map(_rowToPurchase).toList();
   }
 
   @override
   Future<PurchaseEntity> createPurchaseOrder(PurchaseEntity purchase) async {
-    final box = hiveService.getBox(HiveService.boxPurchases);
     final String id = purchase.id.isNotEmpty ? purchase.id : const Uuid().v4();
     final local = PurchaseEntity(
       id: id,
@@ -129,38 +117,32 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
       notes: purchase.notes,
     );
 
-    // Save directly to Hive local storage (single source of truth)
-    await box.put(id, {
-      'id': local.id,
-      'poNumber': local.poNumber,
-      'supplierId': local.supplierId,
-      'supplierName': local.supplierName,
-      'totalAmount': local.totalAmount,
-      'status': local.status,
-      'orderDate': local.orderDate.toIso8601String(),
-      'notes': local.notes,
-    });
+    await db.transaction(() async {
+      await db.into(db.purchases).insertOnConflictUpdate(_purchaseToCompanion(local));
 
-    // Update supplier payable balance in Hive boxSuppliers
-    final supBox = hiveService.getBox(HiveService.boxSuppliers);
-    final supKey = local.supplierId.isNotEmpty ? local.supplierId : 'sup_${local.supplierName.toLowerCase().replaceAll(' ', '_')}';
-    final existingSup = supBox.get(supKey);
-    if (existingSup is Map) {
-      final double currentPayable = (existingSup['payableBalance'] as num?)?.toDouble() ?? 0.0;
-      existingSup['payableBalance'] = currentPayable + local.totalAmount;
-      await supBox.put(supKey, existingSup);
-    } else {
-      await supBox.put(supKey, {
-        'id': supKey,
-        'name': local.supplierName,
-        'companyName': local.supplierName,
-        'phone': '',
-        'email': '',
-        'address': '',
-        'payableBalance': local.totalAmount,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-    }
+      final supKey = local.supplierId.isNotEmpty ? local.supplierId : 'sup_${local.supplierName.toLowerCase().replaceAll(' ', '_')}';
+      final existingSupRow = await (db.select(db.suppliers)..where((t) => t.id.equals(supKey))).getSingleOrNull();
+
+      if (existingSupRow != null) {
+        final currentPayable = existingSupRow.payableBalance;
+        final updatedPayable = currentPayable + local.totalAmount;
+        await (db.update(db.suppliers)..where((t) => t.id.equals(supKey)))
+            .write(SuppliersCompanion(payableBalance: Value(updatedPayable)));
+      } else {
+        await db.into(db.suppliers).insertOnConflictUpdate(
+          SuppliersCompanion(
+            id: Value(supKey),
+            name: Value(local.supplierName),
+            companyName: Value(local.supplierName),
+            phone: const Value(''),
+            email: const Value(''),
+            address: const Value(''),
+            payableBalance: Value(local.totalAmount),
+            createdAt: Value(DateTime.now()),
+          ),
+        );
+      }
+    });
 
     return local;
   }

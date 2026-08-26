@@ -1,17 +1,39 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:drift/drift.dart';
 import '../../domain/entities/category_entity.dart';
 import '../../domain/repositories/category_repository.dart';
-import '../storage/hive_service.dart';
+import '../database/app_database.dart';
 
 class CategoryRepositoryImpl implements CategoryRepository {
-  final HiveService _hiveService;
+  final AppDatabase db;
 
-  CategoryRepositoryImpl(this._hiveService);
+  CategoryRepositoryImpl(this.db);
 
-  Box get _box => _hiveService.getBox(HiveService.boxCategories);
+  CategoryEntity _rowToCategory(Category row) {
+    final type = row.type == 'income' ? CategoryType.income : CategoryType.expense;
+    return CategoryEntity(
+      id: row.id,
+      name: row.name,
+      type: type,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt ?? row.createdAt,
+    );
+  }
+
+  CategoriesCompanion _categoryToCompanion(CategoryEntity c) {
+    return CategoriesCompanion(
+      id: Value(c.id),
+      name: Value(c.name),
+      type: Value(c.type.name),
+      isActive: Value(c.isActive),
+      createdAt: Value(c.createdAt),
+      updatedAt: Value(c.updatedAt),
+    );
+  }
 
   Future<void> _seedDefaultsIfEmpty() async {
-    if (_box.isEmpty) {
+    final count = await db.select(db.categories).get();
+    if (count.isEmpty) {
       final now = DateTime.now();
       final defaultIncomeCategories = [
         'Other Income',
@@ -30,7 +52,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
           createdAt: now,
           updatedAt: now,
         );
-        await _box.put(cat.id, cat.toMap());
+        await db.into(db.categories).insertOnConflictUpdate(_categoryToCompanion(cat));
       }
 
       final defaultExpenseCategories = [
@@ -52,7 +74,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
           createdAt: now,
           updatedAt: now,
         );
-        await _box.put(cat.id, cat.toMap());
+        await db.into(db.categories).insertOnConflictUpdate(_categoryToCompanion(cat));
       }
     }
   }
@@ -60,28 +82,27 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<List<CategoryEntity>> getCategories({CategoryType? type, bool activeOnly = true}) async {
     await _seedDefaultsIfEmpty();
-    final List<CategoryEntity> categories = [];
+    final rows = await db.select(db.categories).get();
+    final categories = rows.map(_rowToCategory).toList();
 
-    for (var key in _box.keys) {
-      final raw = _box.get(key);
-      if (raw != null && raw is Map) {
-        final cat = CategoryEntity.fromMap(Map<String, dynamic>.from(raw));
-        if (type != null && cat.type != type) continue;
-        if (activeOnly && !cat.isActive) continue;
-        categories.add(cat);
-      }
+    List<CategoryEntity> filtered = categories;
+    if (type != null) {
+      filtered = filtered.where((c) => c.type == type).toList();
+    }
+    if (activeOnly) {
+      filtered = filtered.where((c) => c.isActive).toList();
     }
 
-    categories.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return categories;
+    filtered.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return filtered;
   }
 
   @override
   Future<CategoryEntity?> getCategory(String id) async {
     await _seedDefaultsIfEmpty();
-    final raw = _box.get(id);
-    if (raw != null && raw is Map) {
-      return CategoryEntity.fromMap(Map<String, dynamic>.from(raw));
+    final row = await (db.select(db.categories)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      return _rowToCategory(row);
     }
     return null;
   }
@@ -89,8 +110,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<CategoryEntity> createCategory(CategoryEntity category) async {
     await _seedDefaultsIfEmpty();
-    final map = category.toMap();
-    await _box.put(category.id, map);
+    await db.into(db.categories).insertOnConflictUpdate(_categoryToCompanion(category));
     return category;
   }
 
@@ -98,7 +118,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
   Future<CategoryEntity> updateCategory(CategoryEntity category) async {
     await _seedDefaultsIfEmpty();
     final updated = category.copyWith(updatedAt: DateTime.now());
-    await _box.put(updated.id, updated.toMap());
+    await db.into(db.categories).insertOnConflictUpdate(_categoryToCompanion(updated));
     return updated;
   }
 
@@ -108,13 +128,13 @@ class CategoryRepositoryImpl implements CategoryRepository {
     final cat = await getCategory(id);
     if (cat != null) {
       final deactivated = cat.copyWith(isActive: false, updatedAt: DateTime.now());
-      await _box.put(deactivated.id, deactivated.toMap());
+      await db.into(db.categories).insertOnConflictUpdate(_categoryToCompanion(deactivated));
     }
   }
 
   @override
   Future<void> deleteCategory(String id) async {
     await _seedDefaultsIfEmpty();
-    await _box.delete(id);
+    await (db.delete(db.categories)..where((t) => t.id.equals(id))).go();
   }
 }

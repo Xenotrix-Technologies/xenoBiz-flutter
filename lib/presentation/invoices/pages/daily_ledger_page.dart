@@ -133,11 +133,11 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
 
       final salesPdfItems = state.salesTransactions.map((tx) {
         return PdfLedgerTransactionItem(
-          time: DateFormat('h:mm a').format(tx.time),
-          title: tx.title,
-          type: tx.subTitle,
-          paymentMethod: tx.paymentMethod,
-          amount: tx.amount,
+          time: DateFormat('h:mm a').format(tx.issueDate),
+          title: tx.invoiceNumber,
+          type: tx.customerName,
+          paymentMethod: tx.notes.isNotEmpty ? tx.notes : 'Sale',
+          amount: tx.grandTotal,
           isIncome: true,
         );
       }).toList();
@@ -495,18 +495,16 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                 final tx = state.salesTransactions[idx];
                 return AppCard(
                   onTap: () async {
-                    if (tx.invoice != null) {
-                      final bloc = context.read<InvoiceBloc>();
-                      await context.push(
-                        RouteNames.createInvoice,
-                        extra: {
-                          'invoiceType': tx.invoice!.type,
-                          'invoiceToEdit': tx.invoice,
-                        },
-                      );
-                      if (!mounted) return;
-                      bloc.add(const FetchInvoicesEvent());
-                    }
+                    final bloc = context.read<InvoiceBloc>();
+                    await context.push(
+                      RouteNames.createInvoice,
+                      extra: {
+                        'invoiceType': tx.type,
+                        'invoiceToEdit': tx,
+                      },
+                    );
+                    if (!mounted) return;
+                    bloc.add(const FetchInvoicesEvent());
                   },
                   padding: const EdgeInsets.all(14),
                   child: Row(
@@ -527,7 +525,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                tx.title,
+                                tx.invoiceNumber,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 14,
@@ -536,7 +534,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${tx.subTitle} • ${DateFormat('h:mm a').format(tx.time)}',
+                                '${tx.customerName} • ${DateFormat('h:mm a').format(tx.issueDate)}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.secondaryText,
@@ -550,7 +548,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '+ ${_formatCurrency(tx.amount)}',
+                            '+ ${_formatCurrency(tx.grandTotal)}',
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 15,
@@ -565,7 +563,7 @@ class _DailyLedgerPageState extends State<DailyLedgerPage> with SingleTickerProv
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              tx.paymentMethod,
+                              tx.status.name.toUpperCase(),
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,

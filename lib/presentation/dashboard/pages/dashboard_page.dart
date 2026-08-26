@@ -14,8 +14,8 @@ import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
 import '../../../const/strings.dart';
 import '../../../domain/entities/invoice_entity.dart';
+import '../../../infrastructure/database/app_database.dart';
 import '../../../infrastructure/services/backup_restore_service.dart';
-import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
@@ -122,7 +122,7 @@ class DashboardPage extends StatefulWidget {
       },
     );
 
-    final backupService = BackupRestoreService(getIt<HiveService>());
+    final backupService = BackupRestoreService(getIt<AppDatabase>());
     final result = await backupService.performAutoExitBackup();
 
     // Dismiss progress dialog if open
@@ -233,15 +233,6 @@ class _DashboardPageState extends State<DashboardPage> {
           authState.business != null &&
           authState.business!.name.trim().isNotEmpty) {
         return authState.business!.name.trim();
-      }
-    } catch (_) {}
-
-    try {
-      final hive = getIt<HiveService>();
-      final bizBox = hive.getBox(HiveService.boxBusiness);
-      final cached = bizBox.get('name')?.toString();
-      if (cached != null && cached.trim().isNotEmpty) {
-        return cached.trim();
       }
     } catch (_) {}
 

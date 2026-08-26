@@ -94,7 +94,7 @@ class _OfflineSyncCenterPageState extends State<OfflineSyncCenterPage> {
                   const SizedBox(height: 12),
                   const EmptyState(
                     title: 'Local Database Active',
-                    message: 'All customer, product, invoice, payment, and inventory records are stored locally in Hive as the single source of truth.',
+                    message: 'All customer, product, invoice, payment, and inventory records are stored locally in Drift (SQLite) as the single source of truth.',
                     icon: Icons.storage_rounded,
                   ),
                   const SizedBox(height: 24),

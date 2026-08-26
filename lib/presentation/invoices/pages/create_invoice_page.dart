@@ -918,8 +918,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_scannerController == null || !_scannerController!.value.isInitialized)
+    if (_scannerController == null || !_scannerController!.value.isInitialized) {
       return;
+    }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       _scannerController?.stop();
