@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../providers/create_invoice_provider.dart';
 import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
@@ -306,9 +308,14 @@ class AppRouter {
             invoiceToEdit = state.extra as InvoiceEntity;
             invoiceType = invoiceToEdit.type;
           }
-          return CreateInvoicePage(
-            invoiceType: invoiceType,
-            invoiceToEdit: invoiceToEdit,
+          return ProviderScope(
+            overrides: [
+              createInvoiceFormProvider.overrideWith((ref) => CreateInvoiceFormNotifier()),
+            ],
+            child: CreateInvoicePage(
+              invoiceType: invoiceType,
+              invoiceToEdit: invoiceToEdit,
+            ),
           );
         },
       ),
