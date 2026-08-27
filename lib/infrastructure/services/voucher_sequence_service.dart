@@ -102,7 +102,40 @@ class VoucherSequenceService {
         return parsed;
       }
     }
-    return 1;
+
+    int count = 0;
+    try {
+      switch (type) {
+        case VoucherType.sale:
+          final list = await (db.select(db.invoices)..where((t) => t.type.equals('sale'))).get();
+          count = list.length;
+          break;
+        case VoucherType.purchase:
+          final list = await (db.select(db.invoices)..where((t) => t.type.equals('purchase'))).get();
+          count = list.length;
+          break;
+        case VoucherType.salesReturn:
+          final list = await (db.select(db.invoiceReturns)..where((t) => t.type.equals('sale'))).get();
+          count = list.length;
+          break;
+        case VoucherType.purchaseReturn:
+          final list = await (db.select(db.invoiceReturns)..where((t) => t.type.equals('purchase'))).get();
+          count = list.length;
+          break;
+        case VoucherType.payment:
+          final list = await db.select(db.expenses).get();
+          count = list.length;
+          break;
+        case VoucherType.receipt:
+          final list = await db.select(db.income).get();
+          count = list.length;
+          break;
+      }
+    } catch (_) {}
+
+    final nextSeq = count + 1;
+    await db.putKeyValue(key, nextSeq.toString());
+    return nextSeq;
   }
 
   /// Generates preview formatted Voucher ID (e.g. `INV-#00-0001`).

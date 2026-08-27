@@ -7,6 +7,7 @@ import '../../domain/repositories/sync_repository.dart';
 import '../database/app_database.dart';
 import '../network/dio_client.dart';
 import '../network/network_checker.dart';
+import '../services/voucher_sequence_service.dart';
 
 class InvoiceRepositoryImpl implements InvoiceRepository {
   final DioClient dioClient;
@@ -189,6 +190,9 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
         );
       }
     });
+
+    final vType = localInvoice.isPurchase ? VoucherType.purchase : VoucherType.sale;
+    await VoucherSequenceService.instance.incrementSequence(vType);
 
     return localInvoice;
   }
