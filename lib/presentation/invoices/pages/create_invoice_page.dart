@@ -1446,7 +1446,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       },
       child: BlocListener<InvoiceBloc, InvoiceState>(
         listener: (context, state) {
-          if (isEditMode && state is InvoiceOperationSuccessState) {
+          if (isEditMode &&
+              state is InvoiceOperationSuccessState &&
+              state.isUpdate &&
+              state.invoiceId == widget.invoiceToEdit?.id) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                   content: Text(state.message),

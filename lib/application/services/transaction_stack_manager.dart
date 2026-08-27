@@ -129,7 +129,7 @@ class TransactionStackManager {
     final idx = _stack.indexWhere((s) => s.id == currentSessionId);
     if (idx != -1) {
       final session = _stack[idx];
-      if (session.hasMeaningfulData()) {
+      if (!session.isCompleted && session.hasMeaningfulData()) {
         final shouldDiscard = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(

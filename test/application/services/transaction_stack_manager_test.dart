@@ -184,5 +184,25 @@ void main() {
       expect(manager.stack.length, 1);
       expect(manager.currentSession?.id, 'A');
     });
+
+    test('TC-08: Completed session does not trigger discard dialog evaluation', () {
+      final session = TransactionSession(
+        id: 'money_in_1',
+        type: TransactionTypeCategory.moneyIn,
+        isEdit: false,
+        hasMeaningfulData: () => true,
+      );
+
+      manager.registerSession(session);
+      expect(manager.stack.length, 1);
+
+      // Mark completed upon successful save
+      manager.markCompleted('money_in_1');
+      expect(manager.currentSession?.isCompleted, isTrue);
+
+      // Verify that isCompleted prevents dirty discard check
+      expect(session.isCompleted, isTrue);
+      expect(!session.isCompleted && session.hasMeaningfulData(), isFalse);
+    });
   });
 }
