@@ -20,6 +20,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../../domain/repositories/product_repository.dart';
 import '../../../infrastructure/services/voucher_sequence_service.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
@@ -143,6 +144,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   late TextEditingController _extraAmtCtrl;
   late TextEditingController _extraDescCtrl;
 
+  late final String _sessionId =
+      'session_${DateTime.now().microsecondsSinceEpoch}';
+
   @override
   void initState() {
     super.initState();
@@ -190,6 +194,17 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      TransactionStackManager.instance.registerSession(
+        TransactionSession(
+          id: _sessionId,
+          type: isPurchase
+              ? TransactionTypeCategory.purchase
+              : TransactionTypeCategory.sale,
+          isEdit: isEditMode,
+          entityId: widget.invoiceToEdit?.id,
+          hasMeaningfulData: () => _hasUnsavedData,
+        ),
+      );
       if (widget.invoiceToEdit != null) {
         final inv = widget.invoiceToEdit!;
         final party = CustomerEntity(
@@ -647,19 +662,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   void _safePop() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.dashboard);
-    }
+    TransactionStackManager.instance
+        .handleBackFromTransaction(context, _sessionId);
   }
 
   void _handleBackPressed() {
-    if (!isEditMode && _hasUnsavedData) {
-      _confirmDiscardInvoice();
-    } else {
-      _safePop();
-    }
+    TransactionStackManager.instance
+        .handleBackFromTransaction(context, _sessionId);
   }
 
   void _confirmDiscardInvoice() {

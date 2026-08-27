@@ -16,6 +16,7 @@ import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../infrastructure/pdf/pdf_invoice_service.dart';
 import '../../../infrastructure/services/thermal_printer_service.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 
 class InvoiceResultPage extends ConsumerWidget {
   final InvoiceEntity invoice;
@@ -102,11 +103,7 @@ class InvoiceResultPage extends ConsumerWidget {
     final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 2, locale: 'en_IN');
 
     void safePop() {
-      if (context.canPop()) {
-        context.pop();
-      } else {
-        context.go(RouteNames.dashboard);
-      }
+      TransactionStackManager.instance.handleBackFromCheckout(context);
     }
 
     return PopScope(

@@ -17,6 +17,7 @@ import '../../../domain/repositories/invoice_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
 import '../../../domain/repositories/returns_repository.dart';
 import '../../../infrastructure/services/voucher_sequence_service.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
@@ -90,6 +91,17 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
   final TextEditingController _notesCtrl = TextEditingController();
   bool _isSaving = false;
 
+  late final String _sessionId =
+      'session_${DateTime.now().microsecondsSinceEpoch}';
+
+  bool get _hasUnsavedData {
+    return _selectedParty != null ||
+        _selectedOriginalInvoice != null ||
+        _returnQuantities.values.any((q) => q > 0) ||
+        _manualItems.isNotEmpty ||
+        _notesCtrl.text.trim().isNotEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -117,6 +129,20 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
     } else {
       _loadVoucherId();
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      TransactionStackManager.instance.registerSession(
+        TransactionSession(
+          id: _sessionId,
+          type: isSalesReturn
+              ? TransactionTypeCategory.salesReturn
+              : TransactionTypeCategory.purchaseReturn,
+          isEdit: isEditMode,
+          entityId: (widget.existingReturn as InvoiceReturnEntity?)?.id,
+          hasMeaningfulData: () => _hasUnsavedData,
+        ),
+      );
+    });
   }
 
   String _generatedVoucherId = '';
@@ -274,6 +300,7 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
 
   @override
   void dispose() {
+    TransactionStackManager.instance.unregisterSession(_sessionId);
     _partySearchCtrl.dispose();
     _partySearchFocusNode.dispose();
     _invoiceSearchCtrl.dispose();
@@ -500,6 +527,7 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
         } catch (_) {}
       }
 
+      TransactionStackManager.instance.markCompleted(_sessionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -507,7 +535,7 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        _safePop();
       }
     } catch (e) {
       if (mounted) {
@@ -808,11 +836,8 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
   }
 
   void _safePop() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.dashboard);
-    }
+    TransactionStackManager.instance
+        .handleBackFromTransaction(context, _sessionId);
   }
 
   @override

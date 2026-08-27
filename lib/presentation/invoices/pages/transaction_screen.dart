@@ -17,6 +17,7 @@ import '../../../domain/repositories/expense_repository.dart';
 import '../../../domain/repositories/income_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
 import '../../../infrastructure/services/voucher_sequence_service.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 import '../../widgets/app_button.dart';
 import '../widgets/common_voucher_app_bar.dart';
 import '../widgets/voucher_summary_card.dart';
@@ -68,6 +69,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
     {'label': 'Other', 'icon': Icons.circle_outlined},
   ];
 
+  late final String _sessionId =
+      'session_${DateTime.now().microsecondsSinceEpoch}';
+
+  bool get _hasUnsavedData {
+    final amt = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
+    return amt > 0 ||
+        _selectedParty != null ||
+        _descriptionCtrl.text.trim().isNotEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +89,22 @@ class _TransactionScreenState extends State<TransactionScreen> {
     _selectedPaymentMethod = 'Cash';
 
     _loadData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      TransactionStackManager.instance.registerSession(
+        TransactionSession(
+          id: _sessionId,
+          type: isExpense
+              ? TransactionTypeCategory.moneyOut
+              : TransactionTypeCategory.moneyIn,
+          isEdit: isEditMode,
+          entityId: isExpense
+              ? (widget.existingTransaction as ExpenseEntity?)?.id
+              : (widget.existingTransaction as IncomeEntity?)?.id,
+          hasMeaningfulData: () => _hasUnsavedData,
+        ),
+      );
+    });
   }
 
   Future<void> _loadData() async {
@@ -244,6 +271,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   @override
   void dispose() {
+    TransactionStackManager.instance.unregisterSession(_sessionId);
     _amountCtrl.dispose();
     _descriptionCtrl.dispose();
     _partySearchCtrl.dispose();
@@ -335,6 +363,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
         }
       }
 
+      TransactionStackManager.instance.markCompleted(_sessionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -342,7 +371,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop(true);
+        _safePop();
       }
     } catch (e) {
       if (mounted) {
@@ -693,11 +722,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   void _safePop() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.dashboard);
-    }
+    TransactionStackManager.instance
+        .handleBackFromTransaction(context, _sessionId);
   }
 
   @override

@@ -14,6 +14,7 @@ import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/payment_entity.dart';
 import '../../../domain/repositories/expense_repository.dart';
 import '../../../domain/repositories/product_repository.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 
@@ -125,7 +126,7 @@ class _PaymentPageState extends State<PaymentPage> {
       status: status,
     );
 
-    _finalInvoiceCreated = finalInvoice;
+    TransactionStackManager.instance.markCurrentCompleted();
 
     // 1. Submit Invoice
     context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(finalInvoice));
@@ -203,11 +204,7 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void _safePop() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.dashboard);
-    }
+    TransactionStackManager.instance.handleBackFromCheckout(context);
   }
 
   @override
