@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -641,8 +639,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   bool get _hasUnsavedData {
-    return _items.isNotEmpty;
-    // || _selectedCustomer != null
+    return _items.isNotEmpty ||
+        (!_isCashSale && _selectedCustomer != null) ||
+        _notesCtrl.text.trim().isNotEmpty ||
+        _discountAmount > 0 ||
+        _extraExpenseAmount > 0;
   }
 
   void _safePop() {
@@ -654,11 +655,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   void _handleBackPressed() {
-    log(_hasUnsavedData.toString());
     if (!isEditMode && _hasUnsavedData) {
       _confirmDiscardInvoice();
-    } else if (_items.isEmpty) {
-      _safePop();
     } else {
       _safePop();
     }

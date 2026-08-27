@@ -673,20 +673,31 @@ class _PaymentPageState extends State<PaymentPage> {
                   backgroundColor: AppColors.success,
                 ),
               );
-              final enteredAmt = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
-              Navigator.of(context).pop();
-              if (context.mounted) {
-                context.pushReplacement(
-                  RouteNames.invoiceResult,
-                  extra: {
-                    'invoice': _finalInvoiceCreated ?? widget.invoice,
-                    'customer': widget.customer,
-                    'paymentMethod': _selectedPaymentMethod,
-                    'amountPaid': enteredAmt,
-                    'previousBalance': widget.customer?.outstandingBalance ?? 0.0,
-                  },
-                );
+              final enteredAmt =
+                  double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
+              final targetInvoice = _finalInvoiceCreated ?? widget.invoice;
+              final targetCustomer = widget.customer;
+              final targetPaymentMethod = _selectedPaymentMethod;
+              final targetPrevBalance =
+                  widget.customer?.outstandingBalance ?? 0.0;
+
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
               }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) {
+                  context.pushReplacement(
+                    RouteNames.invoiceResult,
+                    extra: {
+                      'invoice': targetInvoice,
+                      'customer': targetCustomer,
+                      'paymentMethod': targetPaymentMethod,
+                      'amountPaid': enteredAmt,
+                      'previousBalance': targetPrevBalance,
+                    },
+                  );
+                }
+              });
             } else if (state is InvoiceErrorState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

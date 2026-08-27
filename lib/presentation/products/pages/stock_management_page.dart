@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +22,7 @@ class StockManagementPage extends StatefulWidget {
 
 class _StockManagementPageState extends State<StockManagementPage> {
   final TextEditingController _searchController = TextEditingController();
+  Completer<void>? _refreshCompleter;
 
   @override
   void initState() {
@@ -37,6 +40,27 @@ class _StockManagementPageState extends State<StockManagementPage> {
     final formatter =
         NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
     return formatter.format(amount);
+  }
+
+  Future<void> _handleRefresh(ProductsLoadedState state) async {
+    final bloc = context.read<ProductBloc>();
+    final streamFuture = bloc.stream.firstWhere(
+      (s) => s is ProductsLoadedState || s is ProductErrorState,
+    );
+
+    bloc.add(
+      FetchProductsEvent(
+        query: _searchController.text,
+        stockFilter: state.selectedStockFilter,
+        category: state.selectedCategory,
+        sortBy: state.sortBy,
+      ),
+    );
+
+    await Future.any([
+      streamFuture,
+      Future.delayed(const Duration(milliseconds: 800)),
+    ]);
   }
 
   void _showFilterBottomSheet(BuildContext context, ProductsLoadedState state) {
@@ -263,8 +287,47 @@ class _StockManagementPageState extends State<StockManagementPage> {
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.white),
+            tooltip: 'Add Product',
+            onPressed: () async {
+              await context.push(RouteNames.createMaster, extra: 0);
+              if (context.mounted) {
+                final currentState = context.read<ProductBloc>().state;
+                if (currentState is ProductsLoadedState) {
+                  context.read<ProductBloc>().add(
+                        FetchProductsEvent(
+                          query: _searchController.text,
+                          stockFilter: currentState.selectedStockFilter,
+                          category: currentState.selectedCategory,
+                          sortBy: currentState.sortBy,
+                        ),
+                      );
+                } else {
+                  context.read<ProductBloc>().add(const FetchProductsEvent());
+                }
+              }
+            },
+          ),
+        ],
       ),
-      body: BlocBuilder<ProductBloc, ProductState>(
+      body: BlocConsumer<ProductBloc, ProductState>(
+        listener: (context, state) {
+          if (state is ProductsLoadedState || state is ProductErrorState) {
+            if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
+              _refreshCompleter!.complete();
+            }
+          }
+          if (state is ProductErrorState) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to refresh inventory: ${state.message}'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        },
         builder: (context, state) {
           if (state is ProductLoadingState || state is ProductInitialState) {
             return const StockManagementSkeleton();
@@ -434,260 +497,297 @@ class _StockManagementPageState extends State<StockManagementPage> {
 
   // PRODUCT LIST CONTENT
   Widget _buildProductList(BuildContext context, ProductsLoadedState state) {
-    final physicalProducts = state.filteredProducts.where((p) => p.isProduct).toList();
+    final physicalProducts =
+        state.filteredProducts.where((p) => p.isProduct).toList();
 
+    Widget childWidget;
     if (physicalProducts.isEmpty) {
-      return EmptyState(
-        title: 'No Products Found',
-        message:
-            state.searchQuery.isNotEmpty || state.selectedStockFilter != 'All'
+      childWidget = SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          alignment: Alignment.center,
+          child: EmptyState(
+            title: 'No Products Found',
+            message: state.searchQuery.isNotEmpty ||
+                    state.selectedStockFilter != 'All'
                 ? 'Try changing your search or filters.'
                 : 'Add your first product to start managing your inventory.',
-        icon: Icons.inventory_2_outlined,
+            icon: Icons.inventory_2_outlined,
+          ),
+        ),
       );
-    }
+    } else {
+      childWidget = ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        itemCount: physicalProducts.length +
+            (state.outOfStockCount > 0 || state.lowStockCount > 0 ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (ctx, idx) {
+          // Render Stock Alerts Banner as first item if issues exist
+          if ((state.outOfStockCount > 0 || state.lowStockCount > 0) &&
+              idx == 0) {
+            return _buildStockAlertsCard(context, state);
+          }
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: physicalProducts.length +
-          (state.outOfStockCount > 0 || state.lowStockCount > 0 ? 1 : 0),
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (ctx, idx) {
-        // Render Stock Alerts Banner as first item if issues exist
-        if ((state.outOfStockCount > 0 || state.lowStockCount > 0) &&
-            idx == 0) {
-          return _buildStockAlertsCard(context, state);
-        }
+          final productIdx =
+              (state.outOfStockCount > 0 || state.lowStockCount > 0)
+                  ? idx - 1
+                  : idx;
+          final p = physicalProducts[productIdx];
+          final isLow = p.isLowStock;
+          final isOut = p.isOutOfStock;
 
-        final productIdx =
-            (state.outOfStockCount > 0 || state.lowStockCount > 0)
-                ? idx - 1
-                : idx;
-        final p = physicalProducts[productIdx];
-        final isLow = p.isLowStock;
-        final isOut = p.isOutOfStock;
-
-        return Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Left Container Icon (Rounded Square matching Invoice Tile)
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: isOut
-                        ? AppColors.errorContainer
-                        : (isLow
-                            ? AppColors.warningContainer
-                            : AppColors.primaryBlue.withValues(alpha: 0.08)),
-                    borderRadius: BorderRadius.circular(10),
+          return Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
-                  child: Icon(
-                    Icons.inventory_2_outlined,
-                    color: isOut
-                        ? AppColors.danger
-                        : (isLow ? AppColors.warning : AppColors.primaryBlue),
-                    size: 20,
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Left Container Icon (Rounded Square matching Invoice Tile)
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isOut
+                          ? AppColors.errorContainer
+                          : (isLow
+                              ? AppColors.warningContainer
+                              : AppColors.primaryBlue.withValues(alpha: 0.08)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.inventory_2_outlined,
+                      color: isOut
+                          ? AppColors.danger
+                          : (isLow ? AppColors.warning : AppColors.primaryBlue),
+                      size: 20,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 12),
 
-                // Middle Column
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Row 1: CATEGORY • Product Name
-                      Row(
-                        children: [
-                          Text(
-                            p.category.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'PlusJakartaSans',
-                              color: isOut
-                                  ? AppColors.danger
-                                  : (isLow
-                                      ? AppColors.warning
-                                      : AppColors.primaryBlue),
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            '•',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.darkBlueText,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              p.name,
-                              style: const TextStyle(
-                                fontSize: 13,
+                  // Middle Column
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Row 1: CATEGORY • Product Name
+                        Row(
+                          children: [
+                            Text(
+                              p.category.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
                                 fontWeight: FontWeight.w800,
                                 fontFamily: 'PlusJakartaSans',
-                                color: AppColors.darkBlueText,
+                                color: isOut
+                                    ? AppColors.danger
+                                    : (isLow
+                                        ? AppColors.warning
+                                        : AppColors.primaryBlue),
+                                letterSpacing: 0.5,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              '•',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.darkBlueText,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                p.name,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'PlusJakartaSans',
+                                  color: AppColors.darkBlueText,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+
+                        // Row 2: Stock Count & optional SKU
+                        Text(
+                          p.sku.trim().isNotEmpty
+                              ? 'SKU: ${p.sku} · Stock: ${p.stockQuantity} ${p.unit}'
+                              : 'Stock: ${p.stockQuantity} ${p.unit}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'PlusJakartaSans',
+                            color: AppColors.secondaryText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Right Column: Price top row, Status Chip bottom row
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _formatCurrency(p.sellingPrice),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'PlusJakartaSans',
+                              color: AppColors.primaryBlue,
                             ),
                           ),
+                          const SizedBox(width: 2),
                         ],
                       ),
                       const SizedBox(height: 3),
-
-                      // Row 2: Stock Count & optional SKU
-                      Text(
-                        p.sku.trim().isNotEmpty
-                            ? 'SKU: ${p.sku} · Stock: ${p.stockQuantity} ${p.unit}'
-                            : 'Stock: ${p.stockQuantity} ${p.unit}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'PlusJakartaSans',
-                          color: AppColors.secondaryText,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      if (isOut)
+                        StatusChip.outOfStock()
+                      else if (isLow)
+                        StatusChip.lowStock()
+                      else
+                        StatusChip.inStock(),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-
-                // Right Column: Price top row, Status Chip bottom row
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _formatCurrency(p.sellingPrice),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'PlusJakartaSans',
-                            color: AppColors.primaryBlue,
-                          ),
+                  const SizedBox(width: 4),
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    color: Colors.white,
+                    elevation: 4,
+                    onSelected: (value) async {
+                      if (value == 'view') {
+                        await context.push(RouteNames.productDetails, extra: p);
+                        if (context.mounted) {
+                          context.read<ProductBloc>().add(
+                                FetchProductsEvent(
+                                  query: _searchController.text,
+                                  stockFilter: state.selectedStockFilter,
+                                  category: state.selectedCategory,
+                                  sortBy: state.sortBy,
+                                ),
+                              );
+                        }
+                      } else if (value == 'edit') {
+                        await context.push(RouteNames.createMaster, extra: p);
+                        if (context.mounted) {
+                          context.read<ProductBloc>().add(
+                                FetchProductsEvent(
+                                  query: _searchController.text,
+                                  stockFilter: state.selectedStockFilter,
+                                  category: state.selectedCategory,
+                                  sortBy: state.sortBy,
+                                ),
+                              );
+                        }
+                      } else if (value == 'delete') {
+                        _confirmDeactivateProduct(context, p);
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem<String>(
+                        value: 'view',
+                        height: 38,
+                        child: Row(
+                          children: [
+                            Icon(Icons.visibility_outlined,
+                                size: 18, color: AppColors.primaryBlue),
+                            SizedBox(width: 10),
+                            Text('View',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.darkBlueText)),
+                          ],
                         ),
-                        const SizedBox(width: 2),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    if (isOut)
-                      StatusChip.outOfStock()
-                    else if (isLow)
-                      StatusChip.lowStock()
-                    else
-                      StatusChip.inStock(),
-                  ],
-                ),
-                const SizedBox(width: 4),
-                PopupMenuButton<String>(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  color: Colors.white,
-                  elevation: 4,
-                  onSelected: (value) {
-                    if (value == 'view') {
-                      context.push(RouteNames.productDetails, extra: p);
-                    } else if (value == 'edit') {
-                      context.push(RouteNames.createMaster, extra: p);
-                    } else if (value == 'delete') {
-                      _confirmDeactivateProduct(context, p);
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem<String>(
-                      value: 'view',
-                      height: 38,
-                      child: Row(
-                        children: [
-                          Icon(Icons.visibility_outlined,
-                              size: 18, color: AppColors.primaryBlue),
-                          SizedBox(width: 10),
-                          Text('View',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.darkBlueText)),
-                        ],
                       ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'edit',
-                      height: 38,
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined,
-                              size: 18, color: AppColors.primaryBlue),
-                          SizedBox(width: 10),
-                          Text('Edit',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.darkBlueText)),
-                        ],
+                      const PopupMenuItem<String>(
+                        value: 'edit',
+                        height: 38,
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined,
+                                size: 18, color: AppColors.primaryBlue),
+                            SizedBox(width: 10),
+                            Text('Edit',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.darkBlueText)),
+                          ],
+                        ),
                       ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'delete',
-                      height: 38,
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline,
-                              size: 18, color: AppColors.danger),
-                          SizedBox(width: 10),
-                          Text('Delete',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.danger)),
-                        ],
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        height: 38,
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline,
+                                size: 18, color: AppColors.danger),
+                            SizedBox(width: 10),
+                            Text('Delete',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.danger)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                  child: const Padding(
-                    padding: EdgeInsets.only(
-                        left: 2.0, right: 0.0, top: 4.0, bottom: 4.0),
-                    child: Icon(
-                      Icons.more_vert,
-                      size: 20,
-                      color: AppColors.secondaryText,
+                    ],
+                    child: const Padding(
+                      padding: EdgeInsets.only(
+                          left: 2.0, right: 0.0, top: 4.0, bottom: 4.0),
+                      child: Icon(
+                        Icons.more_vert,
+                        size: 20,
+                        color: AppColors.secondaryText,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryBlue,
+      backgroundColor: Colors.white,
+      onRefresh: () => _handleRefresh(state),
+      child: childWidget,
     );
   }
 
