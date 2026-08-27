@@ -104,9 +104,19 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             ),
           ),
           Expanded(
-            child: BlocBuilder<InvoiceBloc, InvoiceState>(
-              builder: (context, state) {
-                if (state is InvoiceLoadingState) {
+            child: BlocListener<InvoiceBloc, InvoiceState>(
+              listener: (context, invoiceState) {
+                if (invoiceState is InvoiceOperationSuccessState) {
+                  context.read<InvoiceBloc>().add(FetchInvoicesEvent(
+                        query: _searchController.text.trim().isEmpty
+                            ? null
+                            : _searchController.text.trim(),
+                      ));
+                }
+              },
+              child: BlocBuilder<InvoiceBloc, InvoiceState>(
+                builder: (context, state) {
+                  if (state is InvoiceLoadingState) {
                   return const InvoiceListSkeleton();
                 }
                 if (state is InvoicesLoadedState) {
@@ -274,6 +284,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               },
             ),
           ),
+        ),
         ],
       ),
     );

@@ -15,7 +15,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/status_chip.dart';
 import 'return_voucher_screen.dart';
 
-class InvoiceDetailsPage extends StatelessWidget {
+class InvoiceDetailsPage extends StatefulWidget {
   final InvoiceEntity? invoice;
 
   const InvoiceDetailsPage({
@@ -23,135 +23,17 @@ class InvoiceDetailsPage extends StatelessWidget {
     this.invoice,
   });
 
-  String _formatCurrency(double amount) {
-    final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
-    return formatter.format(amount);
-  }
+  @override
+  State<InvoiceDetailsPage> createState() => _InvoiceDetailsPageState();
+}
 
-  String _formatDate(DateTime date) {
-    return DateFormat('d MMM yyyy, h:mm a').format(date);
-  }
-
-  Future<void> _shareInvoice(BuildContext context, InvoiceEntity inv) async {
-    final text =
-        'Invoice ${inv.invoiceNumber} for ${inv.customerName}\nTotal: ${_formatCurrency(inv.grandTotal)}\nPaid: ${_formatCurrency(inv.paidAmount)}\nBalance Due: ${_formatCurrency(inv.dueAmount)}\nGenerated via XenoBiz Manager.';
-    await Share.share(text, subject: 'Invoice ${inv.invoiceNumber}');
-  }
-
-  void _showRecordPaymentDialog(BuildContext context, InvoiceEntity inv) {
-    final due = inv.dueAmount > 0 ? inv.dueAmount : inv.grandTotal;
-    final amountCtrl = TextEditingController(text: due.toStringAsFixed(0));
-    String selectedMode = 'UPI';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (dialogCtx, setModalState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text('Record Payment - ${inv.invoiceNumber}'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Customer: ${inv.customerName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text('Outstanding Due: ${_formatCurrency(inv.dueAmount)}', style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w700, fontSize: 13)),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Amount (₹)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Text('Payment Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  children: ['UPI', 'Cash', 'Card', 'Bank Transfer'].map((mode) {
-                    final isSel = selectedMode == mode;
-                    return ChoiceChip(
-                      label: Text(mode),
-                      selected: isSel,
-                      selectedColor: AppColors.primaryBlue,
-                      labelStyle: TextStyle(color: isSel ? Colors.white : AppColors.darkBlueText, fontWeight: FontWeight.w600),
-                      onSelected: (val) {
-                        if (val) setModalState(() => selectedMode = mode);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-                  final amount = double.tryParse(amountCtrl.text) ?? 0.0;
-                  if (amount <= 0) return;
-                  final payment = PaymentEntity(
-                    id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
-                    invoiceId: inv.id,
-                    customerId: inv.customerId,
-                    customerName: inv.customerName,
-                    amount: amount,
-                    paymentMode: selectedMode,
-                    paymentDate: DateTime.now(),
-                  );
-                  context.read<InvoiceBloc>().add(RecordPaymentSubmittedEvent(payment));
-                  Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Recorded payment of ${_formatCurrency(amount)} for ${inv.invoiceNumber}')),
-                  );
-                },
-                child: const Text('Confirm Payment', style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _confirmCancelInvoice(BuildContext context, InvoiceEntity inv) {
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cancel Invoice?'),
-        content: Text('Are you sure you want to cancel invoice ${inv.invoiceNumber}? This transaction will be marked as Cancelled.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('No, Keep')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
-            onPressed: () {
-              final cancelledInv = inv.copyWith(status: InvoiceStatus.cancelled);
-              context.read<InvoiceBloc>().add(UpdateInvoiceSubmittedEvent(cancelledInv));
-              Navigator.pop(dialogCtx);
-              context.pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Invoice ${inv.invoiceNumber} has been cancelled.')),
-              );
-            },
-            child: const Text('Yes, Cancel Invoice'),
-          ),
-        ],
-      ),
-    );
-  }
+class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
+  late InvoiceEntity _currentInvoice;
 
   @override
-  Widget build(BuildContext context) {
-    // Fallback if accessed without extra invoice parameter
-    final inv = invoice ??
+  void initState() {
+    super.initState();
+    _currentInvoice = widget.invoice ??
         InvoiceEntity(
           id: 'inv_demo',
           invoiceNumber: 'INV-1042',
@@ -176,10 +58,207 @@ class InvoiceDetailsPage extends StatelessWidget {
           dueDate: DateTime.now(),
         );
 
+    // Initial fetch to get latest invoice data from DB
+    context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+  }
+
+  @override
+  void didUpdateWidget(covariant InvoiceDetailsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.invoice != null && widget.invoice != oldWidget.invoice) {
+      setState(() {
+        _currentInvoice = widget.invoice!;
+      });
+    }
+  }
+
+  String _formatCurrency(double amount) {
+    final formatter =
+        NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
+    return formatter.format(amount);
+  }
+
+  String _formatDate(DateTime date) {
+    return DateFormat('d MMM yyyy, h:mm a').format(date);
+  }
+
+  Future<void> _shareInvoice(BuildContext context, InvoiceEntity inv) async {
+    final text =
+        'Invoice ${inv.invoiceNumber} for ${inv.customerName}\nTotal: ${_formatCurrency(inv.grandTotal)}\nPaid: ${_formatCurrency(inv.paidAmount)}\nBalance Due: ${_formatCurrency(inv.dueAmount)}\nGenerated via XenoBiz Manager.';
+    await Share.share(text, subject: 'Invoice ${inv.invoiceNumber}');
+  }
+
+  void _showRecordPaymentDialog(BuildContext context, InvoiceEntity inv) {
+    final due = inv.dueAmount > 0 ? inv.dueAmount : inv.grandTotal;
+    final amountCtrl = TextEditingController(text: due.toStringAsFixed(0));
+    String selectedMode = 'UPI';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setModalState) {
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('Record Payment - ${inv.invoiceNumber}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Customer: ${inv.customerName}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text('Outstanding Due: ${_formatCurrency(inv.dueAmount)}',
+                    style: const TextStyle(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Amount (₹)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text('Payment Mode',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children:
+                      ['UPI', 'Cash', 'Card', 'Bank Transfer'].map((mode) {
+                    final isSel = selectedMode == mode;
+                    return ChoiceChip(
+                      label: Text(mode),
+                      selected: isSel,
+                      selectedColor: AppColors.primaryBlue,
+                      labelStyle: TextStyle(
+                          color:
+                              isSel ? Colors.white : AppColors.darkBlueText,
+                          fontWeight: FontWeight.w600),
+                      onSelected: (val) {
+                        if (val) setModalState(() => selectedMode = mode);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  final amount = double.tryParse(amountCtrl.text) ?? 0.0;
+                  if (amount <= 0) return;
+                  final payment = PaymentEntity(
+                    id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
+                    invoiceId: inv.id,
+                    customerId: inv.customerId,
+                    customerName: inv.customerName,
+                    amount: amount,
+                    paymentMode: selectedMode,
+                    paymentDate: DateTime.now(),
+                  );
+                  context
+                      .read<InvoiceBloc>()
+                      .add(RecordPaymentSubmittedEvent(payment));
+                  Navigator.pop(dialogCtx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text(
+                            'Recorded payment of ${_formatCurrency(amount)} for ${inv.invoiceNumber}')),
+                  );
+                },
+                child: const Text('Confirm Payment',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmCancelInvoice(BuildContext context, InvoiceEntity inv) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Cancel Invoice?'),
+        content: Text(
+            'Are you sure you want to cancel invoice ${inv.invoiceNumber}? This transaction will be marked as Cancelled.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('No, Keep')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white),
+            onPressed: () {
+              final cancelledInv =
+                  inv.copyWith(status: InvoiceStatus.cancelled);
+              context
+                  .read<InvoiceBloc>()
+                  .add(UpdateInvoiceSubmittedEvent(cancelledInv));
+              Navigator.pop(dialogCtx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content:
+                        Text('Invoice ${inv.invoiceNumber} has been cancelled.')),
+              );
+            },
+            child: const Text('Yes, Cancel Invoice'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<InvoiceBloc, InvoiceState>(
+      listener: (context, state) {
+        if (state is InvoicesLoadedState) {
+          final updated = state.invoices.firstWhere(
+            (i) => i.id == _currentInvoice.id,
+            orElse: () => _currentInvoice,
+          );
+          if (mounted && updated != _currentInvoice) {
+            setState(() {
+              _currentInvoice = updated;
+            });
+          }
+        } else if (state is InvoiceOperationSuccessState) {
+          context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+        }
+      },
+      child: _buildDetailsScaffold(context, _currentInvoice),
+    );
+  }
+
+  Widget _buildDetailsScaffold(BuildContext context, InvoiceEntity inv) {
     final now = DateTime.now();
-    final isOverdue = (inv.status == InvoiceStatus.unpaid || inv.status == InvoiceStatus.partiallyPaid) &&
-        inv.dueDate.isBefore(now);
-    final isReturned = inv.notes.toLowerCase().contains('return') || inv.invoiceNumber.toLowerCase().contains('ret');
+    final isOverdue =
+        (inv.status == InvoiceStatus.unpaid ||
+                inv.status == InvoiceStatus.partiallyPaid) &&
+            inv.dueDate.isBefore(now);
+    final isReturned = inv.notes.toLowerCase().contains('return') ||
+        inv.invoiceNumber.toLowerCase().contains('ret');
 
     Widget statusWidget;
     if (inv.status == InvoiceStatus.cancelled) {
@@ -228,20 +307,26 @@ class InvoiceDetailsPage extends StatelessWidget {
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
-            onSelected: (val) {
+            onSelected: (val) async {
               if (val == 'edit') {
-                context.push(
+                await context.push(
                   RouteNames.createInvoice,
                   extra: {
                     'invoiceType': inv.type,
                     'invoiceToEdit': inv,
                   },
                 );
+                if (context.mounted) {
+                  context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+                }
               } else if (val == 'return') {
-                context.push(
+                await context.push(
                   RouteNames.createReturn,
                   extra: {'returnType': ReturnType.salesReturn},
                 );
+                if (context.mounted) {
+                  context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+                }
               } else if (val == 'cancel') {
                 _confirmCancelInvoice(context, inv);
               }
@@ -250,20 +335,34 @@ class InvoiceDetailsPage extends StatelessWidget {
               const PopupMenuItem(
                 value: 'edit',
                 child: Row(
-                  children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit Invoice')],
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit Invoice')
+                  ],
                 ),
               ),
               const PopupMenuItem(
                 value: 'return',
                 child: Row(
-                  children: [Icon(Icons.assignment_return_outlined, size: 18), SizedBox(width: 8), Text('Create Sales Return')],
+                  children: [
+                    Icon(Icons.assignment_return_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Create Sales Return')
+                  ],
                 ),
               ),
               if (inv.status != InvoiceStatus.cancelled)
                 const PopupMenuItem(
                   value: 'cancel',
                   child: Row(
-                    children: [Icon(Icons.cancel_outlined, size: 18, color: AppColors.danger), SizedBox(width: 8), Text('Cancel Invoice', style: TextStyle(color: AppColors.danger))],
+                    children: [
+                      Icon(Icons.cancel_outlined,
+                          size: 18, color: AppColors.danger),
+                      SizedBox(width: 8),
+                      Text('Cancel Invoice',
+                          style: TextStyle(color: AppColors.danger))
+                    ],
                   ),
                 ),
             ],
@@ -288,7 +387,9 @@ class InvoiceDetailsPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            inv.type == InvoiceType.purchase ? 'PURCHASE VOUCHER' : 'SALES INVOICE',
+                            inv.type == InvoiceType.purchase
+                                ? 'PURCHASE VOUCHER'
+                                : 'SALES INVOICE',
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
@@ -317,22 +418,32 @@ class InvoiceDetailsPage extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Issue Date', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          const Text('Issue Date',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.secondaryText)),
                           const SizedBox(height: 2),
-                          Text(_formatDate(inv.issueDate), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          Text(_formatDate(inv.issueDate),
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600)),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Due Date', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          const Text('Due Date',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.secondaryText)),
                           const SizedBox(height: 2),
                           Text(
                             DateFormat('d MMM yyyy').format(inv.dueDate),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isOverdue ? AppColors.danger : AppColors.darkBlueText,
+                              color: isOverdue
+                                  ? AppColors.danger
+                                  : AppColors.darkBlueText,
                             ),
                           ),
                         ],
@@ -355,7 +466,8 @@ class InvoiceDetailsPage extends StatelessWidget {
                       color: AppColors.primaryBlue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.person_outline, color: AppColors.primaryBlue, size: 24),
+                    child: const Icon(Icons.person_outline,
+                        color: AppColors.primaryBlue, size: 24),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -363,21 +475,32 @@ class InvoiceDetailsPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          inv.customerName.isNotEmpty ? inv.customerName : 'General Customer',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                          inv.customerName.isNotEmpty
+                              ? inv.customerName
+                              : 'General Customer',
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText),
                         ),
                         if (inv.customerPhone.isNotEmpty) ...[
                           const SizedBox(height: 2),
-                          Text(inv.customerPhone, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                          Text(inv.customerPhone,
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.secondaryText)),
                         ],
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.chevron_right, color: AppColors.secondaryText),
+                    icon: const Icon(Icons.chevron_right,
+                        color: AppColors.secondaryText),
                     onPressed: () {
                       final customer = CustomerEntity(
-                        id: inv.customerId.isNotEmpty ? inv.customerId : 'cust_gen',
+                        id: inv.customerId.isNotEmpty
+                            ? inv.customerId
+                            : 'cust_gen',
                         name: inv.customerName,
                         phone: inv.customerPhone,
                         email: '',
@@ -401,13 +524,19 @@ class InvoiceDetailsPage extends StatelessWidget {
                 children: [
                   const Text(
                     'Invoice Items',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkBlueText),
                   ),
                   const SizedBox(height: 14),
                   if (inv.items.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('No itemized details recorded for this invoice.', style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
+                      child: Text(
+                          'No itemized details recorded for this invoice.',
+                          style: TextStyle(
+                              color: AppColors.secondaryText, fontSize: 13)),
                     )
                   else
                     ListView.separated(
@@ -426,19 +555,27 @@ class InvoiceDetailsPage extends StatelessWidget {
                                 children: [
                                   Text(
                                     item.productName,
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.darkBlueText),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '${item.quantity} x ${_formatCurrency(item.unitPrice)}${item.taxPercentage > 0 ? ' (+${item.taxPercentage.toStringAsFixed(0)}% Tax)' : ''}',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.secondaryText),
                                   ),
                                 ],
                               ),
                             ),
                             Text(
                               _formatCurrency(item.total),
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.darkBlueText),
                             ),
                           ],
                         );
@@ -450,20 +587,30 @@ class InvoiceDetailsPage extends StatelessWidget {
                   _buildSummaryLine('Subtotal', _formatCurrency(inv.subtotal)),
                   if (inv.taxTotal > 0) ...[
                     const SizedBox(height: 6),
-                    _buildSummaryLine('Tax / GST', _formatCurrency(inv.taxTotal)),
+                    _buildSummaryLine(
+                        'Tax / GST', _formatCurrency(inv.taxTotal)),
                   ],
                   if (inv.discountTotal > 0) ...[
                     const SizedBox(height: 6),
-                    _buildSummaryLine('Discount', '-${_formatCurrency(inv.discountTotal)}', isDiscount: true),
+                    _buildSummaryLine('Discount',
+                        '-${_formatCurrency(inv.discountTotal)}',
+                        isDiscount: true),
                   ],
                   const Divider(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Amount', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
+                      const Text('Total Amount',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText)),
                       Text(
                         _formatCurrency(inv.grandTotal),
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryBlue),
                       ),
                     ],
                   ),
@@ -471,17 +618,33 @@ class InvoiceDetailsPage extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Paid Amount', style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-                      Text(_formatCurrency(inv.paidAmount), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.success)),
+                      const Text('Paid Amount',
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.secondaryText)),
+                      Text(_formatCurrency(inv.paidAmount),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.success)),
                     ],
                   ),
-                  if (inv.dueAmount > 0 && inv.status != InvoiceStatus.paid && inv.status != InvoiceStatus.cancelled) ...[
+                  if (inv.dueAmount > 0 &&
+                      inv.status != InvoiceStatus.paid &&
+                      inv.status != InvoiceStatus.cancelled) ...[
                     const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Outstanding Due', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.danger)),
-                        Text(_formatCurrency(inv.dueAmount), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.danger)),
+                        const Text('Outstanding Due',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.danger)),
+                        Text(_formatCurrency(inv.dueAmount),
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.danger)),
                       ],
                     ),
                   ],
@@ -495,9 +658,15 @@ class InvoiceDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Notes / Terms', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+                    const Text('Notes / Terms',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.darkBlueText)),
                     const SizedBox(height: 4),
-                    Text(inv.notes, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                    Text(inv.notes,
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.secondaryText)),
                   ],
                 ),
               ),
@@ -515,7 +684,9 @@ class InvoiceDetailsPage extends StatelessWidget {
                     onPressed: () => _shareInvoice(context, inv),
                   ),
                 ),
-                if (inv.dueAmount > 0 && inv.status != InvoiceStatus.paid && inv.status != InvoiceStatus.cancelled) ...[
+                if (inv.dueAmount > 0 &&
+                    inv.status != InvoiceStatus.paid &&
+                    inv.status != InvoiceStatus.cancelled) ...[
                   const SizedBox(width: 12),
                   Expanded(
                     child: AppButton(
@@ -534,11 +705,14 @@ class InvoiceDetailsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryLine(String title, String value, {bool isDiscount = false}) {
+  Widget _buildSummaryLine(String title, String value,
+      {bool isDiscount = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+        Text(title,
+            style:
+                const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
         Text(
           value,
           style: TextStyle(

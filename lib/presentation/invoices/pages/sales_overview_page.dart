@@ -437,79 +437,88 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
               fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
         ),
       ),
-      body: BlocBuilder<SalesOverviewBloc, SalesOverviewState>(
-        builder: (context, state) {
-          if (state is SalesOverviewLoadingState ||
-              state is SalesOverviewInitialState) {
-            return const InvoiceListSkeleton();
+      body: BlocListener<InvoiceBloc, InvoiceState>(
+        listener: (context, invoiceState) {
+          if (invoiceState is InvoiceOperationSuccessState) {
+            context
+                .read<SalesOverviewBloc>()
+                .add(FetchSalesOverviewDataEvent());
           }
-
-          if (state is SalesOverviewErrorState) {
-            return ErrorState(
-              message: state.message,
-              onRetry: () => context
-                  .read<SalesOverviewBloc>()
-                  .add(FetchSalesOverviewDataEvent()),
-            );
-          }
-
-          if (state is SalesOverviewLoadedState) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                context
-                    .read<SalesOverviewBloc>()
-                    .add(FetchSalesOverviewDataEvent());
-              },
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Search Bar & Filter Button
-                    _buildSearchAndFilterRow(context, state),
-                    const SizedBox(height: 12),
-
-                    // Quick Transaction Type Filter Chips (All, Invoices, Returns, Payments)
-                    _buildQuickTypeChipsRow(context, state),
-                    const SizedBox(height: 10),
-
-                    // Active Removable Filter Chips
-                    if (state.isFiltered) ...[
-                      _buildActiveFilterChipsRow(context, state),
-                      const SizedBox(height: 10),
-                    ],
-
-                    // Transactions Section Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Recent Transactions',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.darkBlueText,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Vertical Timeline Financial Activity Feed
-                    Expanded(
-                      child: state.filteredTransactions.isEmpty
-                          ? _buildEmptyState(state)
-                          : _buildVerticalTimelineFeed(
-                              context, state.filteredTransactions),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return const SizedBox.shrink();
         },
+        child: BlocBuilder<SalesOverviewBloc, SalesOverviewState>(
+          builder: (context, state) {
+            if (state is SalesOverviewLoadingState ||
+                state is SalesOverviewInitialState) {
+              return const InvoiceListSkeleton();
+            }
+
+            if (state is SalesOverviewErrorState) {
+              return ErrorState(
+                message: state.message,
+                onRetry: () => context
+                    .read<SalesOverviewBloc>()
+                    .add(FetchSalesOverviewDataEvent()),
+              );
+            }
+
+            if (state is SalesOverviewLoadedState) {
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context
+                      .read<SalesOverviewBloc>()
+                      .add(FetchSalesOverviewDataEvent());
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Search Bar & Filter Button
+                      _buildSearchAndFilterRow(context, state),
+                      const SizedBox(height: 12),
+
+                      // Quick Transaction Type Filter Chips (All, Invoices, Returns, Payments)
+                      _buildQuickTypeChipsRow(context, state),
+                      const SizedBox(height: 10),
+
+                      // Active Removable Filter Chips
+                      if (state.isFiltered) ...[
+                        _buildActiveFilterChipsRow(context, state),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // Transactions Section Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Recent Transactions',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Vertical Timeline Financial Activity Feed
+                      Expanded(
+                        child: state.filteredTransactions.isEmpty
+                            ? _buildEmptyState(state)
+                            : _buildVerticalTimelineFeed(
+                                context, state.filteredTransactions),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     );
   }
@@ -1067,20 +1076,35 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
   }
 
   void _handleViewTransaction(
-      BuildContext context, SalesTransactionWrapper tx) {
+      BuildContext context, SalesTransactionWrapper tx) async {
     if (tx.isInvoice && tx.asInvoice != null) {
-      context.push(RouteNames.invoiceDetails, extra: tx.asInvoice);
+      await context.push(RouteNames.invoiceDetails, extra: tx.asInvoice);
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else if (tx.isReturn) {
-      context.push(RouteNames.salesReturns);
+      await context.push(RouteNames.salesReturns);
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else if (tx.isPayment) {
       _showPaymentDetailsModal(context, tx.asPayment ?? tx);
     }
   }
 
   void _handleEditTransaction(
-      BuildContext context, SalesTransactionWrapper tx) {
+      BuildContext context, SalesTransactionWrapper tx) async {
     if (tx.isInvoice && tx.asInvoice != null) {
-      context.push(RouteNames.createInvoice, extra: tx.asInvoice);
+      await context.push(
+        RouteNames.createInvoice,
+        extra: {
+          'invoiceType': tx.asInvoice!.type,
+          'invoiceToEdit': tx.asInvoice!,
+        },
+      );
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1127,6 +1151,9 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                 context
                     .read<InvoiceBloc>()
                     .add(UpdateInvoiceSubmittedEvent(cancelledInvoice));
+                context
+                    .read<SalesOverviewBloc>()
+                    .add(FetchSalesOverviewDataEvent());
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

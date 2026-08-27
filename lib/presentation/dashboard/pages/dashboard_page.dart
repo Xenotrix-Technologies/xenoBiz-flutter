@@ -373,8 +373,14 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
 
-      body: BlocBuilder<DashboardBloc, DashboardState>(
-        builder: (context, state) {
+      body: BlocListener<InvoiceBloc, InvoiceState>(
+        listener: (context, invoiceState) {
+          if (invoiceState is InvoiceOperationSuccessState) {
+            context.read<DashboardBloc>().add(FetchDashboardDataEvent());
+          }
+        },
+        child: BlocBuilder<DashboardBloc, DashboardState>(
+          builder: (context, state) {
           if (state is DashboardLoadingState) {
             return const DashboardSkeleton();
           }
@@ -904,7 +910,8 @@ class _DashboardPageState extends State<DashboardPage> {
         },
       ),
     ),
-  );
+  ),
+);
 }
   String _formatCurrency(double amount) {
     final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
