@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -233,7 +235,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     final type = widget.invoiceType == InvoiceType.purchase
         ? VoucherType.purchase
         : VoucherType.sale;
-    final generated = await VoucherSequenceService.instance.generateNextVoucherId(type);
+    final generated =
+        await VoucherSequenceService.instance.generateNextVoucherId(type);
     if (mounted) {
       setState(() {
         _invoiceId = generated;
@@ -638,11 +641,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   bool get _hasUnsavedData {
-    return _items.isNotEmpty ||
-        _selectedCustomer != null ||
-        _notesCtrl.text.trim().isNotEmpty ||
-        _discountAmount > 0 ||
-        _extraExpenseAmount > 0;
+    return _items.isNotEmpty;
+    // || _selectedCustomer != null
   }
 
   void _safePop() {
@@ -654,8 +654,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   void _handleBackPressed() {
+    log(_hasUnsavedData.toString());
     if (!isEditMode && _hasUnsavedData) {
       _confirmDiscardInvoice();
+    } else if (_items.isEmpty) {
+      _safePop();
     } else {
       _safePop();
     }
@@ -1005,7 +1008,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_scannerController == null || !_scannerController!.value.isInitialized) {
+    if (_scannerController == null ||
+        !_scannerController!.value.isInitialized) {
       return;
     }
     if (state == AppLifecycleState.inactive ||
@@ -1454,1923 +1458,76 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
               onBackPressed: _handleBackPressed,
               onMorePressed: _showMoreBottomSheet,
             ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Customer / Supplier Search Section
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildVoucherIdBanner(_invoiceId),
-                      Row(
-                        children: [
-                          Icon(
-                            isPurchase
-                                ? Icons.business_outlined
-                                : Icons.person_outline,
-                            size: 18,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            isPurchase
-                                ? 'Supplier / Account'
-                                : 'Customer / Account',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            '(Optional)',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.outline,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_selectedCustomer != null)
-                        AppCard(
-                          backgroundColor: AppColors.deepNavy,
-                          border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.3)),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryContainer
-                                      .withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(
-                                      AppSizes.radiusMedium),
-                                  border: Border.all(color: Colors.white12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  _getInitials(_selectedCustomer!.name),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _selectedCustomer!.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _selectedCustomer!.phone.isNotEmpty
-                                          ? _selectedCustomer!.phone
-                                          : 'Contact account',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    _selectedCustomer!.outstandingBalance > 0
-                                        ? 'PREVIOUS BALANCE'
-                                        : 'STATUS',
-                                    style: const TextStyle(
-                                      color: Colors.white60,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _selectedCustomer!.outstandingBalance > 0
-                                        ? '₹${_selectedCustomer!.outstandingBalance.toStringAsFixed(0)}'
-                                        : 'No Due',
-                                    style: TextStyle(
-                                      color: _selectedCustomer!
-                                                  .outstandingBalance >
-                                              0
-                                          ? AppColors.warning
-                                          : AppColors.success,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () {
-                                  ref
-                                      .read(createInvoiceFormProvider.notifier)
-                                      .selectCustomer(null);
-                                  _customerSearchCtrl.clear();
-                                  _searchFocusNode.requestFocus();
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.close,
-                                      color: Colors.white70, size: 16),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        TapRegion(
-                          groupId: 'customer_search_tap_group',
-                          onTapOutside: (_) {
-                            if (_searchFocusNode.hasFocus) {
-                              _searchFocusNode.unfocus();
-                            }
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceCard,
-                              borderRadius:
-                                  BorderRadius.circular(AppSizes.radiusMedium),
-                              border: Border.all(
-                                color: _showSearchOverlay
-                                    ? AppColors.primary
-                                    : AppColors.surfaceContainerHigh,
-                                width: _showSearchOverlay ? 1.5 : 1.0,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                TextField(
-                                  controller: _customerSearchCtrl,
-                                  focusNode: _searchFocusNode,
-                                  onChanged: (_) {
-                                    setState(() {});
-                                  },
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.onSurface,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: isPurchase
-                                        ? 'Search supplier name or phone'
-                                        : 'Search customer name or phone',
-                                    hintStyle: const TextStyle(
-                                      fontSize: 13,
-                                      color: AppColors.outline,
-                                    ),
-                                    prefixIcon: const Icon(Icons.search_rounded,
-                                        color: AppColors.outline, size: 20),
-                                    suffixIcon:
-                                        _customerSearchCtrl.text.isNotEmpty
-                                            ? IconButton(
-                                                icon: const Icon(Icons.clear,
-                                                    size: 18),
-                                                onPressed: () {
-                                                  _customerSearchCtrl.clear();
-                                                  setState(() {});
-                                                },
-                                              )
-                                            : null,
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 12),
-                                  ),
-                                ),
-                                if (_showSearchOverlay) ...[
-                                  const Divider(height: 1),
-                                  Container(
-                                    constraints:
-                                        const BoxConstraints(maxHeight: 280),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                          child: _filteredCustomers.isEmpty
-                                              ? Padding(
-                                                  padding: const EdgeInsets.all(
-                                                      20.0),
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      const Icon(
-                                                          Icons.search_off,
-                                                          size: 20,
-                                                          color: AppColors
-                                                              .outline),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                          isPurchase
-                                                              ? 'Supplier not found'
-                                                              : 'Customer not found',
-                                                          style: const TextStyle(
-                                                              color: AppColors
-                                                                  .outline,
-                                                              fontSize: 14)),
-                                                    ],
-                                                  ),
-                                                )
-                                              : ListView.separated(
-                                                  shrinkWrap: true,
-                                                  itemCount:
-                                                      _filteredCustomers.length,
-                                                  separatorBuilder: (_, __) =>
-                                                      const Divider(
-                                                          height: 1,
-                                                          indent: 16,
-                                                          endIndent: 16),
-                                                  itemBuilder: (ctx, idx) {
-                                                    final cust =
-                                                        _filteredCustomers[idx];
-                                                    return InkWell(
-                                                      onTap: () {
-                                                        setState(() {
-                                                          ref
-                                                              .read(
-                                                                  createInvoiceFormProvider
-                                                                      .notifier)
-                                                              .selectCustomer(
-                                                                  cust);
-                                                          _showSearchOverlay =
-                                                              false;
-                                                        });
-                                                        _searchFocusNode
-                                                            .unfocus();
-                                                      },
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                                horizontal:
-                                                                    16.0,
-                                                                vertical: 12.0),
-                                                        child: Row(
-                                                          children: [
-                                                            Container(
-                                                              width: 38,
-                                                              height: 38,
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: AppColors
-                                                                    .surfaceContainerLow,
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            10),
-                                                                border: Border.all(
-                                                                    color: AppColors
-                                                                        .border),
-                                                              ),
-                                                              alignment:
-                                                                  Alignment
-                                                                      .center,
-                                                              child: Text(
-                                                                _getInitials(
-                                                                    cust.name),
-                                                                style:
-                                                                    const TextStyle(
-                                                                  color: AppColors
-                                                                      .primary,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w800,
-                                                                  fontSize: 14,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                                width: 12),
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                children: [
-                                                                  Text(
-                                                                    cust.name,
-                                                                    style:
-                                                                        const TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w700,
-                                                                      fontSize:
-                                                                          14,
-                                                                      color: AppColors
-                                                                          .onSurface,
-                                                                    ),
-                                                                  ),
-                                                                  const SizedBox(
-                                                                      height:
-                                                                          2),
-                                                                  Text(
-                                                                    cust.phone,
-                                                                    style: const TextStyle(
-                                                                        fontSize:
-                                                                            12,
-                                                                        color: AppColors
-                                                                            .outline),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            cust.outstandingBalance >
-                                                                    0
-                                                                ? Container(
-                                                                    padding: const EdgeInsets
-                                                                        .symmetric(
-                                                                        horizontal:
-                                                                            8,
-                                                                        vertical:
-                                                                            4),
-                                                                    decoration:
-                                                                        BoxDecoration(
-                                                                      color: AppColors
-                                                                          .warningTint,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              6),
-                                                                      border: Border.all(
-                                                                          color: AppColors
-                                                                              .warning
-                                                                              .withValues(alpha: 0.3)),
-                                                                    ),
-                                                                    child: Text(
-                                                                      'Pending Due · ₹${cust.outstandingBalance.toStringAsFixed(0)}',
-                                                                      style:
-                                                                          const TextStyle(
-                                                                        fontSize:
-                                                                            11,
-                                                                        fontWeight:
-                                                                            FontWeight.w700,
-                                                                        color: AppColors
-                                                                            .warning,
-                                                                      ),
-                                                                    ),
-                                                                  )
-                                                                : Container(
-                                                                    padding: const EdgeInsets
-                                                                        .symmetric(
-                                                                        horizontal:
-                                                                            8,
-                                                                        vertical:
-                                                                            4),
-                                                                    decoration:
-                                                                        BoxDecoration(
-                                                                      color: AppColors
-                                                                          .successTint,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              6),
-                                                                      border: Border.all(
-                                                                          color: AppColors
-                                                                              .success
-                                                                              .withValues(alpha: 0.3)),
-                                                                    ),
-                                                                    child:
-                                                                        const Text(
-                                                                      'No Due',
-                                                                      style:
-                                                                          TextStyle(
-                                                                        fontSize:
-                                                                            11,
-                                                                        fontWeight:
-                                                                            FontWeight.w700,
-                                                                        color: AppColors
-                                                                            .success,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                        ),
-                                        const Divider(height: 1),
-                                        InkWell(
-                                          onTap: () {
-                                            // _searchFocusNode.unfocus();
-                                            _showCreateCustomerDialog(
-                                                _customerSearchCtrl.text);
-                                          },
-                                          borderRadius: const BorderRadius.only(
-                                            bottomLeft: Radius.circular(
-                                                AppSizes.radiusLarge),
-                                            bottomRight: Radius.circular(
-                                                AppSizes.radiusLarge),
-                                          ),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 12),
-                                            color:
-                                                AppColors.surfaceContainerLow,
-                                            alignment: Alignment.center,
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                const Icon(
-                                                    Icons.add_circle_outline,
-                                                    size: 18,
-                                                    color: AppColors.primary),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  isPurchase
-                                                      ? 'Create New Supplier'
-                                                      : 'Create New Customer',
-                                                  style: const TextStyle(
-                                                    color: AppColors.primary,
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TapRegion(
-                    onTapOutside: (_) {
-                      if (_focusedItemIndex != null ||
-                          _showSearchResultsOverlay) {
-                        setState(() {
-                          _focusedItemIndex = null;
-                          _showSearchResultsOverlay = false;
-                        });
-                      }
-                    },
-                    child: Column(
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0, vertical: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Customer / Supplier Search Section
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildVoucherIdBanner(_invoiceId),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Items',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                color: AppColors.darkBlueText,
+                            Icon(
+                              isPurchase
+                                  ? Icons.business_outlined
+                                  : Icons.person_outline,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              isPurchase
+                                  ? 'Supplier / Account'
+                                  : 'Customer / Account',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.onSurface,
                               ),
                             ),
-                            if (_isCameraOn)
-                              InkWell(
-                                onTap: _toggleCamera,
-                                borderRadius:
-                                    BorderRadius.circular(AppSizes.radiusSmall),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.errorContainer,
-                                    borderRadius: BorderRadius.circular(
-                                        AppSizes.radiusSmall),
-                                    border: Border.all(
-                                        color: AppColors.danger
-                                            .withValues(alpha: 0.3)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: const [
-                                      Icon(Icons.videocam_off,
-                                          size: 14, color: AppColors.danger),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Disable Camera',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.danger,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              '(Optional)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.outline,
+                                fontWeight: FontWeight.w500,
                               ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-
-                        // Inline Barcode / SKU Camera Scanner Preview
-                        if (_isCameraOn && _scannerController != null) ...[
-                          ClipRRect(
-                            borderRadius:
-                                BorderRadius.circular(AppSizes.radiusLarge),
-                            child: Container(
-                              height: 200,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius:
-                                    BorderRadius.circular(AppSizes.radiusLarge),
-                                border: Border.all(
-                                    color: AppColors.primary, width: 2),
-                              ),
-                              child: Stack(
-                                children: [
-                                  MobileScanner(
-                                    controller: _scannerController!,
-                                    onDetect: _onBarcodeDetected,
-                                  ),
-                                  Center(
-                                    child: Container(
-                                      width: 220,
-                                      height: 110,
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                            color: AppColors.primary, width: 2),
-                                        borderRadius: BorderRadius.circular(
-                                            AppSizes.radiusMedium),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 12,
-                                    right: 12,
-                                    child: Row(
-                                      children: [
-                                        GestureDetector(
-                                          onTap: _toggleFlash,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black
-                                                  .withValues(alpha: 0.6),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  _isFlashOn
-                                                      ? Icons.flash_on
-                                                      : Icons.flash_off,
-                                                  color: Colors.white,
-                                                  size: 14,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  _isFlashOn
-                                                      ? 'Flash ON'
-                                                      : 'Flash OFF',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap: _toggleCamera,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black
-                                                  .withValues(alpha: 0.6),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: const [
-                                                Icon(
-                                                  Icons.videocam_off,
-                                                  color: Colors.white,
-                                                  size: 14,
-                                                ),
-                                                SizedBox(width: 4),
-                                                Text(
-                                                  'Cam OFF',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 12,
-                                    left: 12,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.65),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Text(
-                                        'Align Barcode / SKU in box',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-
-                        // Empty State (when no products added yet)
-                        if (_items.isEmpty)
+                        const SizedBox(height: 8),
+                        if (_selectedCustomer != null)
                           AppCard(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 24, horizontal: 20),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.primaryContainer,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.shopping_cart_outlined,
-                                    size: 32,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'No products added yet',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.secondaryText,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: _openInlineAddProductCard,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 18, vertical: 12),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                              AppSizes.radiusMedium),
-                                        ),
-                                      ),
-                                      icon: const Icon(Icons.add, size: 18),
-                                      label: const Text(
-                                        'Add Manually',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    OutlinedButton.icon(
-                                      onPressed: _toggleCamera,
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppColors.darkBlueText,
-                                        side: const BorderSide(
-                                            color: AppColors.border),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 15, vertical: 12),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                              AppSizes.radiusMedium),
-                                        ),
-                                      ),
-                                      icon: const Icon(Icons.qr_code_scanner,
-                                          size: 18,
-                                          color: AppColors.darkBlueText),
-                                      label: const Text(
-                                        'Scan to Add',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                          color: AppColors.darkBlueText,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          )
-                        else ...[
-                          // Product List (when items exist)
-                          ...List.generate(_items.length, (index) {
-                            final item = _items[index];
-                            final isFocused = _focusedItemIndex == index;
-
-                            if (isFocused) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 10.0),
-                                child: AppCard(
-                                  padding: const EdgeInsets.all(14),
-                                  border: Border.all(
-                                      color: AppColors.primary, width: 1.5),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  item.productName,
-                                                  style: const TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w800,
-                                                    color:
-                                                        AppColors.darkBlueText,
-                                                  ),
-                                                ),
-                                                if (item.sku.isNotEmpty) ...[
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    'SKU: ${item.sku}',
-                                                    style: const TextStyle(
-                                                      fontSize: 12,
-                                                      color: AppColors
-                                                          .secondaryText,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                          InkWell(
-                                            onTap: () => _showEditPriceDialog(
-                                                index, item),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    AppColors.primaryContainer,
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                border: Border.all(
-                                                    color: AppColors.primary
-                                                        .withValues(
-                                                            alpha: 0.3)),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Text(
-                                                    '₹${item.unitPrice.toStringAsFixed(0)}',
-                                                    style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      fontSize: 15,
-                                                      color: AppColors.primary,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  const Icon(
-                                                      Icons.edit_outlined,
-                                                      size: 14,
-                                                      color: AppColors.primary),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: AppColors.pageBackground,
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                      AppSizes.radiusMedium),
-                                              border: Border.all(
-                                                  color: AppColors.border),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                InkWell(
-                                                  onTap: () =>
-                                                      _updateItemQuantity(
-                                                          index, -1),
-                                                  child: Container(
-                                                    width: 34,
-                                                    height: 34,
-                                                    alignment: Alignment.center,
-                                                    child: const Icon(
-                                                        Icons.remove,
-                                                        size: 16,
-                                                        color: AppColors
-                                                            .darkBlueText),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                          minWidth: 32),
-                                                  height: 34,
-                                                  alignment: Alignment.center,
-                                                  child: Text(
-                                                    '${item.quantity}',
-                                                    style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                      fontSize: 14,
-                                                      color: AppColors
-                                                          .darkBlueText,
-                                                    ),
-                                                  ),
-                                                ),
-                                                InkWell(
-                                                  onTap: () =>
-                                                      _updateItemQuantity(
-                                                          index, 1),
-                                                  child: Container(
-                                                    width: 34,
-                                                    height: 34,
-                                                    alignment: Alignment.center,
-                                                    child: const Icon(Icons.add,
-                                                        size: 16,
-                                                        color: AppColors
-                                                            .darkBlueText),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            'Sub: ₹${item.subtotal.toStringAsFixed(2)}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.secondaryText,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          GestureDetector(
-                                            onTap: () => _removeItem(index),
-                                            child: const Icon(Icons.close,
-                                                size: 18,
-                                                color: AppColors.error),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // Compact Product Card (Default)
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10.0),
-                              child: AppCard(
-                                padding: const EdgeInsets.all(14),
-                                child: InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      _focusedItemIndex = index;
-                                    });
-                                  },
-                                  borderRadius: BorderRadius.circular(
-                                      AppSizes.radiusMedium),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              item.productName,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                                color: AppColors.darkBlueText,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              _isGstEnabled && _gstEnabled
-                                                  ? '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${(item.taxPercentage > 0 ? item.taxPercentage : _taxSettings.defaultGstRate).toStringAsFixed(0)}% GST)'
-                                                  : '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)}',
-                                              style: const TextStyle(
-                                                color: AppColors.secondaryText,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          color: AppColors.pageBackground,
-                                          borderRadius: BorderRadius.circular(
-                                              AppSizes.radiusMedium),
-                                          border: Border.all(
-                                              color: AppColors.border),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            InkWell(
-                                              onTap: () => _updateItemQuantity(
-                                                  index, -1),
-                                              child: Container(
-                                                width: 30,
-                                                height: 30,
-                                                alignment: Alignment.center,
-                                                child: const Icon(Icons.remove,
-                                                    size: 14,
-                                                    color:
-                                                        AppColors.darkBlueText),
-                                              ),
-                                            ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 6),
-                                              child: Text(
-                                                '${item.quantity}',
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 13,
-                                                  color: AppColors.darkBlueText,
-                                                ),
-                                              ),
-                                            ),
-                                            InkWell(
-                                              onTap: () =>
-                                                  _updateItemQuantity(index, 1),
-                                              child: Container(
-                                                width: 30,
-                                                height: 30,
-                                                alignment: Alignment.center,
-                                                child: const Icon(Icons.add,
-                                                    size: 14,
-                                                    color:
-                                                        AppColors.darkBlueText),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        '₹${(item.quantity * item.unitPrice).toStringAsFixed(0)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14,
-                                          color: AppColors.darkBlueText,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      GestureDetector(
-                                        onTap: () => _removeItem(index),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.errorContainer,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(Icons.close,
-                                              size: 14, color: AppColors.error),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _openInlineAddProductCard,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppSizes.radiusMedium),
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.add, size: 18),
-                                  label: const Text(
-                                    'Add More',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              OutlinedButton.icon(
-                                onPressed: _toggleCamera,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.darkBlueText,
-                                  side:
-                                      const BorderSide(color: AppColors.border),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                        AppSizes.radiusMedium),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.qr_code_scanner,
-                                    size: 18, color: AppColors.darkBlueText),
-                                label: const Text(
-                                  'Scan',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: AppColors.darkBlueText,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        // Inline Add Product Form Section
-                        AnimatedCrossFade(
-                          firstChild:
-                              const SizedBox(width: double.infinity, height: 0),
-                          secondChild: Padding(
-                            padding: const EdgeInsets.only(top: 14.0),
-                            child: TapRegion(
-                              groupId: 'inline_add_product_card_group',
-                              onTapOutside: (_) {
-                                if (_showInlineAddProduct) {
-                                  _closeInlineAddProductCard();
-                                }
-                              },
-                              child: AppCard(
-                                key: _inlineCardKey,
-                                padding: const EdgeInsets.all(16),
-                                border: Border.all(
-                                    color: AppColors.primary, width: 1.5),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          'ADD PRODUCT',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.secondaryText,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                        GestureDetector(
-                                          onTap: _closeInlineAddProductCard,
-                                          child: const Icon(Icons.close,
-                                              size: 18,
-                                              color: AppColors.secondaryText),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-
-                                    // Search / Product Name Field with Dropdown Overlay
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'PRODUCT NAME',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.secondaryText,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        SizedBox(
-                                          height: AppSizes.inputHeight,
-                                          child: TextField(
-                                            controller: _inlineSearchCtrl,
-                                            focusNode: _inlineSearchFocusNode,
-                                            textInputAction:
-                                                TextInputAction.next,
-                                            onEditingComplete: () {
-                                              _inlineSearchFocusNode.unfocus();
-                                              FocusManager.instance.primaryFocus
-                                                  ?.unfocus();
-                                              setState(() {
-                                                _showSearchResultsOverlay =
-                                                    false;
-                                              });
-                                            },
-                                            onSubmitted: (_) {
-                                              _closeInlineAddProductCard();
-                                            },
-                                            onTap: () {
-                                              _scrollToInlineCard();
-                                              if (_inlineSearchCtrl.text
-                                                      .trim()
-                                                      .isNotEmpty &&
-                                                  _inlineSelectedProduct ==
-                                                      null) {
-                                                setState(() {
-                                                  _showSearchResultsOverlay =
-                                                      true;
-                                                });
-                                              }
-                                            },
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.darkBlueText,
-                                            ),
-                                            decoration: InputDecoration(
-                                              hintText:
-                                                  'Search product name, SKU or ID',
-                                              hintStyle: const TextStyle(
-                                                color: AppColors.secondaryText,
-                                                fontSize: 13,
-                                              ),
-                                              prefixIcon: const Icon(
-                                                  Icons.search,
-                                                  size: 18,
-                                                  color:
-                                                      AppColors.secondaryText),
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 12),
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        AppSizes.radiusMedium),
-                                                borderSide: const BorderSide(
-                                                    color: AppColors.border),
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        AppSizes.radiusMedium),
-                                                borderSide: const BorderSide(
-                                                    color: AppColors.border),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        AppSizes.radiusMedium),
-                                                borderSide: const BorderSide(
-                                                    color: AppColors.primary,
-                                                    width: 1.5),
-                                              ),
-                                            ),
-                                            onChanged: (val) {
-                                              setState(() {
-                                                if (_inlineSelectedProduct !=
-                                                        null &&
-                                                    val.trim() !=
-                                                        _inlineSelectedProduct!
-                                                            .name) {
-                                                  _inlineSelectedProduct = null;
-                                                }
-                                                _showSearchResultsOverlay = val
-                                                        .trim()
-                                                        .isNotEmpty &&
-                                                    _inlineSelectedProduct ==
-                                                        null;
-                                              });
-                                            },
-                                          ),
-                                        ),
-
-                                        // Floating Search Results Dropdown Overlay
-                                        if (_showSearchResultsOverlay &&
-                                            _inlineSearchCtrl.text
-                                                .trim()
-                                                .isNotEmpty &&
-                                            _inlineSelectedProduct == null)
-                                          Container(
-                                            margin:
-                                                const EdgeInsets.only(top: 4),
-                                            constraints: const BoxConstraints(
-                                                maxHeight: 180),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.surfaceCard,
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                      AppSizes.radiusMedium),
-                                              border: Border.all(
-                                                  color: AppColors.border),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.08),
-                                                  blurRadius: 10,
-                                                  offset: const Offset(0, 4),
-                                                ),
-                                              ],
-                                            ),
-                                            child: _inlineSearchResults
-                                                    .isNotEmpty
-                                                ? ListView.separated(
-                                                    shrinkWrap: true,
-                                                    padding: EdgeInsets.zero,
-                                                    itemCount:
-                                                        _inlineSearchResults
-                                                            .length,
-                                                    separatorBuilder: (_, __) =>
-                                                        const Divider(
-                                                            height: 1,
-                                                            color: AppColors
-                                                                .border),
-                                                    itemBuilder:
-                                                        (context, idx) {
-                                                      final prod =
-                                                          _inlineSearchResults[
-                                                              idx];
-                                                      return ListTile(
-                                                        dense: true,
-                                                        title: Text(
-                                                          prod.name,
-                                                          style:
-                                                              const TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            fontSize: 14,
-                                                            color: AppColors
-                                                                .darkBlueText,
-                                                          ),
-                                                        ),
-                                                        subtitle: prod
-                                                                .sku.isNotEmpty
-                                                            ? Text(
-                                                                'SKU: ${prod.sku}',
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontSize: 12,
-                                                                  color: AppColors
-                                                                      .secondaryText,
-                                                                ),
-                                                              )
-                                                            : null,
-                                                        trailing: Text(
-                                                          '₹${prod.sellingPrice.toStringAsFixed(2)}',
-                                                          style:
-                                                              const TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.w800,
-                                                            fontSize: 14,
-                                                            color: AppColors
-                                                                .primary,
-                                                          ),
-                                                        ),
-                                                        onTap: () =>
-                                                            _selectInlineProduct(
-                                                                prod),
-                                                      );
-                                                    },
-                                                  )
-                                                : const Padding(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                            horizontal: 14,
-                                                            vertical: 12),
-                                                    child: Text(
-                                                      'No products found',
-                                                      style: TextStyle(
-                                                        fontSize: 13,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        color: AppColors
-                                                            .secondaryText,
-                                                      ),
-                                                    ),
-                                                  ),
-                                          ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-
-                                    // Quantity & Unit Price Controls Row
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          flex: 1,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                'QUANTITY',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color:
-                                                      AppColors.secondaryText,
-                                                  letterSpacing: 0.5,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Container(
-                                                height: AppSizes.inputHeight,
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      AppColors.pageBackground,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          AppSizes
-                                                              .radiusMedium),
-                                                  border: Border.all(
-                                                      color: AppColors.border),
-                                                ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    InkWell(
-                                                      onTap: () {
-                                                        if (_inlineQuantity >
-                                                            1) {
-                                                          setState(() {
-                                                            _inlineQuantity--;
-                                                          });
-                                                        }
-                                                      },
-                                                      child: Container(
-                                                        width: 36,
-                                                        height: AppSizes
-                                                            .inputHeight,
-                                                        alignment:
-                                                            Alignment.center,
-                                                        child: const Icon(
-                                                            Icons.remove,
-                                                            size: 18,
-                                                            color: AppColors
-                                                                .darkBlueText),
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '$_inlineQuantity',
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: AppColors
-                                                            .darkBlueText,
-                                                      ),
-                                                    ),
-                                                    InkWell(
-                                                      onTap: () {
-                                                        setState(() {
-                                                          _inlineQuantity++;
-                                                        });
-                                                      },
-                                                      child: Container(
-                                                        width: 36,
-                                                        height: AppSizes
-                                                            .inputHeight,
-                                                        alignment:
-                                                            Alignment.center,
-                                                        child: const Icon(
-                                                            Icons.add,
-                                                            size: 18,
-                                                            color: AppColors
-                                                                .darkBlueText),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          flex: 1,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                'UNIT PRICE (₹)',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color:
-                                                      AppColors.secondaryText,
-                                                  letterSpacing: 0.5,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              SizedBox(
-                                                height: AppSizes.inputHeight,
-                                                child: TextField(
-                                                  controller: _inlinePriceCtrl,
-                                                  keyboardType:
-                                                      const TextInputType
-                                                          .numberWithOptions(
-                                                          decimal: true),
-                                                  textInputAction:
-                                                      TextInputAction.done,
-                                                  onEditingComplete: () {
-                                                    _closeInlineAddProductCard();
-                                                  },
-                                                  onSubmitted: (_) {
-                                                    _closeInlineAddProductCard();
-                                                  },
-                                                  onTapOutside: (_) =>
-                                                      FocusManager
-                                                          .instance.primaryFocus
-                                                          ?.unfocus(),
-                                                  style: const TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w700,
-                                                    color:
-                                                        AppColors.darkBlueText,
-                                                  ),
-                                                  decoration: InputDecoration(
-                                                    hintText: '0',
-                                                    contentPadding:
-                                                        const EdgeInsets
-                                                            .symmetric(
-                                                            horizontal: 14,
-                                                            vertical: 12),
-                                                    border: OutlineInputBorder(
-                                                      borderRadius: BorderRadius
-                                                          .circular(AppSizes
-                                                              .radiusMedium),
-                                                      borderSide:
-                                                          const BorderSide(
-                                                              color: AppColors
-                                                                  .border),
-                                                    ),
-                                                    enabledBorder:
-                                                        OutlineInputBorder(
-                                                      borderRadius: BorderRadius
-                                                          .circular(AppSizes
-                                                              .radiusMedium),
-                                                      borderSide:
-                                                          const BorderSide(
-                                                              color: AppColors
-                                                                  .border),
-                                                    ),
-                                                    focusedBorder:
-                                                        OutlineInputBorder(
-                                                      borderRadius: BorderRadius
-                                                          .circular(AppSizes
-                                                              .radiusMedium),
-                                                      borderSide:
-                                                          const BorderSide(
-                                                              color: AppColors
-                                                                  .primary,
-                                                              width: 1.5),
-                                                    ),
-                                                  ),
-                                                  onChanged: (_) {
-                                                    setState(() {});
-                                                  },
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-
-                                    // Calculated Line Total Display
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          'Line Total',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.secondaryText,
-                                          ),
-                                        ),
-                                        Text(
-                                          '₹${(_inlineQuantity * (double.tryParse(_inlinePriceCtrl.text) ?? 0.0)).toStringAsFixed(2)}',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w900,
-                                            color: AppColors.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-
-                                    // Action Buttons (Cancel / Add Product)
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: OutlinedButton(
-                                            onPressed:
-                                                _closeInlineAddProductCard,
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor:
-                                                  AppColors.darkBlueText,
-                                              side: const BorderSide(
-                                                  color: AppColors.border),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 12),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        AppSizes.radiusMedium),
-                                              ),
-                                            ),
-                                            child: const Text(
-                                              'Cancel',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: ElevatedButton(
-                                            onPressed: _isInlineAddEnabled
-                                                ? () =>
-                                                    _addInlineProductToInvoice(
-                                                        closeAfterAdd: false)
-                                                : null,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  AppColors.primary,
-                                              foregroundColor: Colors.white,
-                                              disabledBackgroundColor: AppColors
-                                                  .surfaceContainerHigh,
-                                              disabledForegroundColor:
-                                                  AppColors.outline,
-                                              elevation: 0,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 12),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        AppSizes.radiusMedium),
-                                              ),
-                                            ),
-                                            child: const Text(
-                                              'Add Product',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          crossFadeState: _showInlineAddProduct
-                              ? CrossFadeState.showSecond
-                              : CrossFadeState.showFirst,
-                          duration: const Duration(milliseconds: 250),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // GST Enable/Disable & Expandable Card (If global GST is enabled)
-                  if (_isGstEnabled) ...[
-                    AppCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _isGstExpanded = !_isGstExpanded;
-                              });
-                            },
-                            borderRadius: BorderRadius.only(
-                              topLeft:
-                                  const Radius.circular(AppSizes.radiusLarge),
-                              topRight:
-                                  const Radius.circular(AppSizes.radiusLarge),
-                              bottomLeft: Radius.circular(
-                                  _isGstExpanded ? 0 : AppSizes.radiusLarge),
-                              bottomRight: Radius.circular(
-                                  _isGstExpanded ? 0 : AppSizes.radiusLarge),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 14),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(
-                                          AppSizes.radiusSmall),
-                                    ),
-                                    child: const Icon(
-                                      Icons.receipt_long_outlined,
-                                      color: AppColors.primary,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Apply GST Tax',
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.darkBlueText,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          _gstEnabled
-                                              ? 'On • ${_taxSettings.defaultGstRate.toStringAsFixed(0)}% applied'
-                                              : 'Off',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.secondaryText,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Switch.adaptive(
-                                    value: _gstEnabled,
-                                    activeTrackColor: AppColors.primary,
-                                    onChanged: (val) => ref
-                                        .read(
-                                            createInvoiceFormProvider.notifier)
-                                        .toggleGst(val),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  AnimatedRotation(
-                                    turns: _isGstExpanded ? 0.5 : 0.0,
-                                    duration: const Duration(milliseconds: 250),
-                                    child: const Icon(
-                                      Icons.keyboard_arrow_down,
-                                      color: AppColors.secondaryText,
-                                      size: 22,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          AnimatedCrossFade(
-                            firstChild: const SizedBox(
-                                width: double.infinity, height: 0),
-                            secondChild: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Divider(
-                                    height: 1, color: AppColors.border),
-                                Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Opacity(
-                                    opacity: _gstEnabled ? 1.0 : 0.4,
-                                    child: IgnorePointer(
-                                      ignoring: !_gstEnabled,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'GST RATE',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.secondaryText,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Row(
-                                            children: [5.0, 12.0, 18.0, 28.0]
-                                                .map((rate) {
-                                              final isSelected =
-                                                  (_taxSettings.defaultGstRate -
-                                                              rate)
-                                                          .abs() <
-                                                      0.01;
-                                              return Expanded(
-                                                child: Padding(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 4.0),
-                                                  child: InkWell(
-                                                    onTap: () =>
-                                                        _updateGstRate(rate),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            AppSizes
-                                                                .radiusMedium),
-                                                    child: AnimatedContainer(
-                                                      duration: const Duration(
-                                                          milliseconds: 200),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 10),
-                                                      decoration: BoxDecoration(
-                                                        color: isSelected
-                                                            ? AppColors
-                                                                .primaryContainer
-                                                            : AppColors
-                                                                .surfaceCard,
-                                                        borderRadius: BorderRadius
-                                                            .circular(AppSizes
-                                                                .radiusMedium),
-                                                        border: Border.all(
-                                                          color: isSelected
-                                                              ? AppColors
-                                                                  .primary
-                                                              : AppColors
-                                                                  .border,
-                                                          width: isSelected
-                                                              ? 1.5
-                                                              : 1.0,
-                                                        ),
-                                                      ),
-                                                      child: Center(
-                                                        child: Text(
-                                                          '${rate.toStringAsFixed(0)}%',
-                                                          style: TextStyle(
-                                                            fontSize: 14,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: isSelected
-                                                                ? AppColors
-                                                                    .primary
-                                                                : AppColors
-                                                                    .darkBlueText,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            crossFadeState: _isGstExpanded
-                                ? CrossFadeState.showSecond
-                                : CrossFadeState.showFirst,
-                            duration: const Duration(milliseconds: 250),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Discount & Extra Charges Expandable Card
-                  AppCard(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      children: [
-                        InkWell(
-                          onTap: () {
-                            setState(() {
-                              _isDiscountExpanded = !_isDiscountExpanded;
-                            });
-                          },
-                          borderRadius: BorderRadius.only(
-                            topLeft:
-                                const Radius.circular(AppSizes.radiusLarge),
-                            topRight:
-                                const Radius.circular(AppSizes.radiusLarge),
-                            bottomLeft: Radius.circular(
-                                _isDiscountExpanded ? 0 : AppSizes.radiusLarge),
-                            bottomRight: Radius.circular(
-                                _isDiscountExpanded ? 0 : AppSizes.radiusLarge),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
+                            backgroundColor: AppColors.deepNavy,
+                            border: Border.all(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.3)),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 36,
-                                  height: 36,
+                                  width: 44,
+                                  height: 44,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primaryContainer,
+                                    color: AppColors.primaryContainer
+                                        .withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(
-                                        AppSizes.radiusSmall),
+                                        AppSizes.radiusMedium),
+                                    border: Border.all(color: Colors.white12),
                                   ),
-                                  child: const Icon(
-                                    Icons.local_offer_outlined,
-                                    color: AppColors.primary,
-                                    size: 20,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    _getInitials(_selectedCustomer!.name),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -3379,82 +1536,1188 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
-                                        'Discount & Extra Charges',
-                                        style: TextStyle(
-                                          fontSize: 15,
+                                      Text(
+                                        _selectedCustomer!.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
                                           fontWeight: FontWeight.w700,
-                                          color: AppColors.darkBlueText,
+                                          fontSize: 15,
                                         ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'Discount: ${_discountIsPercentage ? '${_discountAmount.toStringAsFixed(0)}%' : '₹${_discountAmount.toStringAsFixed(0)}'}   Extra: ₹${_extraExpenseAmount.toStringAsFixed(0)}',
+                                        _selectedCustomer!.phone.isNotEmpty
+                                            ? _selectedCustomer!.phone
+                                            : 'Contact account',
                                         style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.secondaryText,
-                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white70,
+                                          fontSize: 13,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      _selectedCustomer!.outstandingBalance > 0
+                                          ? 'PREVIOUS BALANCE'
+                                          : 'STATUS',
+                                      style: const TextStyle(
+                                        color: Colors.white60,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _selectedCustomer!.outstandingBalance > 0
+                                          ? '₹${_selectedCustomer!.outstandingBalance.toStringAsFixed(0)}'
+                                          : 'No Due',
+                                      style: TextStyle(
+                                        color: _selectedCustomer!
+                                                    .outstandingBalance >
+                                                0
+                                            ? AppColors.warning
+                                            : AppColors.success,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(width: 8),
-                                AnimatedRotation(
-                                  turns: _isDiscountExpanded ? 0.5 : 0.0,
-                                  duration: const Duration(milliseconds: 250),
-                                  child: const Icon(
-                                    Icons.keyboard_arrow_down,
-                                    color: AppColors.secondaryText,
-                                    size: 22,
+                                GestureDetector(
+                                  onTap: () {
+                                    ref
+                                        .read(
+                                            createInvoiceFormProvider.notifier)
+                                        .selectCustomer(null);
+                                    _customerSearchCtrl.clear();
+                                    _searchFocusNode.requestFocus();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close,
+                                        color: Colors.white70, size: 16),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                        ),
-                        AnimatedCrossFade(
-                          firstChild:
-                              const SizedBox(width: double.infinity, height: 0),
-                          secondChild: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Divider(height: 1, color: AppColors.border),
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'DISCOUNT AMOUNT',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.secondaryText,
-                                        letterSpacing: 0.5,
+                          )
+                        else
+                          TapRegion(
+                            groupId: 'customer_search_tap_group',
+                            onTapOutside: (_) {
+                              if (_searchFocusNode.hasFocus) {
+                                _searchFocusNode.unfocus();
+                              }
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceCard,
+                                borderRadius: BorderRadius.circular(
+                                    AppSizes.radiusMedium),
+                                border: Border.all(
+                                  color: _showSearchOverlay
+                                      ? AppColors.primary
+                                      : AppColors.surfaceContainerHigh,
+                                  width: _showSearchOverlay ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  TextField(
+                                    controller: _customerSearchCtrl,
+                                    focusNode: _searchFocusNode,
+                                    onChanged: (_) {
+                                      setState(() {});
+                                    },
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.onSurface,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: isPurchase
+                                          ? 'Search supplier name or phone'
+                                          : 'Search customer name or phone',
+                                      hintStyle: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.outline,
+                                      ),
+                                      prefixIcon: const Icon(
+                                          Icons.search_rounded,
+                                          color: AppColors.outline,
+                                          size: 20),
+                                      suffixIcon:
+                                          _customerSearchCtrl.text.isNotEmpty
+                                              ? IconButton(
+                                                  icon: const Icon(Icons.clear,
+                                                      size: 18),
+                                                  onPressed: () {
+                                                    _customerSearchCtrl.clear();
+                                                    setState(() {});
+                                                  },
+                                                )
+                                              : null,
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 12),
+                                    ),
+                                  ),
+                                  if (_showSearchOverlay) ...[
+                                    const Divider(height: 1),
+                                    Container(
+                                      constraints:
+                                          const BoxConstraints(maxHeight: 280),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: _filteredCustomers.isEmpty
+                                                ? Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                            20.0),
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        const Icon(
+                                                            Icons.search_off,
+                                                            size: 20,
+                                                            color: AppColors
+                                                                .outline),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Text(
+                                                            isPurchase
+                                                                ? 'Supplier not found'
+                                                                : 'Customer not found',
+                                                            style: const TextStyle(
+                                                                color: AppColors
+                                                                    .outline,
+                                                                fontSize: 14)),
+                                                      ],
+                                                    ),
+                                                  )
+                                                : ListView.separated(
+                                                    shrinkWrap: true,
+                                                    itemCount:
+                                                        _filteredCustomers
+                                                            .length,
+                                                    separatorBuilder: (_, __) =>
+                                                        const Divider(
+                                                            height: 1,
+                                                            indent: 16,
+                                                            endIndent: 16),
+                                                    itemBuilder: (ctx, idx) {
+                                                      final cust =
+                                                          _filteredCustomers[
+                                                              idx];
+                                                      return InkWell(
+                                                        onTap: () {
+                                                          setState(() {
+                                                            ref
+                                                                .read(createInvoiceFormProvider
+                                                                    .notifier)
+                                                                .selectCustomer(
+                                                                    cust);
+                                                            _showSearchOverlay =
+                                                                false;
+                                                          });
+                                                          _searchFocusNode
+                                                              .unfocus();
+                                                        },
+                                                        child: Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  horizontal:
+                                                                      16.0,
+                                                                  vertical:
+                                                                      12.0),
+                                                          child: Row(
+                                                            children: [
+                                                              Container(
+                                                                width: 38,
+                                                                height: 38,
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color: AppColors
+                                                                      .surfaceContainerLow,
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              10),
+                                                                  border: Border.all(
+                                                                      color: AppColors
+                                                                          .border),
+                                                                ),
+                                                                alignment:
+                                                                    Alignment
+                                                                        .center,
+                                                                child: Text(
+                                                                  _getInitials(
+                                                                      cust.name),
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    color: AppColors
+                                                                        .primary,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w800,
+                                                                    fontSize:
+                                                                        14,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                  width: 12),
+                                                              Expanded(
+                                                                child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  children: [
+                                                                    Text(
+                                                                      cust.name,
+                                                                      style:
+                                                                          const TextStyle(
+                                                                        fontWeight:
+                                                                            FontWeight.w700,
+                                                                        fontSize:
+                                                                            14,
+                                                                        color: AppColors
+                                                                            .onSurface,
+                                                                      ),
+                                                                    ),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            2),
+                                                                    Text(
+                                                                      cust.phone,
+                                                                      style: const TextStyle(
+                                                                          fontSize:
+                                                                              12,
+                                                                          color:
+                                                                              AppColors.outline),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                              cust.outstandingBalance >
+                                                                      0
+                                                                  ? Container(
+                                                                      padding: const EdgeInsets
+                                                                          .symmetric(
+                                                                          horizontal:
+                                                                              8,
+                                                                          vertical:
+                                                                              4),
+                                                                      decoration:
+                                                                          BoxDecoration(
+                                                                        color: AppColors
+                                                                            .warningTint,
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(6),
+                                                                        border: Border.all(
+                                                                            color:
+                                                                                AppColors.warning.withValues(alpha: 0.3)),
+                                                                      ),
+                                                                      child:
+                                                                          Text(
+                                                                        'Pending Due · ₹${cust.outstandingBalance.toStringAsFixed(0)}',
+                                                                        style:
+                                                                            const TextStyle(
+                                                                          fontSize:
+                                                                              11,
+                                                                          fontWeight:
+                                                                              FontWeight.w700,
+                                                                          color:
+                                                                              AppColors.warning,
+                                                                        ),
+                                                                      ),
+                                                                    )
+                                                                  : Container(
+                                                                      padding: const EdgeInsets
+                                                                          .symmetric(
+                                                                          horizontal:
+                                                                              8,
+                                                                          vertical:
+                                                                              4),
+                                                                      decoration:
+                                                                          BoxDecoration(
+                                                                        color: AppColors
+                                                                            .successTint,
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(6),
+                                                                        border: Border.all(
+                                                                            color:
+                                                                                AppColors.success.withValues(alpha: 0.3)),
+                                                                      ),
+                                                                      child:
+                                                                          const Text(
+                                                                        'No Due',
+                                                                        style:
+                                                                            TextStyle(
+                                                                          fontSize:
+                                                                              11,
+                                                                          fontWeight:
+                                                                              FontWeight.w700,
+                                                                          color:
+                                                                              AppColors.success,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                          ),
+                                          const Divider(height: 1),
+                                          InkWell(
+                                            onTap: () {
+                                              // _searchFocusNode.unfocus();
+                                              _showCreateCustomerDialog(
+                                                  _customerSearchCtrl.text);
+                                            },
+                                            borderRadius:
+                                                const BorderRadius.only(
+                                              bottomLeft: Radius.circular(
+                                                  AppSizes.radiusLarge),
+                                              bottomRight: Radius.circular(
+                                                  AppSizes.radiusLarge),
+                                            ),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 12),
+                                              color:
+                                                  AppColors.surfaceContainerLow,
+                                              alignment: Alignment.center,
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                      Icons.add_circle_outline,
+                                                      size: 18,
+                                                      color: AppColors.primary),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    isPurchase
+                                                        ? 'Create New Supplier'
+                                                        : 'Create New Customer',
+                                                    style: const TextStyle(
+                                                      color: AppColors.primary,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TapRegion(
+                      onTapOutside: (_) {
+                        if (_focusedItemIndex != null ||
+                            _showSearchResultsOverlay) {
+                          setState(() {
+                            _focusedItemIndex = null;
+                            _showSearchResultsOverlay = false;
+                          });
+                        }
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Items',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: AppColors.darkBlueText,
+                                ),
+                              ),
+                              if (_isCameraOn)
+                                InkWell(
+                                  onTap: _toggleCamera,
+                                  borderRadius: BorderRadius.circular(
+                                      AppSizes.radiusSmall),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.errorContainer,
+                                      borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusSmall),
+                                      border: Border.all(
+                                          color: AppColors.danger
+                                              .withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(Icons.videocam_off,
+                                            size: 14, color: AppColors.danger),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Disable Camera',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.danger,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          // Inline Barcode / SKU Camera Scanner Preview
+                          if (_isCameraOn && _scannerController != null) ...[
+                            ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(AppSizes.radiusLarge),
+                              child: Container(
+                                height: 200,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(
+                                      AppSizes.radiusLarge),
+                                  border: Border.all(
+                                      color: AppColors.primary, width: 2),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    MobileScanner(
+                                      controller: _scannerController!,
+                                      onDetect: _onBarcodeDetected,
+                                    ),
+                                    Center(
+                                      child: Container(
+                                        width: 220,
+                                        height: 110,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                              color: AppColors.primary,
+                                              width: 2),
+                                          borderRadius: BorderRadius.circular(
+                                              AppSizes.radiusMedium),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 12,
+                                      right: 12,
+                                      child: Row(
+                                        children: [
+                                          GestureDetector(
+                                            onTap: _toggleFlash,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.6),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    _isFlashOn
+                                                        ? Icons.flash_on
+                                                        : Icons.flash_off,
+                                                    color: Colors.white,
+                                                    size: 14,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    _isFlashOn
+                                                        ? 'Flash ON'
+                                                        : 'Flash OFF',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          GestureDetector(
+                                            onTap: _toggleCamera,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withValues(alpha: 0.6),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: const [
+                                                  Icon(
+                                                    Icons.videocam_off,
+                                                    color: Colors.white,
+                                                    size: 14,
+                                                  ),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'Cam OFF',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 12,
+                                      left: 12,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.65),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: const Text(
+                                          'Align Barcode / SKU in box',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+
+                          // Empty State (when no products added yet)
+                          if (_items.isEmpty)
+                            AppCard(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 24, horizontal: 20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primaryContainer,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.shopping_cart_outlined,
+                                      size: 32,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'No products added yet',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      ElevatedButton.icon(
+                                        onPressed: _openInlineAddProductCard,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 18, vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                          ),
+                                        ),
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text(
+                                          'Add Manually',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      OutlinedButton.icon(
+                                        onPressed: _toggleCamera,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor:
+                                              AppColors.darkBlueText,
+                                          side: const BorderSide(
+                                              color: AppColors.border),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 15, vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                          ),
+                                        ),
+                                        icon: const Icon(Icons.qr_code_scanner,
+                                            size: 18,
+                                            color: AppColors.darkBlueText),
+                                        label: const Text(
+                                          'Scan to Add',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            )
+                          else ...[
+                            // Product List (when items exist)
+                            ...List.generate(_items.length, (index) {
+                              final item = _items[index];
+                              final isFocused = _focusedItemIndex == index;
+
+                              if (isFocused) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 10.0),
+                                  child: AppCard(
+                                    padding: const EdgeInsets.all(14),
+                                    border: Border.all(
+                                        color: AppColors.primary, width: 1.5),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    item.productName,
+                                                    style: const TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: AppColors
+                                                          .darkBlueText,
+                                                    ),
+                                                  ),
+                                                  if (item.sku.isNotEmpty) ...[
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      'SKU: ${item.sku}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: AppColors
+                                                            .secondaryText,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            InkWell(
+                                              onTap: () => _showEditPriceDialog(
+                                                  index, item),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors
+                                                      .primaryContainer,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                      color: AppColors.primary
+                                                          .withValues(
+                                                              alpha: 0.3)),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Text(
+                                                      '₹${item.unitPrice.toStringAsFixed(0)}',
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        fontSize: 15,
+                                                        color:
+                                                            AppColors.primary,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    const Icon(
+                                                        Icons.edit_outlined,
+                                                        size: 14,
+                                                        color:
+                                                            AppColors.primary),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: AppColors.pageBackground,
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        AppSizes.radiusMedium),
+                                                border: Border.all(
+                                                    color: AppColors.border),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  InkWell(
+                                                    onTap: () =>
+                                                        _updateItemQuantity(
+                                                            index, -1),
+                                                    child: Container(
+                                                      width: 34,
+                                                      height: 34,
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: const Icon(
+                                                          Icons.remove,
+                                                          size: 16,
+                                                          color: AppColors
+                                                              .darkBlueText),
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                            minWidth: 32),
+                                                    height: 34,
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      '${item.quantity}',
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        fontSize: 14,
+                                                        color: AppColors
+                                                            .darkBlueText,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  InkWell(
+                                                    onTap: () =>
+                                                        _updateItemQuantity(
+                                                            index, 1),
+                                                    child: Container(
+                                                      width: 34,
+                                                      height: 34,
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: const Icon(
+                                                          Icons.add,
+                                                          size: 16,
+                                                          color: AppColors
+                                                              .darkBlueText),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              'Sub: ₹${item.subtotal.toStringAsFixed(2)}',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.secondaryText,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            GestureDetector(
+                                              onTap: () => _removeItem(index),
+                                              child: const Icon(Icons.close,
+                                                  size: 18,
+                                                  color: AppColors.error),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              // Compact Product Card (Default)
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10.0),
+                                child: AppCard(
+                                  padding: const EdgeInsets.all(14),
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _focusedItemIndex = index;
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(
+                                        AppSizes.radiusMedium),
+                                    child: Row(
                                       children: [
                                         Expanded(
-                                          child: SizedBox(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                item.productName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  color: AppColors.darkBlueText,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                _isGstEnabled && _gstEnabled
+                                                    ? '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)} (${(item.taxPercentage > 0 ? item.taxPercentage : _taxSettings.defaultGstRate).toStringAsFixed(0)}% GST)'
+                                                    : '${item.quantity} × ₹${item.unitPrice.toStringAsFixed(0)}',
+                                                style: const TextStyle(
+                                                  color:
+                                                      AppColors.secondaryText,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: AppColors.pageBackground,
+                                            borderRadius: BorderRadius.circular(
+                                                AppSizes.radiusMedium),
+                                            border: Border.all(
+                                                color: AppColors.border),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              InkWell(
+                                                onTap: () =>
+                                                    _updateItemQuantity(
+                                                        index, -1),
+                                                child: Container(
+                                                  width: 30,
+                                                  height: 30,
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(
+                                                      Icons.remove,
+                                                      size: 14,
+                                                      color: AppColors
+                                                          .darkBlueText),
+                                                ),
+                                              ),
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6),
+                                                child: Text(
+                                                  '${item.quantity}',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13,
+                                                    color:
+                                                        AppColors.darkBlueText,
+                                                  ),
+                                                ),
+                                              ),
+                                              InkWell(
+                                                onTap: () =>
+                                                    _updateItemQuantity(
+                                                        index, 1),
+                                                child: Container(
+                                                  width: 30,
+                                                  height: 30,
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(Icons.add,
+                                                      size: 14,
+                                                      color: AppColors
+                                                          .darkBlueText),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          '₹${(item.quantity * item.unitPrice).toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: () => _removeItem(index),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: AppColors.errorContainer,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(Icons.close,
+                                                size: 14,
+                                                color: AppColors.error),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _openInlineAddProductCard,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                            AppSizes.radiusMedium),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text(
+                                      'Add More',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                OutlinedButton.icon(
+                                  onPressed: _toggleCamera,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.darkBlueText,
+                                    side: const BorderSide(
+                                        color: AppColors.border),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusMedium),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.qr_code_scanner,
+                                      size: 18, color: AppColors.darkBlueText),
+                                  label: const Text(
+                                    'Scan',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: AppColors.darkBlueText,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // Inline Add Product Form Section
+                          AnimatedCrossFade(
+                            firstChild: const SizedBox(
+                                width: double.infinity, height: 0),
+                            secondChild: Padding(
+                              padding: const EdgeInsets.only(top: 14.0),
+                              child: TapRegion(
+                                groupId: 'inline_add_product_card_group',
+                                onTapOutside: (_) {
+                                  if (_showInlineAddProduct) {
+                                    _closeInlineAddProductCard();
+                                  }
+                                },
+                                child: AppCard(
+                                  key: _inlineCardKey,
+                                  padding: const EdgeInsets.all(16),
+                                  border: Border.all(
+                                      color: AppColors.primary, width: 1.5),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'ADD PRODUCT',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.secondaryText,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: _closeInlineAddProductCard,
+                                            child: const Icon(Icons.close,
+                                                size: 18,
+                                                color: AppColors.secondaryText),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+
+                                      // Search / Product Name Field with Dropdown Overlay
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'PRODUCT NAME',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.secondaryText,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          SizedBox(
                                             height: AppSizes.inputHeight,
                                             child: TextField(
-                                              controller: _discountCtrl,
-                                              keyboardType: const TextInputType
-                                                  .numberWithOptions(
-                                                  decimal: true),
-                                              onTapOutside: (_) => FocusManager
-                                                  .instance.primaryFocus
-                                                  ?.unfocus(),
+                                              controller: _inlineSearchCtrl,
+                                              focusNode: _inlineSearchFocusNode,
+                                              textInputAction:
+                                                  TextInputAction.next,
+                                              onEditingComplete: () {
+                                                _inlineSearchFocusNode
+                                                    .unfocus();
+                                                FocusManager
+                                                    .instance.primaryFocus
+                                                    ?.unfocus();
+                                                setState(() {
+                                                  _showSearchResultsOverlay =
+                                                      false;
+                                                });
+                                              },
+                                              onSubmitted: (_) {
+                                                _closeInlineAddProductCard();
+                                              },
+                                              onTap: () {
+                                                _scrollToInlineCard();
+                                                if (_inlineSearchCtrl.text
+                                                        .trim()
+                                                        .isNotEmpty &&
+                                                    _inlineSelectedProduct ==
+                                                        null) {
+                                                  setState(() {
+                                                    _showSearchResultsOverlay =
+                                                        true;
+                                                  });
+                                                }
+                                              },
                                               style: const TextStyle(
-                                                fontSize: 15,
+                                                fontSize: 14,
                                                 fontWeight: FontWeight.w600,
                                                 color: AppColors.darkBlueText,
                                               ),
                                               decoration: InputDecoration(
-                                                hintText: '0',
+                                                hintText:
+                                                    'Search product name, SKU or ID',
+                                                hintStyle: const TextStyle(
+                                                  color:
+                                                      AppColors.secondaryText,
+                                                  fontSize: 13,
+                                                ),
+                                                prefixIcon: const Icon(
+                                                    Icons.search,
+                                                    size: 18,
+                                                    color: AppColors
+                                                        .secondaryText),
                                                 contentPadding:
                                                     const EdgeInsets.symmetric(
                                                         horizontal: 14,
@@ -3488,282 +2751,1105 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                 ),
                                               ),
                                               onChanged: (val) {
-                                                final d =
-                                                    double.tryParse(val) ?? 0.0;
-                                                ref
-                                                    .read(
-                                                        createInvoiceFormProvider
-                                                            .notifier)
-                                                    .updateDiscount(d,
-                                                        _discountIsPercentage);
+                                                setState(() {
+                                                  if (_inlineSelectedProduct !=
+                                                          null &&
+                                                      val.trim() !=
+                                                          _inlineSelectedProduct!
+                                                              .name) {
+                                                    _inlineSelectedProduct =
+                                                        null;
+                                                  }
+                                                  _showSearchResultsOverlay = val
+                                                          .trim()
+                                                          .isNotEmpty &&
+                                                      _inlineSelectedProduct ==
+                                                          null;
+                                                });
                                               },
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Container(
-                                          height: AppSizes.inputHeight,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.surfaceCard,
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            border: Border.all(
-                                                color: AppColors.border),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              _buildSegmentButton(
-                                                label: '₹',
-                                                isSelected:
-                                                    !_discountIsPercentage,
-                                                onTap: () {
-                                                  ref
-                                                      .read(
-                                                          createInvoiceFormProvider
-                                                              .notifier)
-                                                      .updateDiscount(
-                                                          _discountAmount,
-                                                          false);
-                                                },
+
+                                          // Floating Search Results Dropdown Overlay
+                                          if (_showSearchResultsOverlay &&
+                                              _inlineSearchCtrl.text
+                                                  .trim()
+                                                  .isNotEmpty &&
+                                              _inlineSelectedProduct == null)
+                                            Container(
+                                              margin:
+                                                  const EdgeInsets.only(top: 4),
+                                              constraints: const BoxConstraints(
+                                                  maxHeight: 180),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.surfaceCard,
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        AppSizes.radiusMedium),
+                                                border: Border.all(
+                                                    color: AppColors.border),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withValues(
+                                                            alpha: 0.08),
+                                                    blurRadius: 10,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ],
                                               ),
-                                              _buildSegmentButton(
-                                                label: '%',
-                                                isSelected:
-                                                    _discountIsPercentage,
-                                                onTap: () {
-                                                  ref
-                                                      .read(
-                                                          createInvoiceFormProvider
-                                                              .notifier)
-                                                      .updateDiscount(
-                                                          _discountAmount,
-                                                          true);
-                                                },
+                                              child: _inlineSearchResults
+                                                      .isNotEmpty
+                                                  ? ListView.separated(
+                                                      shrinkWrap: true,
+                                                      padding: EdgeInsets.zero,
+                                                      itemCount:
+                                                          _inlineSearchResults
+                                                              .length,
+                                                      separatorBuilder: (_,
+                                                              __) =>
+                                                          const Divider(
+                                                              height: 1,
+                                                              color: AppColors
+                                                                  .border),
+                                                      itemBuilder:
+                                                          (context, idx) {
+                                                        final prod =
+                                                            _inlineSearchResults[
+                                                                idx];
+                                                        return ListTile(
+                                                          dense: true,
+                                                          title: Text(
+                                                            prod.name,
+                                                            style:
+                                                                const TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                              fontSize: 14,
+                                                              color: AppColors
+                                                                  .darkBlueText,
+                                                            ),
+                                                          ),
+                                                          subtitle: prod.sku
+                                                                  .isNotEmpty
+                                                              ? Text(
+                                                                  'SKU: ${prod.sku}',
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    fontSize:
+                                                                        12,
+                                                                    color: AppColors
+                                                                        .secondaryText,
+                                                                  ),
+                                                                )
+                                                              : null,
+                                                          trailing: Text(
+                                                            '₹${prod.sellingPrice.toStringAsFixed(2)}',
+                                                            style:
+                                                                const TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                              fontSize: 14,
+                                                              color: AppColors
+                                                                  .primary,
+                                                            ),
+                                                          ),
+                                                          onTap: () =>
+                                                              _selectInlineProduct(
+                                                                  prod),
+                                                        );
+                                                      },
+                                                    )
+                                                  : const Padding(
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal: 14,
+                                                              vertical: 12),
+                                                      child: Text(
+                                                        'No products found',
+                                                        style: TextStyle(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: AppColors
+                                                              .secondaryText,
+                                                        ),
+                                                      ),
+                                                    ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // Quantity & Unit Price Controls Row
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            flex: 1,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'QUANTITY',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color:
+                                                        AppColors.secondaryText,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Container(
+                                                  height: AppSizes.inputHeight,
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors
+                                                        .pageBackground,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    border: Border.all(
+                                                        color:
+                                                            AppColors.border),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      InkWell(
+                                                        onTap: () {
+                                                          if (_inlineQuantity >
+                                                              1) {
+                                                            setState(() {
+                                                              _inlineQuantity--;
+                                                            });
+                                                          }
+                                                        },
+                                                        child: Container(
+                                                          width: 36,
+                                                          height: AppSizes
+                                                              .inputHeight,
+                                                          alignment:
+                                                              Alignment.center,
+                                                          child: const Icon(
+                                                              Icons.remove,
+                                                              size: 18,
+                                                              color: AppColors
+                                                                  .darkBlueText),
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '$_inlineQuantity',
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          color: AppColors
+                                                              .darkBlueText,
+                                                        ),
+                                                      ),
+                                                      InkWell(
+                                                        onTap: () {
+                                                          setState(() {
+                                                            _inlineQuantity++;
+                                                          });
+                                                        },
+                                                        child: Container(
+                                                          width: 36,
+                                                          height: AppSizes
+                                                              .inputHeight,
+                                                          alignment:
+                                                              Alignment.center,
+                                                          child: const Icon(
+                                                              Icons.add,
+                                                              size: 18,
+                                                              color: AppColors
+                                                                  .darkBlueText),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            flex: 1,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'UNIT PRICE (₹)',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color:
+                                                        AppColors.secondaryText,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                SizedBox(
+                                                  height: AppSizes.inputHeight,
+                                                  child: TextField(
+                                                    controller:
+                                                        _inlinePriceCtrl,
+                                                    keyboardType:
+                                                        const TextInputType
+                                                            .numberWithOptions(
+                                                            decimal: true),
+                                                    textInputAction:
+                                                        TextInputAction.done,
+                                                    onEditingComplete: () {
+                                                      _closeInlineAddProductCard();
+                                                    },
+                                                    onSubmitted: (_) {
+                                                      _closeInlineAddProductCard();
+                                                    },
+                                                    onTapOutside: (_) =>
+                                                        FocusManager.instance
+                                                            .primaryFocus
+                                                            ?.unfocus(),
+                                                    style: const TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppColors
+                                                          .darkBlueText,
+                                                    ),
+                                                    decoration: InputDecoration(
+                                                      hintText: '0',
+                                                      contentPadding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal: 14,
+                                                              vertical: 12),
+                                                      border:
+                                                          OutlineInputBorder(
+                                                        borderRadius: BorderRadius
+                                                            .circular(AppSizes
+                                                                .radiusMedium),
+                                                        borderSide:
+                                                            const BorderSide(
+                                                                color: AppColors
+                                                                    .border),
+                                                      ),
+                                                      enabledBorder:
+                                                          OutlineInputBorder(
+                                                        borderRadius: BorderRadius
+                                                            .circular(AppSizes
+                                                                .radiusMedium),
+                                                        borderSide:
+                                                            const BorderSide(
+                                                                color: AppColors
+                                                                    .border),
+                                                      ),
+                                                      focusedBorder:
+                                                          OutlineInputBorder(
+                                                        borderRadius: BorderRadius
+                                                            .circular(AppSizes
+                                                                .radiusMedium),
+                                                        borderSide:
+                                                            const BorderSide(
+                                                                color: AppColors
+                                                                    .primary,
+                                                                width: 1.5),
+                                                      ),
+                                                    ),
+                                                    onChanged: (_) {
+                                                      setState(() {});
+                                                    },
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // Calculated Line Total Display
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Line Total',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.secondaryText,
+                                            ),
+                                          ),
+                                          Text(
+                                            '₹${(_inlineQuantity * (double.tryParse(_inlinePriceCtrl.text) ?? 0.0)).toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w900,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Action Buttons (Cancel / Add Product)
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed:
+                                                  _closeInlineAddProductCard,
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor:
+                                                    AppColors.darkBlueText,
+                                                side: const BorderSide(
+                                                    color: AppColors.border),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 12),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          AppSizes
+                                                              .radiusMedium),
+                                                ),
                                               ),
-                                            ],
+                                              child: const Text(
+                                                'Cancel',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              onPressed: _isInlineAddEnabled
+                                                  ? () =>
+                                                      _addInlineProductToInvoice(
+                                                          closeAfterAdd: false)
+                                                  : null,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppColors.primary,
+                                                foregroundColor: Colors.white,
+                                                disabledBackgroundColor:
+                                                    AppColors
+                                                        .surfaceContainerHigh,
+                                                disabledForegroundColor:
+                                                    AppColors.outline,
+                                                elevation: 0,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 12),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          AppSizes
+                                                              .radiusMedium),
+                                                ),
+                                              ),
+                                              child: const Text(
+                                                'Add Product',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            crossFadeState: _showInlineAddProduct
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration: const Duration(milliseconds: 250),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // GST Enable/Disable & Expandable Card (If global GST is enabled)
+                    if (_isGstEnabled) ...[
+                      AppCard(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isGstExpanded = !_isGstExpanded;
+                                });
+                              },
+                              borderRadius: BorderRadius.only(
+                                topLeft:
+                                    const Radius.circular(AppSizes.radiusLarge),
+                                topRight:
+                                    const Radius.circular(AppSizes.radiusLarge),
+                                bottomLeft: Radius.circular(
+                                    _isGstExpanded ? 0 : AppSizes.radiusLarge),
+                                bottomRight: Radius.circular(
+                                    _isGstExpanded ? 0 : AppSizes.radiusLarge),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 14),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryContainer,
+                                        borderRadius: BorderRadius.circular(
+                                            AppSizes.radiusSmall),
+                                      ),
+                                      child: const Icon(
+                                        Icons.receipt_long_outlined,
+                                        color: AppColors.primary,
+                                        size: 20,
+                                      ),
                                     ),
-                                    const SizedBox(height: 16),
-                                    const Text(
-                                      'EXTRA EXPENSE AMOUNT',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Apply GST Tax',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.darkBlueText,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _gstEnabled
+                                                ? 'On • ${_taxSettings.defaultGstRate.toStringAsFixed(0)}% applied'
+                                                : 'Off',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.secondaryText,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch.adaptive(
+                                      value: _gstEnabled,
+                                      activeTrackColor: AppColors.primary,
+                                      onChanged: (val) => ref
+                                          .read(createInvoiceFormProvider
+                                              .notifier)
+                                          .toggleGst(val),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    AnimatedRotation(
+                                      turns: _isGstExpanded ? 0.5 : 0.0,
+                                      duration:
+                                          const Duration(milliseconds: 250),
+                                      child: const Icon(
+                                        Icons.keyboard_arrow_down,
                                         color: AppColors.secondaryText,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    SizedBox(
-                                      height: AppSizes.inputHeight,
-                                      child: TextField(
-                                        controller: _extraAmtCtrl,
-                                        keyboardType: const TextInputType
-                                            .numberWithOptions(decimal: true),
-                                        onTapOutside: (_) => FocusManager
-                                            .instance.primaryFocus
-                                            ?.unfocus(),
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.darkBlueText,
-                                        ),
-                                        decoration: InputDecoration(
-                                          hintText: '0',
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            borderSide: const BorderSide(
-                                                color: AppColors.border),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            borderSide: const BorderSide(
-                                                color: AppColors.border),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            borderSide: const BorderSide(
-                                                color: AppColors.primary,
-                                                width: 1.5),
-                                          ),
-                                        ),
-                                        onChanged: (val) {
-                                          final amt =
-                                              double.tryParse(val) ?? 0.0;
-                                          ref
-                                              .read(createInvoiceFormProvider
-                                                  .notifier)
-                                              .updateExtraExpense(
-                                                  amt, _extraDescCtrl.text);
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    const Text(
-                                      'EXPENSE NOTE',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.secondaryText,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    SizedBox(
-                                      height: AppSizes.inputHeight,
-                                      child: TextField(
-                                        controller: _extraDescCtrl,
-                                        onTapOutside: (_) => FocusManager
-                                            .instance.primaryFocus
-                                            ?.unfocus(),
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: AppColors.darkBlueText,
-                                        ),
-                                        decoration: InputDecoration(
-                                          hintText: 'e.g. Delivery charge',
-                                          hintStyle: const TextStyle(
-                                            color: AppColors.secondaryText,
-                                            fontSize: 14,
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 14, vertical: 12),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            borderSide: const BorderSide(
-                                                color: AppColors.border),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            borderSide: const BorderSide(
-                                                color: AppColors.border),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                AppSizes.radiusMedium),
-                                            borderSide: const BorderSide(
-                                                color: AppColors.primary,
-                                                width: 1.5),
-                                          ),
-                                        ),
-                                        onChanged: (val) {
-                                          ref
-                                              .read(createInvoiceFormProvider
-                                                  .notifier)
-                                              .updateExtraExpense(
-                                                  _extraExpenseAmount, val);
-                                        },
+                                        size: 22,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
+                            ),
+                            AnimatedCrossFade(
+                              firstChild: const SizedBox(
+                                  width: double.infinity, height: 0),
+                              secondChild: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Divider(
+                                      height: 1, color: AppColors.border),
+                                  Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Opacity(
+                                      opacity: _gstEnabled ? 1.0 : 0.4,
+                                      child: IgnorePointer(
+                                        ignoring: !_gstEnabled,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'GST RATE',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.secondaryText,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [5.0, 12.0, 18.0, 28.0]
+                                                  .map((rate) {
+                                                final isSelected = (_taxSettings
+                                                                .defaultGstRate -
+                                                            rate)
+                                                        .abs() <
+                                                    0.01;
+                                                return Expanded(
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 4.0),
+                                                    child: InkWell(
+                                                      onTap: () =>
+                                                          _updateGstRate(rate),
+                                                      borderRadius: BorderRadius
+                                                          .circular(AppSizes
+                                                              .radiusMedium),
+                                                      child: AnimatedContainer(
+                                                        duration:
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    200),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 10),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: isSelected
+                                                              ? AppColors
+                                                                  .primaryContainer
+                                                              : AppColors
+                                                                  .surfaceCard,
+                                                          borderRadius: BorderRadius
+                                                              .circular(AppSizes
+                                                                  .radiusMedium),
+                                                          border: Border.all(
+                                                            color: isSelected
+                                                                ? AppColors
+                                                                    .primary
+                                                                : AppColors
+                                                                    .border,
+                                                            width: isSelected
+                                                                ? 1.5
+                                                                : 1.0,
+                                                          ),
+                                                        ),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '${rate.toStringAsFixed(0)}%',
+                                                            style: TextStyle(
+                                                              fontSize: 14,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                              color: isSelected
+                                                                  ? AppColors
+                                                                      .primary
+                                                                  : AppColors
+                                                                      .darkBlueText,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              crossFadeState: _isGstExpanded
+                                  ? CrossFadeState.showSecond
+                                  : CrossFadeState.showFirst,
+                              duration: const Duration(milliseconds: 250),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    // Discount & Extra Charges Expandable Card
+                    AppCard(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        children: [
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isDiscountExpanded = !_isDiscountExpanded;
+                              });
+                            },
+                            borderRadius: BorderRadius.only(
+                              topLeft:
+                                  const Radius.circular(AppSizes.radiusLarge),
+                              topRight:
+                                  const Radius.circular(AppSizes.radiusLarge),
+                              bottomLeft: Radius.circular(_isDiscountExpanded
+                                  ? 0
+                                  : AppSizes.radiusLarge),
+                              bottomRight: Radius.circular(_isDiscountExpanded
+                                  ? 0
+                                  : AppSizes.radiusLarge),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryContainer,
+                                      borderRadius: BorderRadius.circular(
+                                          AppSizes.radiusSmall),
+                                    ),
+                                    child: const Icon(
+                                      Icons.local_offer_outlined,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Discount & Extra Charges',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Discount: ${_discountIsPercentage ? '${_discountAmount.toStringAsFixed(0)}%' : '₹${_discountAmount.toStringAsFixed(0)}'}   Extra: ₹${_extraExpenseAmount.toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.secondaryText,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  AnimatedRotation(
+                                    turns: _isDiscountExpanded ? 0.5 : 0.0,
+                                    duration: const Duration(milliseconds: 250),
+                                    child: const Icon(
+                                      Icons.keyboard_arrow_down,
+                                      color: AppColors.secondaryText,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          crossFadeState: _isDiscountExpanded
-                              ? CrossFadeState.showSecond
-                              : CrossFadeState.showFirst,
-                          duration: const Duration(milliseconds: 250),
+                          AnimatedCrossFade(
+                            firstChild: const SizedBox(
+                                width: double.infinity, height: 0),
+                            secondChild: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Divider(
+                                    height: 1, color: AppColors.border),
+                                Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'DISCOUNT AMOUNT',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.secondaryText,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: AppSizes.inputHeight,
+                                              child: TextField(
+                                                controller: _discountCtrl,
+                                                keyboardType:
+                                                    const TextInputType
+                                                        .numberWithOptions(
+                                                        decimal: true),
+                                                onTapOutside: (_) =>
+                                                    FocusManager
+                                                        .instance.primaryFocus
+                                                        ?.unfocus(),
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.darkBlueText,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  hintText: '0',
+                                                  contentPadding:
+                                                      const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 14,
+                                                          vertical: 12),
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    borderSide:
+                                                        const BorderSide(
+                                                            color: AppColors
+                                                                .border),
+                                                  ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    borderSide:
+                                                        const BorderSide(
+                                                            color: AppColors
+                                                                .border),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            AppSizes
+                                                                .radiusMedium),
+                                                    borderSide:
+                                                        const BorderSide(
+                                                            color: AppColors
+                                                                .primary,
+                                                            width: 1.5),
+                                                  ),
+                                                ),
+                                                onChanged: (val) {
+                                                  final d =
+                                                      double.tryParse(val) ??
+                                                          0.0;
+                                                  ref
+                                                      .read(
+                                                          createInvoiceFormProvider
+                                                              .notifier)
+                                                      .updateDiscount(d,
+                                                          _discountIsPercentage);
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Container(
+                                            height: AppSizes.inputHeight,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.surfaceCard,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              border: Border.all(
+                                                  color: AppColors.border),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                _buildSegmentButton(
+                                                  label: '₹',
+                                                  isSelected:
+                                                      !_discountIsPercentage,
+                                                  onTap: () {
+                                                    ref
+                                                        .read(
+                                                            createInvoiceFormProvider
+                                                                .notifier)
+                                                        .updateDiscount(
+                                                            _discountAmount,
+                                                            false);
+                                                  },
+                                                ),
+                                                _buildSegmentButton(
+                                                  label: '%',
+                                                  isSelected:
+                                                      _discountIsPercentage,
+                                                  onTap: () {
+                                                    ref
+                                                        .read(
+                                                            createInvoiceFormProvider
+                                                                .notifier)
+                                                        .updateDiscount(
+                                                            _discountAmount,
+                                                            true);
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'EXTRA EXPENSE AMOUNT',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.secondaryText,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: AppSizes.inputHeight,
+                                        child: TextField(
+                                          controller: _extraAmtCtrl,
+                                          keyboardType: const TextInputType
+                                              .numberWithOptions(decimal: true),
+                                          onTapOutside: (_) => FocusManager
+                                              .instance.primaryFocus
+                                              ?.unfocus(),
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText: '0',
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 12),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.border),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.border),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.primary,
+                                                  width: 1.5),
+                                            ),
+                                          ),
+                                          onChanged: (val) {
+                                            final amt =
+                                                double.tryParse(val) ?? 0.0;
+                                            ref
+                                                .read(createInvoiceFormProvider
+                                                    .notifier)
+                                                .updateExtraExpense(
+                                                    amt, _extraDescCtrl.text);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'EXPENSE NOTE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.secondaryText,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: AppSizes.inputHeight,
+                                        child: TextField(
+                                          controller: _extraDescCtrl,
+                                          onTapOutside: (_) => FocusManager
+                                              .instance.primaryFocus
+                                              ?.unfocus(),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppColors.darkBlueText,
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText: 'e.g. Delivery charge',
+                                            hintStyle: const TextStyle(
+                                              color: AppColors.secondaryText,
+                                              fontSize: 14,
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 12),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.border),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.border),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppSizes.radiusMedium),
+                                              borderSide: const BorderSide(
+                                                  color: AppColors.primary,
+                                                  width: 1.5),
+                                            ),
+                                          ),
+                                          onChanged: (val) {
+                                            ref
+                                                .read(createInvoiceFormProvider
+                                                    .notifier)
+                                                .updateExtraExpense(
+                                                    _extraExpenseAmount, val);
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            crossFadeState: _isDiscountExpanded
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration: const Duration(milliseconds: 250),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    VoucherSummaryCard(
+                      subtotal: rawSubtotal,
+                      totalTax: taxTotal,
+                      discountAmount: calculatedDiscountTotal,
+                      extraCharges: _extraExpenseAmount,
+                      grandTotal: grandTotal,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+            bottomNavigationBar: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 12,
+                bottom: 12 + MediaQuery.of(context).padding.bottom,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Total Amount',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Total = ₹${grandTotal.toStringAsFixed(2)} /-',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  VoucherSummaryCard(
-                    subtotal: rawSubtotal,
-                    totalTax: taxTotal,
-                    discountAmount: calculatedDiscountTotal,
-                    extraCharges: _extraExpenseAmount,
-                    grandTotal: grandTotal,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 5,
+                    child: BlocBuilder<InvoiceBloc, InvoiceState>(
+                      builder: (context, state) {
+                        return AppButton(
+                          text: isEditMode
+                              ? 'Update Invoice'
+                              : 'Proceed to Payment',
+                          onPressed: _onCreateInvoice,
+                          isLoading: state is InvoiceLoadingState,
+                        );
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 12,
-              bottom: 12 + MediaQuery.of(context).padding.bottom,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Total Amount',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Total = ₹${grandTotal.toStringAsFixed(2)} /-',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primaryBlue,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 5,
-                  child: BlocBuilder<InvoiceBloc, InvoiceState>(
-                    builder: (context, state) {
-                      return AppButton(
-                        text: isEditMode
-                            ? 'Update Invoice'
-                            : 'Proceed to Payment',
-                        onPressed: _onCreateInvoice,
-                        isLoading: state is InvoiceLoadingState,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
