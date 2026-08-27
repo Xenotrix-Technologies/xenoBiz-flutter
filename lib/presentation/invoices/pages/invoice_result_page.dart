@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../application/bloc/auth_bloc.dart';
 import '../../../application/bloc/tax_settings_bloc.dart';
 import '../../../application/providers/app_providers.dart';
-import '../../../application/providers/create_invoice_provider.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/business_entity.dart';
@@ -17,6 +16,7 @@ import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/tax_settings_entity.dart';
 import '../../../infrastructure/pdf/pdf_invoice_service.dart';
 import '../../../infrastructure/services/thermal_printer_service.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 
 class InvoiceResultPage extends ConsumerWidget {
   final InvoiceEntity invoice;
@@ -102,16 +102,26 @@ class InvoiceResultPage extends ConsumerWidget {
     final timeFormatter = DateFormat('HH:mm');
     final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 2, locale: 'en_IN');
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F9),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.darkBlueText),
-          onPressed: () => context.go(RouteNames.dashboard),
-        ),
+    void safePop() {
+      TransactionStackManager.instance.handleBackFromCheckout(context);
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        safePop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F6F9),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.darkBlueText),
+            onPressed: safePop,
+          ),
         title: const Text(
           'Checkout',
           style: TextStyle(
@@ -593,15 +603,17 @@ class InvoiceResultPage extends ConsumerWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: () {
-                  // Completely reset create invoice form state
-                  ref.read(createInvoiceFormProvider.notifier).reset();
-                  // Open fresh Create Invoice Screen
-                  context.go(RouteNames.createInvoice);
+                  context.push(
+                    RouteNames.createInvoice,
+                    extra: {'invoiceType': invoice.type},
+                  );
                 },
                 icon: const Icon(Icons.add_circle_outline, size: 20),
-                label: const Text(
-                  'CREATE ANOTHER INVOICE',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                label: Text(
+                  invoice.type == InvoiceType.purchase
+                      ? 'CREATE ANOTHER PURCHASE'
+                      : 'CREATE ANOTHER SALE',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                 ),
               ),
             ),
@@ -609,8 +621,9 @@ class InvoiceResultPage extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSummaryLine(String label, String value, {Color? color}) {
     return Padding(

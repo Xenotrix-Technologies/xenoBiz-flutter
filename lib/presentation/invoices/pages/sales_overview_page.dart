@@ -432,84 +432,93 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Sales',
+          'Transactions',
           style: TextStyle(
               fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
         ),
       ),
-      body: BlocBuilder<SalesOverviewBloc, SalesOverviewState>(
-        builder: (context, state) {
-          if (state is SalesOverviewLoadingState ||
-              state is SalesOverviewInitialState) {
-            return const InvoiceListSkeleton();
+      body: BlocListener<InvoiceBloc, InvoiceState>(
+        listener: (context, invoiceState) {
+          if (invoiceState is InvoiceOperationSuccessState) {
+            context
+                .read<SalesOverviewBloc>()
+                .add(FetchSalesOverviewDataEvent());
           }
-
-          if (state is SalesOverviewErrorState) {
-            return ErrorState(
-              message: state.message,
-              onRetry: () => context
-                  .read<SalesOverviewBloc>()
-                  .add(FetchSalesOverviewDataEvent()),
-            );
-          }
-
-          if (state is SalesOverviewLoadedState) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                context
-                    .read<SalesOverviewBloc>()
-                    .add(FetchSalesOverviewDataEvent());
-              },
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Search Bar & Filter Button
-                    _buildSearchAndFilterRow(context, state),
-                    const SizedBox(height: 12),
-
-                    // Quick Transaction Type Filter Chips (All, Invoices, Returns, Payments)
-                    _buildQuickTypeChipsRow(context, state),
-                    const SizedBox(height: 10),
-
-                    // Active Removable Filter Chips
-                    if (state.isFiltered) ...[
-                      _buildActiveFilterChipsRow(context, state),
-                      const SizedBox(height: 10),
-                    ],
-
-                    // Transactions Section Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Recent Transactions',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.darkBlueText,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Vertical Timeline Financial Activity Feed
-                    Expanded(
-                      child: state.filteredTransactions.isEmpty
-                          ? _buildEmptyState(state)
-                          : _buildVerticalTimelineFeed(
-                              context, state.filteredTransactions),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return const SizedBox.shrink();
         },
+        child: BlocBuilder<SalesOverviewBloc, SalesOverviewState>(
+          builder: (context, state) {
+            if (state is SalesOverviewLoadingState ||
+                state is SalesOverviewInitialState) {
+              return const InvoiceListSkeleton();
+            }
+
+            if (state is SalesOverviewErrorState) {
+              return ErrorState(
+                message: state.message,
+                onRetry: () => context
+                    .read<SalesOverviewBloc>()
+                    .add(FetchSalesOverviewDataEvent()),
+              );
+            }
+
+            if (state is SalesOverviewLoadedState) {
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context
+                      .read<SalesOverviewBloc>()
+                      .add(FetchSalesOverviewDataEvent());
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Search Bar & Filter Button
+                      _buildSearchAndFilterRow(context, state),
+                      const SizedBox(height: 12),
+
+                      // Quick Transaction Type Filter Chips
+                      _buildQuickTypeChipsRow(context, state),
+                      const SizedBox(height: 10),
+
+                      // Active Removable Filter Chips
+                      if (state.isFiltered) ...[
+                        _buildActiveFilterChipsRow(context, state),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // Transactions Section Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Recent Transactions',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Vertical Timeline Financial Activity Feed
+                      Expanded(
+                        child: state.filteredTransactions.isEmpty
+                            ? _buildEmptyState(state)
+                            : _buildVerticalTimelineFeed(
+                                context, state.filteredTransactions),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     );
   }
@@ -535,9 +544,12 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                     .add(SearchSalesOverviewEvent(val));
               },
               decoration: InputDecoration(
-                hintText: 'Search invoice, customer or transaction...',
+                hintText: 'Search party, transaction or number...',
                 hintStyle: const TextStyle(
-                    fontSize: 13, color: AppColors.secondaryText),
+                  fontSize: 12,
+                  color: AppColors.secondaryText,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 prefixIcon: const Icon(Icons.search,
                     size: 20, color: AppColors.secondaryText),
                 suffixIcon: _searchController.text.isNotEmpty
@@ -583,10 +595,18 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     );
   }
 
-  // QUICK TYPE CHIPS ROW (All, Invoices, Returns, Payments)
+  // QUICK TYPE CHIPS ROW (All, Sales, Sale Returns, Purchases, Purchase Returns, Money In, Money Out)
   Widget _buildQuickTypeChipsRow(
       BuildContext context, SalesOverviewLoadedState state) {
-    final chips = ['All', 'Invoices', 'Returns', 'Payments'];
+    final chips = [
+      'All',
+      'Sales',
+      'Sale Returns',
+      'Purchases',
+      'Purchase Returns',
+      'Money In',
+      'Money Out'
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -821,31 +841,71 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     Color iconBgColor;
     Color iconColor;
     Color amountColor;
+    String amountPrefix = '';
 
-    if (tx.isReturn) {
-      icon = Icons.u_turn_left_rounded;
-      iconBgColor = Colors.purple.withValues(alpha: 0.1);
-      iconColor = Colors.purple.shade700;
-      amountColor = AppColors.danger;
-    } else if (tx.isPayment) {
-      icon = Icons.arrow_downward_rounded;
-      iconBgColor = AppColors.success.withValues(alpha: 0.1);
-      iconColor = AppColors.success;
-      amountColor = AppColors.success;
-    } else {
-      icon = Icons.receipt_long_rounded;
-      iconBgColor = AppColors.primaryBlue.withValues(alpha: 0.1);
-      iconColor = AppColors.primaryBlue;
-      amountColor = AppColors.darkBlueText;
+    switch (tx.type) {
+      case SalesTransactionType.sale:
+        icon = Icons.receipt_long_rounded;
+        iconBgColor = AppColors.primaryBlue.withValues(alpha: 0.1);
+        iconColor = AppColors.primaryBlue;
+        amountColor = AppColors.darkBlueText;
+        amountPrefix = '';
+        break;
+
+      case SalesTransactionType.salesReturn:
+        icon = Icons.u_turn_left_rounded;
+        iconBgColor = Colors.purple.withValues(alpha: 0.1);
+        iconColor = Colors.purple.shade700;
+        amountColor = AppColors.danger;
+        amountPrefix = '-';
+        break;
+
+      case SalesTransactionType.purchase:
+        icon = Icons.shopping_bag_outlined;
+        iconBgColor = Colors.teal.withValues(alpha: 0.1);
+        iconColor = Colors.teal.shade700;
+        amountColor = AppColors.darkBlueText;
+        amountPrefix = '';
+        break;
+
+      case SalesTransactionType.purchaseReturn:
+        icon = Icons.assignment_return_outlined;
+        iconBgColor = Colors.orange.withValues(alpha: 0.1);
+        iconColor = Colors.orange.shade700;
+        amountColor = Colors.orange.shade800;
+        amountPrefix = '-';
+        break;
+
+      case SalesTransactionType.payment:
+        // Payment = Money OUT
+        icon = Icons.arrow_upward_rounded;
+        iconBgColor = AppColors.danger.withValues(alpha: 0.1);
+        iconColor = AppColors.danger;
+        amountColor = AppColors.danger;
+        amountPrefix = '-';
+        break;
+
+      case SalesTransactionType.receipt:
+        // Receipt = Money IN
+        icon = Icons.arrow_downward_rounded;
+        iconBgColor = AppColors.success.withValues(alpha: 0.1);
+        iconColor = AppColors.success;
+        amountColor = AppColors.success;
+        amountPrefix = '+';
+        break;
     }
 
     // Dot Status indicator
     Color statusDotColor;
-    String statusText;
-    if (tx.isReturn) {
-      statusDotColor = Colors.purple.shade700;
-      statusText = 'Completed';
+    String statusText = tx.statusText;
+
+    if (tx.isSalesReturn || tx.isPurchaseReturn) {
+      statusDotColor = tx.isSalesReturn ? Colors.purple.shade700 : Colors.orange.shade700;
+      statusText = 'Returned';
     } else if (tx.isPayment) {
+      statusDotColor = AppColors.danger;
+      statusText = 'Paid';
+    } else if (tx.isReceipt) {
       statusDotColor = AppColors.success;
       statusText = 'Received';
     } else {
@@ -909,12 +969,16 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          '• ${tx.transactionNumber}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.darkBlueText,
+                        Expanded(
+                          child: Text(
+                            '• ${tx.transactionNumber}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -942,9 +1006,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        tx.isReturn
-                            ? '-${_formatCurrency(tx.totalAmount)}'
-                            : _formatCurrency(tx.totalAmount),
+                        '$amountPrefix${_formatCurrency(tx.totalAmount)}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
@@ -1067,20 +1129,35 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
   }
 
   void _handleViewTransaction(
-      BuildContext context, SalesTransactionWrapper tx) {
+      BuildContext context, SalesTransactionWrapper tx) async {
     if (tx.isInvoice && tx.asInvoice != null) {
-      context.push(RouteNames.invoiceDetails, extra: tx.asInvoice);
+      await context.push(RouteNames.invoiceDetails, extra: tx.asInvoice);
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else if (tx.isReturn) {
-      context.push(RouteNames.salesReturns);
+      await context.push(RouteNames.salesReturns);
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else if (tx.isPayment) {
       _showPaymentDetailsModal(context, tx.asPayment ?? tx);
     }
   }
 
   void _handleEditTransaction(
-      BuildContext context, SalesTransactionWrapper tx) {
+      BuildContext context, SalesTransactionWrapper tx) async {
     if (tx.isInvoice && tx.asInvoice != null) {
-      context.push(RouteNames.createInvoice, extra: tx.asInvoice);
+      await context.push(
+        RouteNames.createInvoice,
+        extra: {
+          'invoiceType': tx.asInvoice!.type,
+          'invoiceToEdit': tx.asInvoice!,
+        },
+      );
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1127,6 +1204,9 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                 context
                     .read<InvoiceBloc>()
                     .add(UpdateInvoiceSubmittedEvent(cancelledInvoice));
+                context
+                    .read<SalesOverviewBloc>()
+                    .add(FetchSalesOverviewDataEvent());
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

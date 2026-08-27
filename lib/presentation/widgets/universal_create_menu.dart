@@ -186,10 +186,10 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                         mainAxisSpacing: 10,
                         children: [
                           // Row 1
-                          // 1. Invoice
+                          // 1. Sale
                           _ActionCard(
-                            title: 'Invoice',
-                            subtitle: 'Sales & Docs',
+                            title: 'Sale',
+                            subtitle: 'Customer Bill',
                             icon: Icons.receipt_long_rounded,
                             iconColor: AppColors.primaryBlue,
                             bgColor:
@@ -201,9 +201,9 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               );
                             }),
                           ),
-                          // 2. Purchase Invoice
+                          // 2. Purchase
                           _ActionCard(
-                            title: 'Purchase Invoice',
+                            title: 'Purchase',
                             subtitle: 'Supplier Bill',
                             icon: Icons.shopping_bag_outlined,
                             iconColor: const Color(0xFF0D9488),
@@ -235,9 +235,9 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                             }),
                           ),
                           // Row 2
-                          // 4. Payment
+                          // 4. Money Out
                           _ActionCard(
-                            title: 'Payment',
+                            title: 'Money Out',
                             subtitle: 'Money Out',
                             icon: Icons.arrow_upward_rounded,
                             iconColor: AppColors.danger,
@@ -246,9 +246,9 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               context.push(RouteNames.expense);
                             }),
                           ),
-                          // 5. Receipt
+                          // 5. Money In
                           _ActionCard(
-                            title: 'Receipt',
+                            title: 'Money In',
                             subtitle: 'Money In',
                             icon: Icons.arrow_downward_rounded,
                             iconColor: AppColors.success,

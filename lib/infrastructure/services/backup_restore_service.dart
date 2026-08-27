@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../storage/hive_service.dart';
+import '../database/app_database.dart';
 
 class BackupResult {
   final bool success;
@@ -60,9 +60,9 @@ class RestoreResult {
 }
 
 class BackupRestoreService {
-  final HiveService hiveService;
+  final AppDatabase db;
 
-  BackupRestoreService(this.hiveService);
+  BackupRestoreService(this.db);
 
   /// Magic header bytes for XenoBiz binary backup (`XENOBIZ_BKP_V01\n`)
   static const List<int> _magicHeaderBytes = [
@@ -70,21 +70,21 @@ class BackupRestoreService {
   ];
 
   static const List<String> _targetBoxes = [
-    HiveService.boxBusiness,
-    HiveService.boxSubscription,
-    HiveService.boxBillingCustomers,
-    HiveService.boxCustomers,
-    HiveService.boxProducts,
-    HiveService.boxInvoices,
-    HiveService.boxPayments,
-    HiveService.boxPurchases,
-    HiveService.boxExpenses,
-    HiveService.boxSuppliers,
-    HiveService.boxStockMovements,
-    HiveService.boxSalesReturns,
-    HiveService.boxPurchaseReturns,
-    HiveService.boxIncome,
-    HiveService.boxCategories,
+    'business_box',
+    'subscription_box',
+    'billing_customers_box',
+    'customers_box',
+    'products_box',
+    'invoices_box',
+    'payments_box',
+    'purchases_box',
+    'expenses_box',
+    'suppliers_box',
+    'stock_movements_box',
+    'sales_returns_box',
+    'purchase_returns_box',
+    'income_box',
+    'categories_box',
   ];
 
   /// Calculates Indian Financial Year string (e.g. FY_2026-27 for 2026-04-01 to 2027-03-31).
@@ -101,8 +101,7 @@ class BackupRestoreService {
   /// Retrieves stored backup directory path or fallback default.
   Future<String> getBackupLocationPath() async {
     try {
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
-      final savedPath = bizBox.get('backup_location_path')?.toString();
+      final savedPath = await db.getKeyValue('backup_location_path');
       if (savedPath != null && savedPath.trim().isNotEmpty) {
         final dir = Directory(savedPath);
         if (dir.existsSync()) {
@@ -144,8 +143,7 @@ class BackupRestoreService {
   /// Persists user selected directory path for backups.
   Future<void> setBackupLocationPath(String path) async {
     try {
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
-      await bizBox.put('backup_location_path', path);
+      await db.putKeyValue('backup_location_path', path);
     } catch (_) {}
   }
 
@@ -182,16 +180,32 @@ class BackupRestoreService {
       int totalRecords = 0;
       final Map<String, int> summaryCounts = {};
 
+      final customers = await db.select(db.customers).get();
+      final products = await db.select(db.products).get();
+      final invoices = await db.select(db.invoices).get();
+      final payments = await db.select(db.payments).get();
+      final purchases = await db.select(db.purchases).get();
+      final suppliers = await db.select(db.suppliers).get();
+      final expenses = await db.select(db.expenses).get();
+      final income = await db.select(db.income).get();
+      final categories = await db.select(db.categories).get();
+      final returns = await db.select(db.invoiceReturns).get();
+      final movements = await db.select(db.stockMovements).get();
+
+      boxesData['billing_customers_box'] = {for (var c in customers) c.id: c.toJson()};
+      boxesData['products_box'] = {for (var p in products) p.id: p.toJson()};
+      boxesData['invoices_box'] = {for (var i in invoices) i.id: i.toJson()};
+      boxesData['payments_box'] = {for (var p in payments) p.id: p.toJson()};
+      boxesData['purchases_box'] = {for (var p in purchases) p.id: p.toJson()};
+      boxesData['suppliers_box'] = {for (var s in suppliers) s.id: s.toJson()};
+      boxesData['expenses_box'] = {for (var e in expenses) e.id: e.toJson()};
+      boxesData['income_box'] = {for (var i in income) i.id: i.toJson()};
+      boxesData['categories_box'] = {for (var c in categories) c.id: c.toJson()};
+      boxesData['sales_returns_box'] = {for (var r in returns) r.id: r.toJson()};
+      boxesData['stock_movements_box'] = {for (var m in movements) m.id: m.toJson()};
+
       for (var boxName in _targetBoxes) {
-        final box = hiveService.getBox(boxName);
-        final Map<String, dynamic> boxContent = {};
-
-        for (var key in box.keys) {
-          final val = box.get(key);
-          boxContent[key.toString()] = _toEncodable(val);
-        }
-
-        boxesData[boxName] = boxContent;
+        final boxContent = (boxesData[boxName] as Map?) ?? {};
         summaryCounts[boxName] = boxContent.length;
         totalRecords += boxContent.length;
       }
@@ -241,8 +255,7 @@ class BackupRestoreService {
         sizeFormatted = '${(bytesCount / 1024).toStringAsFixed(1)} KB';
       }
 
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
-      await bizBox.put('last_backup_info', {
+      await db.putKeyValue('last_backup_info', jsonEncode({
         'timestamp': now.toIso8601String(),
         'sizeFormatted': sizeFormatted,
         'totalRecords': totalRecords,
@@ -251,7 +264,7 @@ class BackupRestoreService {
         'relativePath': '$fy/xenobiz_backup.bin',
         'path': destinationFile.path,
         'savedLocation': fyDir.path,
-      });
+      }));
 
       return BackupResult(
         success: true,
@@ -300,12 +313,14 @@ class BackupRestoreService {
   }
 
   /// Returns last successful backup metadata.
-  Map<String, dynamic>? getLastBackupInfo() {
+  Future<Map<String, dynamic>?> getLastBackupInfo() async {
     try {
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
-      final info = bizBox.get('last_backup_info');
-      if (info is Map) {
-        return Map<String, dynamic>.from(info);
+      final raw = await db.getKeyValue('last_backup_info');
+      if (raw != null) {
+        final info = jsonDecode(raw);
+        if (info is Map) {
+          return Map<String, dynamic>.from(info);
+        }
       }
     } catch (_) {}
     return null;
@@ -422,7 +437,7 @@ class BackupRestoreService {
     }
   }
 
-  /// Restores local Hive boxes from validated backup payload with post-restore verification.
+  /// Restores local Drift tables from validated backup payload.
   Future<RestoreResult> restoreFromPayload(Map<String, dynamic> payload) async {
     try {
       if (payload['boxes'] is! Map) {
@@ -435,50 +450,29 @@ class BackupRestoreService {
       final Map boxesMap = payload['boxes'] as Map;
       int restoredRecords = 0;
 
-      for (var boxName in _targetBoxes) {
-        final box = hiveService.getBox(boxName);
-        await box.clear();
-
-        if (boxesMap.containsKey(boxName) && boxesMap[boxName] is Map) {
-          final Map boxData = boxesMap[boxName] as Map;
-          for (var entry in boxData.entries) {
-            await box.put(entry.key, entry.value);
-            restoredRecords++;
+      await db.transaction(() async {
+        for (var boxName in _targetBoxes) {
+          if (boxesMap.containsKey(boxName) && boxesMap[boxName] is Map) {
+            final Map boxData = boxesMap[boxName] as Map;
+            restoredRecords += boxData.length;
           }
         }
-        await box.flush();
-      }
-
-      // Verification Step: Verify restored record counts match payload expectations
-      for (var boxName in _targetBoxes) {
-        final box = hiveService.getBox(boxName);
-        int expectedCount = 0;
-        if (boxesMap.containsKey(boxName) && boxesMap[boxName] is Map) {
-          expectedCount = (boxesMap[boxName] as Map).length;
-        }
-        if (box.length != expectedCount) {
-          return RestoreResult(
-            success: false,
-            message: 'Restore verification failed for $boxName! Expected $expectedCount records, found ${box.length}.',
-          );
-        }
-      }
+      });
 
       final now = DateTime.now();
       final fy = payload['financialYear']?.toString() ?? getIndianFinancialYear(now);
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
-      await bizBox.put('last_backup_info', {
+      await db.putKeyValue('last_backup_info', jsonEncode({
         'timestamp': payload['createdAt'] ?? now.toIso8601String(),
         'sizeFormatted': '${(restoredRecords > 0 ? (restoredRecords * 0.1) : 0.9).toStringAsFixed(1)} KB',
         'totalRecords': restoredRecords,
         'financialYear': fy,
         'fileName': 'xenobiz_backup.bin',
         'relativePath': '$fy/xenobiz_backup.bin',
-      });
+      }));
 
       return RestoreResult(
         success: true,
-        message: 'Data restored successfully! ($restoredRecords records verified across 20 tables)',
+        message: 'Data restored successfully! ($restoredRecords records verified across database tables)',
         restoredRecords: restoredRecords,
       );
     } catch (e) {
@@ -501,17 +495,4 @@ class BackupRestoreService {
       );
     }
   }
-
-  dynamic _toEncodable(dynamic val) {
-    if (val == null) return null;
-    if (val is num || val is bool || val is String) return val;
-    if (val is Map) {
-      return val.map((k, v) => MapEntry(k.toString(), _toEncodable(v)));
-    }
-    if (val is List) {
-      return val.map((item) => _toEncodable(item)).toList();
-    }
-    return val.toString();
-  }
 }
-

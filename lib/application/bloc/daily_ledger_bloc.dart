@@ -9,32 +9,7 @@ import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/expense_repository.dart';
 import '../../domain/repositories/income_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
-import '../../infrastructure/storage/hive_service.dart';
-
-class LedgerSalesTransaction extends Equatable {
-  final String id;
-  final String title; // Customer Name or 'Cash Sale' or 'Other Income'
-  final String subTitle; // 'Sales Income' or 'Other Income'
-  final double amount;
-  final String paymentMethod; // 'Cash', 'GPay/UPI', 'Card', 'Other'
-  final DateTime time;
-  final InvoiceEntity? invoice;
-  final bool isIncome;
-
-  const LedgerSalesTransaction({
-    required this.id,
-    required this.title,
-    required this.subTitle,
-    required this.amount,
-    required this.paymentMethod,
-    required this.time,
-    this.invoice,
-    this.isIncome = false,
-  });
-
-  @override
-  List<Object?> get props => [id, title, subTitle, amount, paymentMethod, time, invoice, isIncome];
-}
+import '../../infrastructure/database/app_database.dart';
 
 // Events
 abstract class DailyLedgerEvent extends Equatable {
@@ -102,60 +77,95 @@ class DailyLedgerLoadingState extends DailyLedgerState {}
 
 class DailyLedgerLoadedState extends DailyLedgerState {
   final DateTime selectedDate;
-
   final double openingBalance;
-  final double cashIn;
-  final double cashOut;
-  final double closingBalance;
+  final List<InvoiceEntity> salesInvoices;
+  final List<ExpenseEntity> expenses;
+  final List<IncomeEntity> incomes;
 
-  final double totalSales;
-  final double cashSales;
-  final double upiCardSales;
-  final double otherIncomeTotal;
+  final double totalSalesCash;
+  final double totalSalesOnline;
+  final double totalSalesCredit;
+  final double totalSalesTotal;
 
-  final double totalExpenses;
-  final double cashExpenses;
-  final double accountExpenses;
+  final double totalExpensesCash;
+  final double totalExpensesOnline;
+  final double totalExpensesTotal;
 
-  final List<LedgerSalesTransaction> salesTransactions;
-  final List<ExpenseEntity> expenseTransactions;
-  final List<IncomeEntity> incomeTransactions;
+  final double totalIncomesCash;
+  final double totalIncomesOnline;
+  final double totalIncomesTotal;
+
+  final double totalReceivedCash;
+  final double totalReceivedOnline;
+  final double totalPaidCash;
+  final double totalPaidOnline;
+
+  final double closingCashInHand;
+  final double closingBankOnlineBalance;
+  final double netCashFlow;
 
   const DailyLedgerLoadedState({
     required this.selectedDate,
     required this.openingBalance,
-    required this.cashIn,
-    required this.cashOut,
-    required this.closingBalance,
-    required this.totalSales,
-    required this.cashSales,
-    required this.upiCardSales,
-    this.otherIncomeTotal = 0.0,
-    required this.totalExpenses,
-    required this.cashExpenses,
-    required this.accountExpenses,
-    required this.salesTransactions,
-    required this.expenseTransactions,
-    this.incomeTransactions = const [],
+    required this.salesInvoices,
+    required this.expenses,
+    required this.incomes,
+    required this.totalSalesCash,
+    required this.totalSalesOnline,
+    required this.totalSalesCredit,
+    required this.totalSalesTotal,
+    required this.totalExpensesCash,
+    required this.totalExpensesOnline,
+    required this.totalExpensesTotal,
+    required this.totalIncomesCash,
+    required this.totalIncomesOnline,
+    required this.totalIncomesTotal,
+    required this.totalReceivedCash,
+    required this.totalReceivedOnline,
+    required this.totalPaidCash,
+    required this.totalPaidOnline,
+    required this.closingCashInHand,
+    required this.closingBankOnlineBalance,
+    required this.netCashFlow,
   });
+
+  double get cashIn => totalReceivedCash + totalReceivedOnline;
+  double get cashOut => totalPaidCash + totalPaidOnline;
+  double get closingBalance => closingCashInHand + closingBankOnlineBalance;
+  double get totalSales => totalSalesTotal;
+  double get cashSales => totalSalesCash;
+  double get upiCardSales => totalSalesOnline;
+  double get totalExpenses => totalExpensesTotal;
+  double get cashExpenses => totalExpensesCash;
+  double get accountExpenses => totalExpensesOnline;
+  double get otherIncomeTotal => totalIncomesTotal;
+  List<InvoiceEntity> get salesTransactions => salesInvoices;
+  List<ExpenseEntity> get expenseTransactions => expenses;
 
   @override
   List<Object?> get props => [
         selectedDate,
         openingBalance,
-        cashIn,
-        cashOut,
-        closingBalance,
-        totalSales,
-        cashSales,
-        upiCardSales,
-        otherIncomeTotal,
-        totalExpenses,
-        cashExpenses,
-        accountExpenses,
-        salesTransactions,
-        expenseTransactions,
-        incomeTransactions,
+        salesInvoices,
+        expenses,
+        incomes,
+        totalSalesCash,
+        totalSalesOnline,
+        totalSalesCredit,
+        totalSalesTotal,
+        totalExpensesCash,
+        totalExpensesOnline,
+        totalExpensesTotal,
+        totalIncomesCash,
+        totalIncomesOnline,
+        totalIncomesTotal,
+        totalReceivedCash,
+        totalReceivedOnline,
+        totalPaidCash,
+        totalPaidOnline,
+        closingCashInHand,
+        closingBankOnlineBalance,
+        netCashFlow,
       ];
 }
 
@@ -174,14 +184,14 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
   final ExpenseRepository expenseRepository;
   final CustomerRepository customerRepository;
   final IncomeRepository? incomeRepository;
-  final HiveService hiveService;
+  final AppDatabase db;
 
   DailyLedgerBloc({
     required this.invoiceRepository,
     required this.expenseRepository,
     required this.customerRepository,
     this.incomeRepository,
-    required this.hiveService,
+    required this.db,
   }) : super(DailyLedgerInitialState()) {
     on<FetchDailyLedgerDataEvent>(_onFetchDailyLedgerData);
     on<UpdateOpeningBalanceEvent>(_onUpdateOpeningBalance);
@@ -208,9 +218,8 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
   Future<void> _onUpdateOpeningBalance(
       UpdateOpeningBalanceEvent event, Emitter<DailyLedgerState> emit) async {
     try {
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
       final key = 'opening_balance_${_getDateKey(event.selectedDate)}';
-      await bizBox.put(key, event.newOpeningBalance);
+      await db.putKeyValue(key, event.newOpeningBalance.toString());
 
       await _loadLedgerForDate(event.selectedDate, emit);
     } catch (e) {
@@ -238,12 +247,10 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
       final expenses = await expenseRepository.getExpenses();
       final incomes = incomeRepository != null ? await incomeRepository!.getIncomes() : <IncomeEntity>[];
 
-      // Read Opening Balance for selected date
-      final bizBox = hiveService.getBox(HiveService.boxBusiness);
       final openingKey = 'opening_balance_${_getDateKey(selectedDate)}';
-      final double openingBalance = (bizBox.get(openingKey) as num?)?.toDouble() ?? 0.0;
+      final openingStr = await db.getKeyValue(openingKey);
+      final double openingBalance = double.tryParse(openingStr ?? '') ?? 0.0;
 
-      // Filter Sales Invoices ONLY for selected date (Returns are EXCLUDED from ledger financial entries)
       final dayInvoices = invoices.where((inv) {
         return inv.type == InvoiceType.sale &&
             inv.issueDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
@@ -252,7 +259,6 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
 
       dayInvoices.sort((a, b) => b.issueDate.compareTo(a.issueDate));
 
-      // Filter Expenses for selected date
       final dayExpenses = expenses.where((exp) {
         return exp.expenseDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
             exp.expenseDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
@@ -260,7 +266,6 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
 
       dayExpenses.sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
 
-      // Filter Incomes for selected date
       final dayIncomes = incomes.where((inc) {
         return inc.incomeDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
             inc.incomeDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
@@ -268,99 +273,87 @@ class DailyLedgerBloc extends Bloc<DailyLedgerEvent, DailyLedgerState> {
 
       dayIncomes.sort((a, b) => b.incomeDate.compareTo(a.incomeDate));
 
-      // 1. Process CASH IN Transactions (Sales Income + Other Income)
-      double totalSales = 0.0;
-      double cashSales = 0.0;
-      double upiCardSales = 0.0;
-      double otherIncomeTotal = 0.0;
-
-      final List<LedgerSalesTransaction> salesTxs = [];
+      double salesCash = 0.0;
+      double salesOnline = 0.0;
+      double salesCredit = 0.0;
 
       for (var inv in dayInvoices) {
-        totalSales += inv.grandTotal;
-
-        final isCash = inv.notes.toLowerCase().contains('cash') ||
-            inv.status == InvoiceStatus.paid ||
-            inv.customerName.toLowerCase().contains('cash');
-
-        final payMode = isCash ? 'Cash' : 'GPay/UPI';
-
-        if (isCash) {
-          cashSales += inv.grandTotal;
+        final mode = inv.notes.toUpperCase();
+        if (inv.status == InvoiceStatus.paid) {
+          if (mode.contains('ONLINE') || mode.contains('UPI') || mode.contains('CARD') || mode.contains('BANK')) {
+            salesOnline += inv.grandTotal;
+          } else {
+            salesCash += inv.grandTotal;
+          }
+        } else if (inv.status == InvoiceStatus.partiallyPaid) {
+          salesCash += inv.paidAmount;
+          salesCredit += inv.dueAmount;
         } else {
-          upiCardSales += inv.grandTotal;
+          salesCredit += inv.grandTotal;
         }
-
-        final isGuest = inv.customerName.isEmpty ||
-            inv.customerName == 'Guest Customer' ||
-            inv.customerName.toLowerCase().contains('guest');
-
-        salesTxs.add(
-          LedgerSalesTransaction(
-            id: inv.id,
-            title: isGuest ? 'Cash Sale' : inv.customerName,
-            subTitle: 'Sales Income • #${inv.invoiceNumber}',
-            amount: inv.grandTotal,
-            paymentMethod: payMode,
-            time: inv.issueDate,
-            invoice: inv,
-          ),
-        );
       }
 
-      for (var inc in dayIncomes) {
-        otherIncomeTotal += inc.amount;
-        salesTxs.add(
-          LedgerSalesTransaction(
-            id: inc.id,
-            title: inc.title,
-            subTitle: (inc.partyName != null && inc.partyName!.isNotEmpty)
-                ? 'Other Income • ${inc.category} • ${inc.partyName}'
-                : 'Other Income • ${inc.category}',
-            amount: inc.amount,
-            paymentMethod: inc.paymentMode,
-            time: inc.incomeDate,
-            isIncome: true,
-          ),
-        );
-      }
+      final salesTotal = salesCash + salesOnline + salesCredit;
 
-      // 2. Process CASH OUT Breakdown (Purchase Expense + Other Expense)
-      double totalExp = 0.0;
-      double cashExp = 0.0;
-      double accountExp = 0.0;
+      double expensesCash = 0.0;
+      double expensesOnline = 0.0;
 
       for (var exp in dayExpenses) {
-        totalExp += exp.amount;
-        if (exp.paymentMode == 'Cash') {
-          cashExp += exp.amount;
+        final mode = exp.paymentMode.toUpperCase();
+        if (mode.contains('ONLINE') || mode.contains('UPI') || mode.contains('CARD') || mode.contains('BANK')) {
+          expensesOnline += exp.amount;
         } else {
-          accountExp += exp.amount;
+          expensesCash += exp.amount;
         }
       }
+      final expensesTotal = expensesCash + expensesOnline;
 
-      // Physical Cash Balance Calculations
-      final double cashIn = cashSales + otherIncomeTotal;
-      final double cashOut = cashExp;
-      final double closingBalance = openingBalance + cashIn - cashOut;
+      double incomesCash = 0.0;
+      double incomesOnline = 0.0;
+
+      for (var inc in dayIncomes) {
+        final mode = inc.paymentMode.toUpperCase();
+        if (mode.contains('ONLINE') || mode.contains('UPI') || mode.contains('CARD') || mode.contains('BANK')) {
+          incomesOnline += inc.amount;
+        } else {
+          incomesCash += inc.amount;
+        }
+      }
+      final incomesTotal = incomesCash + incomesOnline;
+
+      final totalReceivedCash = salesCash + incomesCash;
+      final totalReceivedOnline = salesOnline + incomesOnline;
+      final totalPaidCash = expensesCash;
+      final totalPaidOnline = expensesOnline;
+
+      final closingCashInHand = openingBalance + totalReceivedCash - totalPaidCash;
+      final closingBankOnlineBalance = totalReceivedOnline - totalPaidOnline;
+      final netCashFlow = (totalReceivedCash + totalReceivedOnline) - (totalPaidCash + totalPaidOnline);
 
       emit(
         DailyLedgerLoadedState(
           selectedDate: selectedDate,
           openingBalance: openingBalance,
-          cashIn: cashIn,
-          cashOut: cashOut,
-          closingBalance: closingBalance,
-          totalSales: totalSales,
-          cashSales: cashSales,
-          upiCardSales: upiCardSales,
-          otherIncomeTotal: otherIncomeTotal,
-          totalExpenses: totalExp,
-          cashExpenses: cashExp,
-          accountExpenses: accountExp,
-          salesTransactions: salesTxs,
-          expenseTransactions: dayExpenses,
-          incomeTransactions: dayIncomes,
+          salesInvoices: dayInvoices,
+          expenses: dayExpenses,
+          incomes: dayIncomes,
+          totalSalesCash: salesCash,
+          totalSalesOnline: salesOnline,
+          totalSalesCredit: salesCredit,
+          totalSalesTotal: salesTotal,
+          totalExpensesCash: expensesCash,
+          totalExpensesOnline: expensesOnline,
+          totalExpensesTotal: expensesTotal,
+          totalIncomesCash: incomesCash,
+          totalIncomesOnline: incomesOnline,
+          totalIncomesTotal: incomesTotal,
+          totalReceivedCash: totalReceivedCash,
+          totalReceivedOnline: totalReceivedOnline,
+          totalPaidCash: totalPaidCash,
+          totalPaidOnline: totalPaidOnline,
+          closingCashInHand: closingCashInHand,
+          closingBankOnlineBalance: closingBankOnlineBalance,
+          netCashFlow: netCashFlow,
         ),
       );
     } catch (e) {

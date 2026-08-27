@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/invoice_entity.dart';
 import '../../domain/entities/invoice_return_entity.dart';
@@ -5,148 +6,109 @@ import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/product_repository.dart';
 import '../../domain/repositories/purchase_repository.dart';
 import '../../domain/repositories/returns_repository.dart';
-import '../storage/hive_service.dart';
+import '../database/app_database.dart';
 
 class ReturnsRepositoryImpl implements ReturnsRepository {
-  final HiveService hiveService;
+  final AppDatabase db;
   final ProductRepository productRepository;
   final CustomerRepository customerRepository;
   final PurchaseRepository purchaseRepository;
 
   ReturnsRepositoryImpl({
-    required this.hiveService,
+    required this.db,
     required this.productRepository,
     required this.customerRepository,
     required this.purchaseRepository,
   });
 
-  String _getBoxName(InvoiceType type) {
-    return type == InvoiceType.sale
-        ? HiveService.boxSalesReturns
-        : HiveService.boxPurchaseReturns;
-  }
+  InvoiceReturnEntity _rowToReturn(InvoiceReturn row, List<InvoiceReturnItem> itemRows) {
+    final type = row.type == 'purchase' ? InvoiceType.purchase : InvoiceType.sale;
 
-  Map<String, dynamic> _returnToMap(InvoiceReturnEntity r) {
-    return {
-      'id': r.id,
-      'returnNumber': r.returnNumber,
-      'invoiceId': r.invoiceId,
-      'invoiceNumber': r.invoiceNumber,
-      'partyId': r.partyId,
-      'partyName': r.partyName,
-      'type': r.type.name,
-      'items': r.items
-          .map((i) => {
-                'productId': i.productId,
-                'productName': i.productName,
-                'sku': i.sku,
-                'originalQuantity': i.originalQuantity,
-                'returnedQuantity': i.returnedQuantity,
-                'unitPrice': i.unitPrice,
-              })
-          .toList(),
-      'totalAmount': r.totalAmount,
-      'returnDate': r.returnDate.toIso8601String(),
-      'notes': r.notes,
-    };
-  }
-
-  InvoiceReturnEntity _mapToReturn(Map<dynamic, dynamic> map) {
-    final List rawItems = map['items'] is List ? map['items'] : [];
-    final items = rawItems.map((itm) {
-      if (itm is Map) {
-        return InvoiceReturnItemEntity(
-          productId: itm['productId']?.toString() ?? '',
-          productName: itm['productName']?.toString() ?? 'Item',
-          sku: itm['sku']?.toString() ?? '',
-          originalQuantity: (itm['originalQuantity'] as num?)?.toInt() ?? 0,
-          returnedQuantity: (itm['returnedQuantity'] as num?)?.toInt() ?? 0,
-          unitPrice: (itm['unitPrice'] as num?)?.toDouble() ?? 0.0,
-        );
-      }
-      return const InvoiceReturnItemEntity(
-        productId: '',
-        productName: '',
-        originalQuantity: 0,
-        returnedQuantity: 0,
-        unitPrice: 0.0,
-      );
-    }).toList();
-
-    final typeStr = map['type']?.toString();
-    final type =
-        typeStr == 'purchase' ? InvoiceType.purchase : InvoiceType.sale;
+    final items = itemRows.map((i) => InvoiceReturnItemEntity(
+      productId: i.productId,
+      productName: i.productName,
+      sku: i.sku,
+      originalQuantity: i.originalQuantity,
+      returnedQuantity: i.returnedQuantity,
+      unitPrice: i.unitPrice,
+    )).toList();
 
     return InvoiceReturnEntity(
-      id: map['id']?.toString() ?? '',
-      returnNumber: map['returnNumber']?.toString() ?? 'RET-000',
-      invoiceId: map['invoiceId']?.toString() ?? '',
-      invoiceNumber: map['invoiceNumber']?.toString() ?? '',
-      partyId: map['partyId']?.toString() ?? '',
-      partyName: map['partyName']?.toString() ?? 'Party',
+      id: row.id,
+      returnNumber: row.returnNumber,
+      invoiceId: row.invoiceId,
+      invoiceNumber: row.invoiceNumber,
+      partyId: row.partyId,
+      partyName: row.partyName,
       type: type,
       items: items,
-      totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0.0,
-      returnDate: DateTime.tryParse(map['returnDate']?.toString() ?? '') ??
-          DateTime.now(),
-      notes: map['notes']?.toString() ?? '',
+      totalAmount: row.totalAmount,
+      returnDate: row.returnDate,
+      notes: row.notes,
+    );
+  }
+
+  InvoiceReturnsCompanion _returnToCompanion(InvoiceReturnEntity r) {
+    return InvoiceReturnsCompanion(
+      id: Value(r.id),
+      returnNumber: Value(r.returnNumber),
+      invoiceId: Value(r.invoiceId),
+      invoiceNumber: Value(r.invoiceNumber),
+      partyId: Value(r.partyId),
+      partyName: Value(r.partyName),
+      type: Value(r.type.name),
+      totalAmount: Value(r.totalAmount),
+      returnDate: Value(r.returnDate),
+      notes: Value(r.notes),
     );
   }
 
   @override
   Future<List<InvoiceReturnEntity>> getReturns(InvoiceType type) async {
-    final box = hiveService.getBox(_getBoxName(type));
+    final typeStr = type.name;
+    final q = db.select(db.invoiceReturns)
+      ..where((t) => t.type.equals(typeStr))
+      ..orderBy([(t) => OrderingTerm.desc(t.returnDate)]);
+
+    final rows = await q.get();
+
     final List<InvoiceReturnEntity> list = [];
-    for (var key in box.keys) {
-      final val = box.get(key);
-      if (val is Map) {
-        list.add(_mapToReturn(val));
-      }
+    for (var row in rows) {
+      final itemRows = await (db.select(db.invoiceReturnItems)..where((t) => t.returnId.equals(row.id))).get();
+      list.add(_rowToReturn(row, itemRows));
     }
-    list.sort((a, b) => b.returnDate.compareTo(a.returnDate));
     return list;
   }
 
   @override
   Future<InvoiceReturnEntity?> getReturn(String id) async {
-    for (var type in [InvoiceType.sale, InvoiceType.purchase]) {
-      final box = hiveService.getBox(_getBoxName(type));
-      final map = box.get(id);
-      if (map is Map) {
-        return _mapToReturn(map);
-      }
+    final row = await (db.select(db.invoiceReturns)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      final itemRows = await (db.select(db.invoiceReturnItems)..where((t) => t.returnId.equals(id))).get();
+      return _rowToReturn(row, itemRows);
     }
     return null;
   }
 
   @override
-  Future<Map<String, int>> getReturnedQuantitiesForInvoice(
-      String invoiceId) async {
+  Future<Map<String, int>> getReturnedQuantitiesForInvoice(String invoiceId) async {
     final Map<String, int> returnedCounts = {};
-    for (var type in [InvoiceType.sale, InvoiceType.purchase]) {
-      final box = hiveService.getBox(_getBoxName(type));
-      for (var key in box.keys) {
-        final val = box.get(key);
-        if (val is Map && val['invoiceId'] == invoiceId) {
-          final ret = _mapToReturn(val);
-          for (var item in ret.items) {
-            returnedCounts[item.productId] =
-                (returnedCounts[item.productId] ?? 0) + item.returnedQuantity;
-          }
-        }
+    final q = db.select(db.invoiceReturns)..where((t) => t.invoiceId.equals(invoiceId));
+    final rows = await q.get();
+
+    for (var row in rows) {
+      final itemRows = await (db.select(db.invoiceReturnItems)..where((t) => t.returnId.equals(row.id))).get();
+      for (var item in itemRows) {
+        returnedCounts[item.productId] = (returnedCounts[item.productId] ?? 0) + item.returnedQuantity;
       }
     }
     return returnedCounts;
   }
 
   @override
-  Future<InvoiceReturnEntity> createReturn(
-      InvoiceReturnEntity returnEntity) async {
-    final box = hiveService.getBox(_getBoxName(returnEntity.type));
-    final String id =
-        returnEntity.id.isNotEmpty ? returnEntity.id : const Uuid().v4();
-    final String retNum = returnEntity.returnNumber.isNotEmpty &&
-            returnEntity.returnNumber != 'RET-000'
+  Future<InvoiceReturnEntity> createReturn(InvoiceReturnEntity returnEntity) async {
+    final String id = returnEntity.id.isNotEmpty ? returnEntity.id : const Uuid().v4();
+    final String retNum = returnEntity.returnNumber.isNotEmpty && returnEntity.returnNumber != 'RET-000'
         ? returnEntity.returnNumber
         : 'RET-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
@@ -164,10 +126,25 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
       notes: returnEntity.notes,
     );
 
-    // 1. Save Return Record
-    await box.put(id, _returnToMap(localReturn));
+    await db.transaction(() async {
+      await db.into(db.invoiceReturns).insertOnConflictUpdate(_returnToCompanion(localReturn));
+      await (db.delete(db.invoiceReturnItems)..where((t) => t.returnId.equals(id))).go();
 
-    // 2. Adjust Stock only (Sales Return: +stock, Purchase Return: -stock)
+      for (var item in localReturn.items) {
+        await db.into(db.invoiceReturnItems).insert(
+          InvoiceReturnItemsCompanion.insert(
+            returnId: id,
+            productId: item.productId,
+            productName: item.productName,
+            sku: Value(item.sku),
+            originalQuantity: Value(item.originalQuantity),
+            returnedQuantity: Value(item.returnedQuantity),
+            unitPrice: Value(item.unitPrice),
+          ),
+        );
+      }
+    });
+
     for (var item in localReturn.items) {
       if (item.returnedQuantity > 0) {
         final stockDelta = returnEntity.isSale
@@ -182,7 +159,6 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
       }
     }
 
-    // Returns do NOT create amount transactions in financial ledgers or alter monetary balance.
     return localReturn;
   }
 
@@ -196,10 +172,25 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
       }
     }
 
-    final box = hiveService.getBox(_getBoxName(returnEntity.type));
-    await box.put(returnEntity.id, _returnToMap(returnEntity));
+    await db.transaction(() async {
+      await db.into(db.invoiceReturns).insertOnConflictUpdate(_returnToCompanion(returnEntity));
+      await (db.delete(db.invoiceReturnItems)..where((t) => t.returnId.equals(returnEntity.id))).go();
 
-    // Calculate stock delta: (newQty - oldQty)
+      for (var item in returnEntity.items) {
+        await db.into(db.invoiceReturnItems).insert(
+          InvoiceReturnItemsCompanion.insert(
+            returnId: returnEntity.id,
+            productId: item.productId,
+            productName: item.productName,
+            sku: Value(item.sku),
+            originalQuantity: Value(item.originalQuantity),
+            returnedQuantity: Value(item.returnedQuantity),
+            unitPrice: Value(item.unitPrice),
+          ),
+        );
+      }
+    });
+
     for (var item in returnEntity.items) {
       final oldQty = oldQtyMap[item.productId] ?? 0;
       final qtyDiff = item.returnedQuantity - oldQty;

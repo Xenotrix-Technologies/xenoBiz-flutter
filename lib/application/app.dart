@@ -63,7 +63,8 @@ class XenoBizApp extends StatelessWidget {
               expenseRepository: getIt(),
               customerRepository: getIt(),
               returnsRepository: getIt(),
-              hiveService: getIt(),
+              incomeRepository: getIt(),
+              db: getIt(),
             )..add(FetchSalesOverviewDataEvent()),
           ),
           BlocProvider<DailyLedgerBloc>(
@@ -71,7 +72,7 @@ class XenoBizApp extends StatelessWidget {
               invoiceRepository: getIt(),
               expenseRepository: getIt(),
               customerRepository: getIt(),
-              hiveService: getIt(),
+              db: getIt(),
             )..add(FetchDailyLedgerDataEvent(DateTime.now())),
           ),
           BlocProvider<AccountsBloc>(
@@ -79,7 +80,7 @@ class XenoBizApp extends StatelessWidget {
               customerRepository: getIt(),
               expenseRepository: getIt(),
               invoiceRepository: getIt(),
-              hiveService: getIt(),
+              db: getIt(),
             )..add(const FetchAccountsEvent()),
           ),
           BlocProvider<GlobalSearchBloc>(
@@ -89,12 +90,10 @@ class XenoBizApp extends StatelessWidget {
               productRepository: getIt(),
               expenseRepository: getIt(),
               purchaseRepository: getIt(),
-              hiveService: getIt(),
+              db: getIt(),
             )..add(LoadRecentSearchesEvent()),
           ),
         ],
-
-
 
       child: MaterialApp.router(
         title: 'XenoBiz Manager',

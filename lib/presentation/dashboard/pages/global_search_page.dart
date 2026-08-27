@@ -213,7 +213,7 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
     }
 
     if (state is GlobalSearchLoadedState) {
-      if (state.isEmpty) {
+      if (state.totalResultsCount == 0) {
         return _buildNoResultsView(state.query);
       }
       return _buildSearchResultsList(context, state);

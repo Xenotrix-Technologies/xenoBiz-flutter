@@ -14,6 +14,7 @@ import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/payment_entity.dart';
 import '../../../domain/repositories/expense_repository.dart';
 import '../../../domain/repositories/product_repository.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 
@@ -99,7 +100,10 @@ class _PaymentPageState extends State<PaymentPage> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.go(RouteNames.dashboard);
+        Navigator.of(context).pop();
+        if (context.mounted) {
+          _safePop();
+        }
       }
       return;
     }
@@ -122,7 +126,7 @@ class _PaymentPageState extends State<PaymentPage> {
       status: status,
     );
 
-    _finalInvoiceCreated = finalInvoice;
+    TransactionStackManager.instance.markCurrentCompleted();
 
     // 1. Submit Invoice
     context.read<InvoiceBloc>().add(CreateInvoiceSubmittedEvent(finalInvoice));
@@ -199,6 +203,10 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
+  void _safePop() {
+    TransactionStackManager.instance.handleBackFromCheckout(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isCashSale = widget.customer == null;
@@ -229,21 +237,27 @@ class _PaymentPageState extends State<PaymentPage> {
 
     final isPurchase = widget.invoice.type == InvoiceType.purchase;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                children: [
-                  // Back Button Card
-                  InkWell(
-                    onTap: () => context.pop(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _safePop();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  children: [
+                    // Back Button Card
+                    InkWell(
+                      onTap: _safePop,
                     borderRadius:
                         BorderRadius.circular(AppSizes.radiusMedium),
                     child: Container(
@@ -656,17 +670,31 @@ class _PaymentPageState extends State<PaymentPage> {
                   backgroundColor: AppColors.success,
                 ),
               );
-              final enteredAmt = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
-              context.go(
-                RouteNames.invoiceResult,
-                extra: {
-                  'invoice': _finalInvoiceCreated ?? widget.invoice,
-                  'customer': widget.customer,
-                  'paymentMethod': _selectedPaymentMethod,
-                  'amountPaid': enteredAmt,
-                  'previousBalance': widget.customer?.outstandingBalance ?? 0.0,
-                },
-              );
+              final enteredAmt =
+                  double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
+              final targetInvoice = _finalInvoiceCreated ?? widget.invoice;
+              final targetCustomer = widget.customer;
+              final targetPaymentMethod = _selectedPaymentMethod;
+              final targetPrevBalance =
+                  widget.customer?.outstandingBalance ?? 0.0;
+
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) {
+                  context.pushReplacement(
+                    RouteNames.invoiceResult,
+                    extra: {
+                      'invoice': targetInvoice,
+                      'customer': targetCustomer,
+                      'paymentMethod': targetPaymentMethod,
+                      'amountPaid': enteredAmt,
+                      'previousBalance': targetPrevBalance,
+                    },
+                  );
+                }
+              });
             } else if (state is InvoiceErrorState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -685,8 +713,9 @@ class _PaymentPageState extends State<PaymentPage> {
           },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SummaryRow extends StatelessWidget {

@@ -1,6 +1,5 @@
 import 'package:get_it/get_it.dart';
 
-
 import '../../domain/repositories/repositories.dart';
 import '../../domain/usecases/create_invoice_usecase.dart';
 import '../../domain/usecases/record_payment_usecase.dart';
@@ -12,29 +11,27 @@ import '../../infrastructure/repositories/category_repository_impl.dart';
 import '../../infrastructure/repositories/expense_repository_impl.dart';
 import '../../infrastructure/repositories/income_repository_impl.dart';
 import '../../infrastructure/repositories/invoice_repository_impl.dart';
-
 import '../../infrastructure/repositories/product_repository_impl.dart';
 import '../../infrastructure/repositories/purchase_repository_impl.dart';
 import '../../infrastructure/repositories/returns_repository_impl.dart';
 import '../../infrastructure/repositories/subscription_repository_impl.dart';
 import '../../infrastructure/repositories/sync_repository_impl.dart';
+import '../../infrastructure/repositories/accounting_repository.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
-
 
 import '../../domain/repositories/billing_customer_repository.dart';
 import '../../infrastructure/repositories/billing_customer_repository_impl.dart';
 
-import '../../infrastructure/storage/hive_service.dart';
+import '../../infrastructure/database/app_database.dart';
+import '../../infrastructure/services/voucher_sequence_service.dart';
 import '../../infrastructure/storage/secure_storage_service.dart';
 
 final GetIt getIt = GetIt.instance;
 
 Future<void> configureDependencies() async {
-  // 1. Core Services & Storage
-  final hiveService = HiveService();
-  await hiveService.init();
-  await hiveService.seedDummyDataIfEmpty();
-  getIt.registerSingleton<HiveService>(hiveService);
+  // 1. Core Database & Services
+  final db = AppDatabase();
+  getIt.registerSingleton<AppDatabase>(db);
 
   final secureStorage = SecureStorageService();
   getIt.registerSingleton<SecureStorageService>(secureStorage);
@@ -45,10 +42,14 @@ Future<void> configureDependencies() async {
   final networkChecker = NetworkChecker();
   getIt.registerSingleton<NetworkChecker>(networkChecker);
 
+  getIt.registerLazySingleton<VoucherSequenceService>(
+    () => VoucherSequenceService(db),
+  );
+
   // 2. Sync Repository
   getIt.registerLazySingleton<SyncRepository>(
     () => SyncRepositoryImpl(
-      hiveService: getIt(),
+      db: getIt(),
       dioClient: getIt(),
       networkChecker: getIt(),
     ),
@@ -58,13 +59,13 @@ Future<void> configureDependencies() async {
   getIt.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(
       dioClient: getIt(),
-      hiveService: getIt(),
+      db: getIt(),
       secureStorage: getIt(),
     ),
   );
 
   getIt.registerLazySingleton<SubscriptionRepository>(
-    () => SubscriptionRepositoryImpl(hiveService: getIt()),
+    () => SubscriptionRepositoryImpl(db: getIt()),
   );
 
   getIt.registerLazySingleton<CategoryRepository>(
@@ -74,18 +75,16 @@ Future<void> configureDependencies() async {
   getIt.registerLazySingleton<BillingCustomerRepository>(
     () => BillingCustomerRepositoryImpl(
       dioClient: getIt(),
-      hiveService: getIt(),
+      db: getIt(),
       networkChecker: getIt(),
       syncRepository: getIt(),
     ),
   );
 
-
-
   getIt.registerLazySingleton<ProductRepository>(
     () => ProductRepositoryImpl(
       dioClient: getIt(),
-      hiveService: getIt(),
+      db: getIt(),
       networkChecker: getIt(),
       syncRepository: getIt(),
     ),
@@ -94,16 +93,14 @@ Future<void> configureDependencies() async {
   getIt.registerLazySingleton<InvoiceRepository>(
     () => InvoiceRepositoryImpl(
       dioClient: getIt(),
-      hiveService: getIt(),
+      db: getIt(),
       networkChecker: getIt(),
       syncRepository: getIt(),
     ),
   );
 
-
-
   getIt.registerLazySingleton<ExpenseRepository>(
-    () => ExpenseRepositoryImpl(hiveService: getIt()),
+    () => ExpenseRepositoryImpl(db: getIt()),
   );
 
   getIt.registerLazySingleton<IncomeRepository>(
@@ -111,23 +108,25 @@ Future<void> configureDependencies() async {
   );
 
   getIt.registerLazySingleton<PurchaseRepository>(
-    () => PurchaseRepositoryImpl(dioClient: getIt(), hiveService: getIt()),
+    () => PurchaseRepositoryImpl(dioClient: getIt(), db: getIt()),
   );
 
   getIt.registerLazySingleton<TaxSettingsRepository>(
-    () => TaxSettingsRepositoryImpl(hiveService: getIt()),
+    () => TaxSettingsRepositoryImpl(db: getIt()),
   );
 
   getIt.registerLazySingleton<ReturnsRepository>(
     () => ReturnsRepositoryImpl(
-      hiveService: getIt(),
+      db: getIt(),
       productRepository: getIt(),
       customerRepository: getIt(),
       purchaseRepository: getIt(),
     ),
   );
 
-
+  getIt.registerLazySingleton<AccountingRepository>(
+    () => AccountingRepository(getIt()),
+  );
 
   // 4. Use Cases
   getIt.registerLazySingleton<CreateInvoiceUseCase>(

@@ -5,9 +5,12 @@ import 'invoice_return_entity.dart';
 import 'payment_entity.dart';
 
 enum SalesTransactionType {
-  invoice,
+  sale,
   salesReturn,
+  purchase,
+  purchaseReturn,
   payment,
+  receipt,
 }
 
 class SalesTransactionWrapper extends Equatable {
@@ -37,22 +40,40 @@ class SalesTransactionWrapper extends Equatable {
     required this.originalEntity,
   });
 
-  bool get isInvoice => type == SalesTransactionType.invoice;
-  bool get isReturn => type == SalesTransactionType.salesReturn;
-  bool get isPayment => type == SalesTransactionType.payment;
+  bool get isSale => type == SalesTransactionType.sale;
+  bool get isPurchase => type == SalesTransactionType.purchase;
+  bool get isInvoice => isSale || isPurchase;
 
-  InvoiceEntity? get asInvoice => isInvoice ? (originalEntity as InvoiceEntity) : null;
-  InvoiceReturnEntity? get asReturn => isReturn ? (originalEntity as InvoiceReturnEntity) : null;
-  PaymentEntity? get asPayment => isPayment ? (originalEntity as PaymentEntity) : null;
+  bool get isSalesReturn => type == SalesTransactionType.salesReturn;
+  bool get isPurchaseReturn => type == SalesTransactionType.purchaseReturn;
+  bool get isReturn => isSalesReturn || isPurchaseReturn;
+
+  bool get isPayment => type == SalesTransactionType.payment;
+  bool get isReceipt => type == SalesTransactionType.receipt;
+
+  InvoiceEntity? get asInvoice =>
+      originalEntity is InvoiceEntity ? (originalEntity as InvoiceEntity) : null;
+  InvoiceReturnEntity? get asReturn =>
+      originalEntity is InvoiceReturnEntity
+          ? (originalEntity as InvoiceReturnEntity)
+          : null;
+  PaymentEntity? get asPayment =>
+      originalEntity is PaymentEntity ? (originalEntity as PaymentEntity) : null;
 
   String get typeLabel {
     switch (type) {
-      case SalesTransactionType.invoice:
-        return 'INVOICE';
+      case SalesTransactionType.sale:
+        return 'SALE';
       case SalesTransactionType.salesReturn:
         return 'SALES RETURN';
+      case SalesTransactionType.purchase:
+        return 'PURCHASE';
+      case SalesTransactionType.purchaseReturn:
+        return 'PURCHASE RETURN';
       case SalesTransactionType.payment:
-        return 'PAYMENT';
+        return 'MONEY OUT';
+      case SalesTransactionType.receipt:
+        return 'MONEY IN';
     }
   }
 

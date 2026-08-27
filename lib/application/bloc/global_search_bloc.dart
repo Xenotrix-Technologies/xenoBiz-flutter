@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,7 +12,7 @@ import '../../domain/repositories/expense_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/repositories/product_repository.dart';
 import '../../domain/repositories/purchase_repository.dart';
-import '../../infrastructure/storage/hive_service.dart';
+import '../../infrastructure/database/app_database.dart';
 
 // Events
 abstract class GlobalSearchEvent extends Equatable {
@@ -25,7 +26,7 @@ class LoadRecentSearchesEvent extends GlobalSearchEvent {}
 
 class PerformGlobalSearchEvent extends GlobalSearchEvent {
   final String query;
-  final String categoryFilter;
+  final String categoryFilter; // All, Customers, Invoices, Products, Expenses, Purchases
 
   const PerformGlobalSearchEvent({
     required this.query,
@@ -47,6 +48,7 @@ class ChangeSearchCategoryFilterEvent extends GlobalSearchEvent {
 
 class AddRecentSearchQueryEvent extends GlobalSearchEvent {
   final String query;
+
   const AddRecentSearchQueryEvent(this.query);
 
   @override
@@ -109,13 +111,29 @@ class GlobalSearchLoadedState extends GlobalSearchState {
   });
 
   int get totalResultsCount =>
-      customers.length +
-      invoices.length +
-      products.length +
-      expenses.length +
-      purchases.length;
+      customers.length + invoices.length + products.length + expenses.length + purchases.length;
 
-  bool get isEmpty => totalResultsCount == 0;
+  GlobalSearchLoadedState copyWith({
+    String? query,
+    String? categoryFilter,
+    List<CustomerEntity>? customers,
+    List<InvoiceEntity>? invoices,
+    List<ProductEntity>? products,
+    List<ExpenseEntity>? expenses,
+    List<PurchaseEntity>? purchases,
+    List<String>? recentSearches,
+  }) {
+    return GlobalSearchLoadedState(
+      query: query ?? this.query,
+      categoryFilter: categoryFilter ?? this.categoryFilter,
+      customers: customers ?? this.customers,
+      invoices: invoices ?? this.invoices,
+      products: products ?? this.products,
+      expenses: expenses ?? this.expenses,
+      purchases: purchases ?? this.purchases,
+      recentSearches: recentSearches ?? this.recentSearches,
+    );
+  }
 
   @override
   List<Object?> get props => [
@@ -146,7 +164,7 @@ class GlobalSearchBloc extends Bloc<GlobalSearchEvent, GlobalSearchState> {
   final ProductRepository productRepository;
   final ExpenseRepository expenseRepository;
   final PurchaseRepository purchaseRepository;
-  final HiveService hiveService;
+  final AppDatabase db;
 
   GlobalSearchBloc({
     required this.customerRepository,
@@ -154,7 +172,7 @@ class GlobalSearchBloc extends Bloc<GlobalSearchEvent, GlobalSearchState> {
     required this.productRepository,
     required this.expenseRepository,
     required this.purchaseRepository,
-    required this.hiveService,
+    required this.db,
   }) : super(const GlobalSearchInitialState()) {
     on<LoadRecentSearchesEvent>(_onLoadRecentSearches);
     on<PerformGlobalSearchEvent>(_onPerformGlobalSearch);
@@ -164,27 +182,26 @@ class GlobalSearchBloc extends Bloc<GlobalSearchEvent, GlobalSearchState> {
     on<ClearGlobalSearchEvent>(_onClearGlobalSearch);
   }
 
-  List<String> _getRecentSearchesFromHive() {
+  Future<List<String>> _getRecentSearchesFromDb() async {
     try {
-      final box = hiveService.getBox(HiveService.boxBusiness);
-      final raw = box.get('recent_global_searches');
-      if (raw is List) {
-        return raw.map((e) => e.toString()).toList();
+      final raw = await db.getKeyValue('recent_global_searches');
+      if (raw != null) {
+        final List list = jsonDecode(raw);
+        return list.map((e) => e.toString()).toList();
       }
     } catch (_) {}
     return [];
   }
 
-  Future<void> _saveRecentSearchesToHive(List<String> list) async {
+  Future<void> _saveRecentSearchesToDb(List<String> list) async {
     try {
-      final box = hiveService.getBox(HiveService.boxBusiness);
-      await box.put('recent_global_searches', list);
+      await db.putKeyValue('recent_global_searches', jsonEncode(list));
     } catch (_) {}
   }
 
-  void _onLoadRecentSearches(
-      LoadRecentSearchesEvent event, Emitter<GlobalSearchState> emit) {
-    final recent = _getRecentSearchesFromHive();
+  Future<void> _onLoadRecentSearches(
+      LoadRecentSearchesEvent event, Emitter<GlobalSearchState> emit) async {
+    final recent = await _getRecentSearchesFromDb();
     emit(GlobalSearchInitialState(recentSearches: recent));
   }
 
@@ -192,7 +209,7 @@ class GlobalSearchBloc extends Bloc<GlobalSearchEvent, GlobalSearchState> {
       PerformGlobalSearchEvent event, Emitter<GlobalSearchState> emit) async {
     final q = event.query.trim().toLowerCase();
     if (q.isEmpty) {
-      final recent = _getRecentSearchesFromHive();
+      final recent = await _getRecentSearchesFromDb();
       emit(GlobalSearchInitialState(recentSearches: recent));
       return;
     }
@@ -203,63 +220,67 @@ class GlobalSearchBloc extends Bloc<GlobalSearchEvent, GlobalSearchState> {
     ));
 
     try {
-      final recent = _getRecentSearchesFromHive();
+      final allCustomers = await customerRepository.getCustomers();
+      final allInvoices = await invoiceRepository.getInvoices();
+      final allProducts = await productRepository.getProducts();
+      final allExpenses = await expenseRepository.getExpenses();
+      final allPurchases = await purchaseRepository.getPurchaseOrders();
+      final recent = await _getRecentSearchesFromDb();
 
-      // Query across all repositories in parallel
-      final results = await Future.wait([
-        customerRepository.getCustomers(),
-        invoiceRepository.getInvoices(),
-        productRepository.getProducts(),
-        expenseRepository.getExpenses(),
-        purchaseRepository.getPurchaseOrders(),
-      ]);
+      List<CustomerEntity> matchedCustomers = [];
+      List<InvoiceEntity> matchedInvoices = [];
+      List<ProductEntity> matchedProducts = [];
+      List<ExpenseEntity> matchedExpenses = [];
+      List<PurchaseEntity> matchedPurchases = [];
 
-      final allCustomers = results[0] as List<CustomerEntity>;
-      final allInvoices = results[1] as List<InvoiceEntity>;
-      final allProducts = results[2] as List<ProductEntity>;
-      final allExpenses = results[3] as List<ExpenseEntity>;
-      final allPurchases = results[4] as List<PurchaseEntity>;
+      final cat = event.categoryFilter;
 
-      // Filter Customers
-      final matchedCustomers = allCustomers.where((c) {
-        return c.name.toLowerCase().contains(q) ||
-            c.phone.toLowerCase().contains(q) ||
-            c.email.toLowerCase().contains(q) ||
-            c.address.toLowerCase().contains(q);
-      }).toList();
+      if (cat == 'All' || cat == 'Customers') {
+        matchedCustomers = allCustomers.where((c) {
+          return c.name.toLowerCase().contains(q) ||
+              c.phone.toLowerCase().contains(q) ||
+              c.email.toLowerCase().contains(q) ||
+              c.address.toLowerCase().contains(q);
+        }).toList();
+      }
 
-      // Filter Invoices
-      final matchedInvoices = allInvoices.where((inv) {
-        return inv.invoiceNumber.toLowerCase().contains(q) ||
-            inv.customerName.toLowerCase().contains(q) ||
-            inv.customerPhone.toLowerCase().contains(q) ||
-            inv.notes.toLowerCase().contains(q) ||
-            inv.grandTotal.toString().contains(q);
-      }).toList();
+      if (cat == 'All' || cat == 'Invoices') {
+        matchedInvoices = allInvoices.where((i) {
+          return i.invoiceNumber.toLowerCase().contains(q) ||
+              i.customerName.toLowerCase().contains(q) ||
+              i.customerPhone.toLowerCase().contains(q) ||
+              i.grandTotal.toString().contains(q) ||
+              i.notes.toLowerCase().contains(q);
+        }).toList();
+      }
 
-      // Filter Products
-      final matchedProducts = allProducts.where((p) {
-        return p.name.toLowerCase().contains(q) ||
-            p.sku.toLowerCase().contains(q) ||
-            p.category.toLowerCase().contains(q) ||
-            p.description.toLowerCase().contains(q);
-      }).toList();
+      if (cat == 'All' || cat == 'Products') {
+        matchedProducts = allProducts.where((p) {
+          return p.name.toLowerCase().contains(q) ||
+              p.sku.toLowerCase().contains(q) ||
+              p.barcode.toLowerCase().contains(q) ||
+              p.category.toLowerCase().contains(q) ||
+              p.description.toLowerCase().contains(q);
+        }).toList();
+      }
 
-      // Filter Expenses
-      final matchedExpenses = allExpenses.where((e) {
-        return e.title.toLowerCase().contains(q) ||
-            e.category.toLowerCase().contains(q) ||
-            e.notes.toLowerCase().contains(q) ||
-            e.amount.toString().contains(q);
-      }).toList();
+      if (cat == 'All' || cat == 'Expenses') {
+        matchedExpenses = allExpenses.where((e) {
+          return e.title.toLowerCase().contains(q) ||
+              e.category.toLowerCase().contains(q) ||
+              e.amount.toString().contains(q) ||
+              e.notes.toLowerCase().contains(q);
+        }).toList();
+      }
 
-      // Filter Purchases
-      final matchedPurchases = allPurchases.where((pur) {
-        return pur.poNumber.toLowerCase().contains(q) ||
-            pur.supplierName.toLowerCase().contains(q) ||
-            pur.notes.toLowerCase().contains(q) ||
-            pur.totalAmount.toString().contains(q);
-      }).toList();
+      if (cat == 'All' || cat == 'Purchases') {
+        matchedPurchases = allPurchases.where((p) {
+          return p.poNumber.toLowerCase().contains(q) ||
+              p.supplierName.toLowerCase().contains(q) ||
+              p.totalAmount.toString().contains(q) ||
+              p.notes.toLowerCase().contains(q);
+        }).toList();
+      }
 
       emit(GlobalSearchLoadedState(
         query: event.query,
@@ -276,64 +297,54 @@ class GlobalSearchBloc extends Bloc<GlobalSearchEvent, GlobalSearchState> {
     }
   }
 
-  void _onChangeCategoryFilter(
-      ChangeSearchCategoryFilterEvent event, Emitter<GlobalSearchState> emit) {
+  Future<void> _onChangeCategoryFilter(
+      ChangeSearchCategoryFilterEvent event, Emitter<GlobalSearchState> emit) async {
     if (state is GlobalSearchLoadedState) {
       final current = state as GlobalSearchLoadedState;
-      emit(GlobalSearchLoadedState(
+      add(PerformGlobalSearchEvent(
         query: current.query,
         categoryFilter: event.categoryFilter,
-        customers: current.customers,
-        invoices: current.invoices,
-        products: current.products,
-        expenses: current.expenses,
-        purchases: current.purchases,
-        recentSearches: current.recentSearches,
       ));
     }
   }
 
   Future<void> _onAddRecentSearchQuery(
       AddRecentSearchQueryEvent event, Emitter<GlobalSearchState> emit) async {
-    final q = event.query.trim();
-    if (q.isEmpty) return;
+    final query = event.query.trim();
+    if (query.isEmpty) return;
 
-    final recent = _getRecentSearchesFromHive();
-    recent.removeWhere((item) => item.toLowerCase() == q.toLowerCase());
-    recent.insert(0, q);
-    if (recent.length > 10) {
-      recent.removeRange(10, recent.length);
+    final current = await _getRecentSearchesFromDb();
+    final updated = List<String>.from(current);
+    updated.removeWhere((item) => item.toLowerCase() == query.toLowerCase());
+    updated.insert(0, query);
+    if (updated.length > 5) {
+      updated.removeLast();
     }
-    await _saveRecentSearchesToHive(recent);
+
+    await _saveRecentSearchesToDb(updated);
 
     if (state is GlobalSearchInitialState) {
-      emit(GlobalSearchInitialState(recentSearches: recent));
+      emit(GlobalSearchInitialState(recentSearches: updated));
+    } else if (state is GlobalSearchLoadedState) {
+      final curLoaded = state as GlobalSearchLoadedState;
+      emit(curLoaded.copyWith(recentSearches: updated));
     }
   }
 
   Future<void> _onClearRecentSearches(
       ClearRecentSearchesEvent event, Emitter<GlobalSearchState> emit) async {
-    await _saveRecentSearchesToHive([]);
+    await _saveRecentSearchesToDb([]);
     if (state is GlobalSearchInitialState) {
       emit(const GlobalSearchInitialState(recentSearches: []));
     } else if (state is GlobalSearchLoadedState) {
-      final current = state as GlobalSearchLoadedState;
-      emit(GlobalSearchLoadedState(
-        query: current.query,
-        categoryFilter: current.categoryFilter,
-        customers: current.customers,
-        invoices: current.invoices,
-        products: current.products,
-        expenses: current.expenses,
-        purchases: current.purchases,
-        recentSearches: const [],
-      ));
+      final curLoaded = state as GlobalSearchLoadedState;
+      emit(curLoaded.copyWith(recentSearches: []));
     }
   }
 
-  void _onClearGlobalSearch(
-      ClearGlobalSearchEvent event, Emitter<GlobalSearchState> emit) {
-    final recent = _getRecentSearchesFromHive();
+  Future<void> _onClearGlobalSearch(
+      ClearGlobalSearchEvent event, Emitter<GlobalSearchState> emit) async {
+    final recent = await _getRecentSearchesFromDb();
     emit(GlobalSearchInitialState(recentSearches: recent));
   }
 }

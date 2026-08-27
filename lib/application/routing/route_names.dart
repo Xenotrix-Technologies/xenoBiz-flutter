@@ -19,7 +19,9 @@ abstract class RouteNames {
   static const String products = '/products';
   static const String productDetails = '/product-details';
   static const String stockManagement = '/stock-management';
-  static const String stockAdjustment = '/stock-adjustment';
+
+  // Services
+  static const String services = '/services';
 
   // Invoices & Sales
   static const String invoices = '/invoices';
@@ -27,6 +29,7 @@ abstract class RouteNames {
   static const String invoiceDetails = '/invoice-details';
   static const String invoiceResult = '/invoice-result';
   static const String invoiceSettings = '/invoice-settings';
+  static const String voucherPrefixSettings = '/voucher-prefix-settings';
   static const String salesOverview = '/sales-overview';
   static const String payment = '/payment';
   static const String addProducts = '/add-products';
@@ -72,5 +75,44 @@ abstract class RouteNames {
   static const String income = '/income';
   static const String expense = '/expense';
   static const String categories = '/categories';
+
+  // Advanced Accounting & Business Hub Modules
+  static const String journal = '/journal';
+  static const String newJournalEntry = '/new-journal-entry';
+  static const String contra = '/contra';
+  static const String newContraEntry = '/new-contra-entry';
+  static const String dailyBook = '/daily-book';
+  static const String ledger = '/ledger';
+  static const String cashBank = '/cash-bank';
+  static const String receivables = '/receivables';
+  static const String payables = '/payables';
+  static const String trialBalance = '/trial-balance';
+
+  // GST & Taxation
+  static const String gstTaxation = '/gst-taxation';
+  static const String eInvoice = '/e-invoice';
+  static const String eWayBill = '/e-way-bill';
+  static const String hsnSacSummary = '/hsn-sac-summary';
+  static const String inputTaxCredit = '/input-tax-credit';
+
+  // Secondary Sales & Inventory Modules
+  static const String quotations = '/quotations';
+  static const String proformaInvoices = '/proforma-invoices';
+  static const String deliveryChallans = '/delivery-challans';
+  static const String creditNotes = '/credit-notes';
+  static const String debitNotes = '/debit-notes';
+  static const String stockTransfer = '/stock-transfer';
+  static const String stockValuation = '/stock-valuation';
+  static const String lowStockReport = '/low-stock-report';
+  static const String stockMovement = '/stock-movement';
+
+  // Business Tools & Admin
+  static const String recurringInvoices = '/recurring-invoices';
+  static const String importData = '/import-data';
+  static const String exportData = '/export-data';
+  static const String documentTemplates = '/document-templates';
+  static const String staffUsers = '/staff-users';
+  static const String printerSettings = '/printer-settings';
+  static const String notificationSettings = '/notification-settings';
 }
 

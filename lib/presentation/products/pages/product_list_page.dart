@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +21,7 @@ class ProductListPage extends StatefulWidget {
 
 class _ProductListPageState extends State<ProductListPage> {
   final _searchController = TextEditingController();
+  Completer<void>? _refreshCompleter;
 
   @override
   void initState() {
@@ -26,7 +29,30 @@ class _ProductListPageState extends State<ProductListPage> {
     context.read<ProductBloc>().add(const FetchProductsEvent());
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
+  Future<void> _handleRefresh(ProductsLoadedState state) async {
+    final bloc = context.read<ProductBloc>();
+    final streamFuture = bloc.stream.firstWhere(
+      (s) => s is ProductsLoadedState || s is ProductErrorState,
+    );
+    bloc.add(
+      FetchProductsEvent(
+        query: _searchController.text,
+        stockFilter: state.selectedStockFilter,
+        category: state.selectedCategory,
+        sortBy: state.sortBy,
+      ),
+    );
+    await Future.any([
+      streamFuture,
+      Future.delayed(const Duration(milliseconds: 800)),
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,17 +62,6 @@ class _ProductListPageState extends State<ProductListPage> {
         title: const Text(AppStrings.inventoryTitle),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.tune),
-            onPressed: () async {
-              await context.push(RouteNames.stockAdjustment);
-              if (context.mounted) {
-                context.read<ProductBloc>().add(const FetchProductsEvent());
-              }
-            },
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: null,
@@ -54,7 +69,19 @@ class _ProductListPageState extends State<ProductListPage> {
         onPressed: () async {
           await context.push(RouteNames.createMaster, extra: 0);
           if (context.mounted) {
-            context.read<ProductBloc>().add(const FetchProductsEvent());
+            final currentState = context.read<ProductBloc>().state;
+            if (currentState is ProductsLoadedState) {
+              context.read<ProductBloc>().add(
+                    FetchProductsEvent(
+                      query: _searchController.text,
+                      stockFilter: currentState.selectedStockFilter,
+                      category: currentState.selectedCategory,
+                      sortBy: currentState.sortBy,
+                    ),
+                  );
+            } else {
+              context.read<ProductBloc>().add(const FetchProductsEvent());
+            }
           }
         },
         child: const Icon(Icons.add, color: Colors.white),
@@ -71,36 +98,80 @@ class _ProductListPageState extends State<ProductListPage> {
               controller: _searchController,
               prefixIcon: Icons.search,
               onChanged: (q) {
-                context.read<ProductBloc>().add(FetchProductsEvent(query: q));
+                final currentState = context.read<ProductBloc>().state;
+                if (currentState is ProductsLoadedState) {
+                  context.read<ProductBloc>().add(
+                        FetchProductsEvent(
+                          query: q,
+                          stockFilter: currentState.selectedStockFilter,
+                          category: currentState.selectedCategory,
+                          sortBy: currentState.sortBy,
+                        ),
+                      );
+                } else {
+                  context.read<ProductBloc>().add(FetchProductsEvent(query: q));
+                }
               },
             ),
           ),
           Expanded(
-            child: BlocBuilder<ProductBloc, ProductState>(
+            child: BlocConsumer<ProductBloc, ProductState>(
+              listener: (context, state) {
+                if (state is ProductsLoadedState || state is ProductErrorState) {
+                  if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
+                    _refreshCompleter!.complete();
+                  }
+                }
+                if (state is ProductErrorState) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to refresh catalog: ${state.message}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
               builder: (context, state) {
                 if (state is ProductLoadingState) {
                   return const ProductListSkeleton();
                 }
                 if (state is ProductsLoadedState) {
-                  if (state.products.isEmpty) {
-                    return const EmptyState(
-                      title: 'No Products Found',
-                      message: 'Create your inventory catalog to start billing & tracking stock.',
+                  final physicalProducts = state.products.where((p) => p.isProduct).toList();
+                  Widget content;
+                  if (physicalProducts.isEmpty) {
+                    content = SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Container(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        alignment: Alignment.center,
+                        child: const EmptyState(
+                          title: 'No Products Found',
+                          message: 'Create your inventory catalog to start billing & tracking stock.',
+                        ),
+                      ),
                     );
-                  }
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: state.products.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (ctx, idx) {
-                      final p = state.products[idx];
-                      return AppCard(
-                        onTap: () async {
-                          await context.push(RouteNames.productDetails, extra: p);
-                          if (context.mounted) {
-                            context.read<ProductBloc>().add(const FetchProductsEvent());
-                          }
-                        },
+                  } else {
+                    content = ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: physicalProducts.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, idx) {
+                        final p = physicalProducts[idx];
+                        return AppCard(
+                          onTap: () async {
+                            await context.push(RouteNames.productDetails, extra: p);
+                            if (context.mounted) {
+                              context.read<ProductBloc>().add(
+                                    FetchProductsEvent(
+                                      query: _searchController.text,
+                                      stockFilter: state.selectedStockFilter,
+                                      category: state.selectedCategory,
+                                      sortBy: state.sortBy,
+                                    ),
+                                  );
+                            }
+                          },
                         child: Row(
                           children: [
                             Container(
@@ -131,7 +202,9 @@ class _ProductListPageState extends State<ProductListPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${p.sku} • ${p.category}',
+                                    p.sku.trim().isNotEmpty
+                                        ? 'SKU: ${p.sku} • ${p.category.isNotEmpty ? p.category : "General"}'
+                                        : (p.category.isNotEmpty ? p.category : 'General'),
                                     style: const TextStyle(fontSize: 13, color: AppColors.outline),
                                   ),
                                 ],
@@ -195,6 +268,12 @@ class _ProductListPageState extends State<ProductListPage> {
                         ),
                       );
                     },
+                  );
+                  }
+                  return RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () => _handleRefresh(state),
+                    child: content,
                   );
                 }
 

@@ -1,67 +1,54 @@
+import 'package:drift/drift.dart';
 import '../../domain/entities/income_entity.dart';
 import '../../domain/repositories/income_repository.dart';
-import '../storage/hive_service.dart';
+import '../database/app_database.dart';
 
 class IncomeRepositoryImpl implements IncomeRepository {
-  final HiveService _hiveService;
+  final AppDatabase db;
 
-  IncomeRepositoryImpl(this._hiveService);
+  IncomeRepositoryImpl(this.db);
+
+  IncomeEntity _rowToIncome(IncomeData row) {
+    return IncomeEntity(
+      id: row.id,
+      title: row.title,
+      category: row.category,
+      amount: row.amount,
+      paymentMode: row.paymentMode,
+      incomeDate: row.incomeDate,
+      notes: row.notes,
+    );
+  }
+
+  IncomeCompanion _incomeToCompanion(IncomeEntity i) {
+    return IncomeCompanion(
+      id: Value(i.id),
+      title: Value(i.title),
+      category: Value(i.category),
+      amount: Value(i.amount),
+      paymentMode: Value(i.paymentMode),
+      incomeDate: Value(i.incomeDate),
+      notes: Value(i.notes),
+    );
+  }
 
   @override
   Future<void> createIncome(IncomeEntity income) async {
-    final box = _hiveService.getBox(HiveService.boxIncome);
-    final map = {
-      'id': income.id,
-      'title': income.title,
-      'category': income.category,
-      'amount': income.amount,
-      'paymentMode': income.paymentMode,
-      'incomeDate': income.incomeDate.toIso8601String(),
-      'notes': income.notes,
-    };
-    await box.put(income.id, map);
+    await db.into(db.income).insertOnConflictUpdate(_incomeToCompanion(income));
   }
 
   @override
   Future<List<IncomeEntity>> getIncomes() async {
-    final box = _hiveService.getBox(HiveService.boxIncome);
-    final list = <IncomeEntity>[];
-    for (var key in box.keys) {
-      final map = box.get(key);
-      if (map is Map) {
-        list.add(IncomeEntity(
-          id: map['id']?.toString() ?? key.toString(),
-          title: map['title']?.toString() ?? '',
-          category: map['category']?.toString() ?? '',
-          amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-          paymentMode: map['paymentMode']?.toString() ?? 'Cash',
-          incomeDate: map['incomeDate'] != null
-              ? DateTime.tryParse(map['incomeDate'].toString()) ?? DateTime.now()
-              : DateTime.now(),
-          notes: map['notes']?.toString() ?? '',
-        ));
-      }
-    }
-    list.sort((a, b) => b.incomeDate.compareTo(a.incomeDate));
-    return list;
+    final q = db.select(db.income)..orderBy([(t) => OrderingTerm.desc(t.incomeDate)]);
+    final rows = await q.get();
+    return rows.map(_rowToIncome).toList();
   }
 
   @override
   Future<IncomeEntity?> getIncome(String id) async {
-    final box = _hiveService.getBox(HiveService.boxIncome);
-    final map = box.get(id);
-    if (map is Map) {
-      return IncomeEntity(
-        id: map['id']?.toString() ?? id,
-        title: map['title']?.toString() ?? '',
-        category: map['category']?.toString() ?? '',
-        amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-        paymentMode: map['paymentMode']?.toString() ?? 'Cash',
-        incomeDate: map['incomeDate'] != null
-            ? DateTime.tryParse(map['incomeDate'].toString()) ?? DateTime.now()
-            : DateTime.now(),
-        notes: map['notes']?.toString() ?? '',
-      );
+    final row = await (db.select(db.income)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      return _rowToIncome(row);
     }
     return null;
   }
@@ -73,7 +60,6 @@ class IncomeRepositoryImpl implements IncomeRepository {
 
   @override
   Future<void> deleteIncome(String id) async {
-    final box = _hiveService.getBox(HiveService.boxIncome);
-    await box.delete(id);
+    await (db.delete(db.income)..where((t) => t.id.equals(id))).go();
   }
 }

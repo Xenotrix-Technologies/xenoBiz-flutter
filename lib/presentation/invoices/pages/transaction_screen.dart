@@ -3,18 +3,25 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../application/di/injection.dart';
+import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/category_entity.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/expense_entity.dart';
 import '../../../domain/entities/income_entity.dart';
+import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/purchase_entity.dart';
 import '../../../domain/repositories/category_repository.dart';
 import '../../../domain/repositories/customer_repository.dart';
 import '../../../domain/repositories/expense_repository.dart';
 import '../../../domain/repositories/income_repository.dart';
 import '../../../domain/repositories/purchase_repository.dart';
+import '../../../infrastructure/services/voucher_sequence_service.dart';
+import '../../../application/services/transaction_stack_manager.dart';
 import '../../widgets/app_button.dart';
+import '../widgets/common_voucher_app_bar.dart';
+import '../widgets/voucher_summary_card.dart';
+import 'return_voucher_screen.dart';
 
 enum TransactionType { income, expense }
 
@@ -62,6 +69,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
     {'label': 'Other', 'icon': Icons.circle_outlined},
   ];
 
+  late final String _sessionId =
+      'session_${DateTime.now().microsecondsSinceEpoch}';
+
+  bool get _hasUnsavedData {
+    final amt = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
+    return amt > 0 ||
+        _selectedParty != null ||
+        _descriptionCtrl.text.trim().isNotEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +89,22 @@ class _TransactionScreenState extends State<TransactionScreen> {
     _selectedPaymentMethod = 'Cash';
 
     _loadData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      TransactionStackManager.instance.registerSession(
+        TransactionSession(
+          id: _sessionId,
+          type: isExpense
+              ? TransactionTypeCategory.moneyOut
+              : TransactionTypeCategory.moneyIn,
+          isEdit: isEditMode,
+          entityId: isExpense
+              ? (widget.existingTransaction as ExpenseEntity?)?.id
+              : (widget.existingTransaction as IncomeEntity?)?.id,
+          hasMeaningfulData: () => _hasUnsavedData,
+        ),
+      );
+    });
   }
 
   Future<void> _loadData() async {
@@ -100,14 +133,29 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       if (isEditMode) {
         _populateData();
-      } else if (_categories.isNotEmpty) {
-        _selectedCategory = _categories.first;
-        _selectedCategoryId = _selectedCategory!.id;
-        _customCategoryName = _selectedCategory!.name;
+      } else {
+        _loadVoucherId();
+        if (_categories.isNotEmpty) {
+          _selectedCategory = _categories.first;
+          _selectedCategoryId = _selectedCategory!.id;
+          _customCategoryName = _selectedCategory!.name;
+        }
       }
     } catch (_) {}
     if (mounted) {
       setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  String _generatedVoucherId = '';
+
+  Future<void> _loadVoucherId() async {
+    final type = isExpense ? VoucherType.payment : VoucherType.receipt;
+    final generated = await VoucherSequenceService.instance.generateNextVoucherId(type);
+    if (mounted) {
+      setState(() {
+        _generatedVoucherId = generated;
+      });
     }
   }
 
@@ -223,6 +271,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   @override
   void dispose() {
+    TransactionStackManager.instance.unregisterSession(_sessionId);
     _amountCtrl.dispose();
     _descriptionCtrl.dispose();
     _partySearchCtrl.dispose();
@@ -289,6 +338,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           await getIt<ExpenseRepository>().updateExpense(expense);
         } else {
           await getIt<ExpenseRepository>().createExpense(expense);
+          await VoucherSequenceService.instance.incrementSequence(VoucherType.payment);
         }
       } else {
         final existing = widget.existingTransaction as IncomeEntity?;
@@ -309,9 +359,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
           await getIt<IncomeRepository>().updateIncome(income);
         } else {
           await getIt<IncomeRepository>().createIncome(income);
+          await VoucherSequenceService.instance.incrementSequence(VoucherType.receipt);
         }
       }
 
+      TransactionStackManager.instance.markCompleted(_sessionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -319,7 +371,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop(true);
+        _safePop();
       }
     } catch (e) {
       if (mounted) {
@@ -331,21 +383,372 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
   }
 
+  void _showMoreBottomSheet() {
+    final title = isExpense ? 'Payment Voucher' : 'Receipt Voucher';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'More Options',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildMoreSheetTile(
+                icon: isExpense
+                    ? Icons.business_outlined
+                    : Icons.person_add_alt_1_outlined,
+                iconColor: AppColors.primary,
+                iconBgColor: AppColors.primary.withValues(alpha: 0.1),
+                title: 'Add Party',
+                subtitle: isExpense
+                    ? 'Create a new supplier account'
+                    : 'Create a new customer account',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(RouteNames.createMaster,
+                      extra: isExpense ? 2 : 1);
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildMoreSheetTile(
+                icon: Icons.note_add_outlined,
+                iconColor: AppColors.primary,
+                iconBgColor: AppColors.primary.withValues(alpha: 0.1),
+                title: 'Add Another Voucher',
+                subtitle: 'Create another voucher without losing this one',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAddAnotherVoucherSheet();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildMoreSheetTile(
+                icon: Icons.delete_outline,
+                iconColor: AppColors.danger,
+                iconBgColor: AppColors.danger.withValues(alpha: 0.1),
+                title: 'Discard Voucher',
+                titleColor: AppColors.danger,
+                subtitle: 'Permanently remove this voucher draft',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVoucherIdBanner(String voucherId) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.confirmation_number_outlined,
+                  color: AppColors.primaryBlue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Voucher / Transaction ID',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              voucherId.isEmpty
+                  ? (isExpense ? 'PMT-#00-0001' : 'RCT-#00-0001')
+                  : voucherId,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddAnotherVoucherSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Add Another Voucher',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.darkBlueText,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Select voucher type to create without losing current progress',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildMoreSheetTile(
+                icon: Icons.receipt_long_outlined,
+                iconColor: AppColors.primary,
+                iconBgColor: AppColors.primary.withValues(alpha: 0.1),
+                title: 'Add Sale Voucher',
+                subtitle: 'Create a sales invoice / bill',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(
+                    RouteNames.createInvoice,
+                    extra: {'invoiceType': InvoiceType.sale},
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildMoreSheetTile(
+                icon: Icons.assignment_return_outlined,
+                iconColor: const Color(0xFF7C3AED),
+                iconBgColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                title: 'Add Sales Return Voucher',
+                subtitle: 'Create a sales return / credit note',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(
+                    RouteNames.createReturn,
+                    extra: {'returnType': ReturnType.salesReturn},
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildMoreSheetTile(
+                icon: Icons.shopping_bag_outlined,
+                iconColor: const Color(0xFF0D9488),
+                iconBgColor: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                title: 'Add Purchase Voucher',
+                subtitle: 'Create a purchase invoice / bill',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(
+                    RouteNames.createInvoice,
+                    extra: {'invoiceType': InvoiceType.purchase},
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildMoreSheetTile(
+                icon: Icons.assignment_return_outlined,
+                iconColor: const Color(0xFFD97706),
+                iconBgColor: const Color(0xFFD97706).withValues(alpha: 0.1),
+                title: 'Add Purchase Return Voucher',
+                subtitle: 'Create a purchase return / debit note',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(
+                    RouteNames.createReturn,
+                    extra: {'returnType': ReturnType.purchaseReturn},
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildMoreSheetTile(
+                icon: Icons.arrow_upward_rounded,
+                iconColor: AppColors.danger,
+                iconBgColor: AppColors.danger.withValues(alpha: 0.1),
+                title: 'Add Payment Voucher',
+                subtitle: 'Record an expense / payment made',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(RouteNames.expense);
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildMoreSheetTile(
+                icon: Icons.arrow_downward_rounded,
+                iconColor: AppColors.success,
+                iconBgColor: AppColors.success.withValues(alpha: 0.1),
+                title: 'Add Receipt Voucher',
+                subtitle: 'Record an income / receipt received',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(RouteNames.income);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMoreSheetTile({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color titleColor = AppColors.darkBlueText,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: titleColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                size: 18, color: AppColors.secondaryText),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _safePop() {
+    TransactionStackManager.instance
+        .handleBackFromTransaction(context, _sessionId);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final title = isExpense ? 'Expense' : 'Income';
-    final amountLabel = isExpense ? 'EXPENSE AMOUNT' : 'INCOME AMOUNT';
-    final partyLabel = isExpense ? 'Supplier / Account' : 'Customer / Account';
-    final partyHint = isExpense ? 'Search supplier name or phone' : 'Search customer name or phone';
+    final title = isExpense
+        ? (isEditMode ? 'Edit Money Out' : 'Add Money Out')
+        : (isEditMode ? 'Edit Money In' : 'Add Money In');
+    final amountLabel = isExpense ? 'MONEY OUT AMOUNT' : 'MONEY IN AMOUNT';
+    final partyLabel = 'Party / Account';
+    final partyHint = 'Search party name or phone';
+    final amount = double.tryParse(_amountCtrl.text) ?? 0.0;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(isEditMode ? 'Edit $title' : title),
-        backgroundColor: AppColors.deepNavy,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _safePop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: CommonVoucherAppBar(
+          title: title,
+          onBackPressed: _safePop,
+          onMorePressed: _showMoreBottomSheet,
+        ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -422,6 +825,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             const SizedBox(height: 20),
 
             // SECTION 2: CUSTOMER / SUPPLIER SELECTION (Optional)
+            _buildVoucherIdBanner(_generatedVoucherId),
             Row(
               children: [
                 Text(
@@ -739,20 +1143,82 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 32),
-
-            // SAVE / UPDATE BUTTON
-            AppButton(
-              text: isEditMode
-                  ? (isExpense ? 'Update Expense' : 'Update Income')
-                  : (isExpense ? 'Save Expense' : 'Save Income'),
-              onPressed: _submit,
-              isLoading: _isSaving,
+            const SizedBox(height: 20),
+            VoucherSummaryCard(
+              subtotal: amount,
+              totalTax: 0.0,
+              discountAmount: 0.0,
+              extraCharges: 0.0,
+              grandTotal: amount,
             ),
             const SizedBox(height: 24),
           ],
         ),
       ),
-    );
-  }
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.only(
+          left: 16.0,
+          right: 16.0,
+          top: 12.0,
+          bottom: 12.0 + MediaQuery.of(context).padding.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Total Amount',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Total = ₹${amount.toStringAsFixed(2)} /-',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 5,
+              child: AppButton(
+                text: isEditMode
+                    ? (isExpense ? 'Update Payment' : 'Update Receipt')
+                    : (isExpense ? 'Save Payment' : 'Save Receipt'),
+                onPressed: _submit,
+                isLoading: _isSaving,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 }

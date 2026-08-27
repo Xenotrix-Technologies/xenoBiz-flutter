@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../application/bloc/blocs.dart';
 import '../../../application/di/injection.dart';
 import '../../../const/colors.dart';
+import '../../../infrastructure/database/app_database.dart';
 import '../../../infrastructure/services/backup_restore_service.dart';
-import '../../../infrastructure/storage/hive_service.dart';
 import '../../widgets/app_card.dart';
 
 class BackupRestorePage extends StatefulWidget {
@@ -26,13 +26,13 @@ class _BackupRestorePageState extends State<BackupRestorePage> {
   @override
   void initState() {
     super.initState();
-    _backupService = BackupRestoreService(getIt<HiveService>());
+    _backupService = BackupRestoreService(getIt<AppDatabase>());
     _loadInitialData();
   }
 
   Future<void> _loadInitialData() async {
     final location = await _backupService.getBackupLocationPath();
-    final info = _backupService.getLastBackupInfo();
+    final info = await _backupService.getLastBackupInfo();
     if (mounted) {
       setState(() {
         _currentBackupLocation = location;

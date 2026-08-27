@@ -2,19 +2,19 @@ import 'package:dio/dio.dart';
 import '../../domain/entities/business_entity.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../database/app_database.dart';
 import '../network/api_endpoints.dart';
 import '../network/dio_client.dart';
-import '../storage/hive_service.dart';
 import '../storage/secure_storage_service.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final DioClient dioClient;
-  final HiveService hiveService;
+  final AppDatabase db;
   final SecureStorageService secureStorage;
 
   AuthRepositoryImpl({
     required this.dioClient,
-    required this.hiveService,
+    required this.db,
     required this.secureStorage,
   });
 
@@ -39,34 +39,31 @@ class AuthRepositoryImpl implements AuthRepository {
           createdAt: DateTime.tryParse(userData['createdAt']?.toString() ?? userData['created_at']?.toString() ?? '') ?? DateTime.now(),
         );
 
-        final boxBiz = hiveService.getBox(HiveService.boxBusiness);
         if (bizData != null) {
-          await boxBiz.put('id', bizData['id']?.toString() ?? '');
-          await boxBiz.put('name', bizData['name']?.toString() ?? '');
-          await boxBiz.put('email', bizData['email']?.toString());
-          await boxBiz.put('gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString());
-          await boxBiz.put('category', (bizData['category'] ?? bizData['business_type'] ?? '').toString());
-          await boxBiz.put('currency', (bizData['currency'] ?? '₹').toString());
-          await boxBiz.put('phone', bizData['phone']?.toString() ?? '');
-          await boxBiz.put('address', bizData['address']?.toString() ?? '');
-          await boxBiz.put('logoUrl', (bizData['logoUrl'] ?? bizData['logo'])?.toString());
+          await db.putKeyValue('biz_id', bizData['id']?.toString() ?? '');
+          await db.putKeyValue('biz_name', bizData['name']?.toString() ?? '');
+          await db.putKeyValue('biz_email', bizData['email']?.toString() ?? '');
+          await db.putKeyValue('biz_gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString() ?? '');
+          await db.putKeyValue('biz_category', (bizData['category'] ?? bizData['business_type'] ?? '').toString());
+          await db.putKeyValue('biz_currency', (bizData['currency'] ?? '₹').toString());
+          await db.putKeyValue('biz_phone', bizData['phone']?.toString() ?? '');
+          await db.putKeyValue('biz_address', bizData['address']?.toString() ?? '');
+          await db.putKeyValue('biz_logoUrl', (bizData['logoUrl'] ?? bizData['logo'])?.toString() ?? '');
         } else {
-          await boxBiz.clear();
+          await db.clearKeyValuesWithPrefix('biz_');
         }
 
         return user;
       }
     } catch (e) {
-      // Fallback to cached Hive user if offline
-      final box = hiveService.getBox(HiveService.boxAuth);
-      final userId = box.get('userId')?.toString();
+      final userId = await db.getKeyValue('auth_userId');
       if (userId != null && userId.isNotEmpty) {
         return UserEntity(
           id: userId,
-          name: box.get('userName')?.toString() ?? 'Business Owner',
-          email: box.get('userEmail')?.toString() ?? 'owner@xenobiz.com',
-          phone: box.get('userPhone')?.toString() ?? '+91 98470 11223',
-          businessId: box.get('businessId')?.toString() ?? 'biz_101',
+          name: await db.getKeyValue('auth_userName') ?? 'Business Owner',
+          email: await db.getKeyValue('auth_userEmail') ?? 'owner@xenobiz.com',
+          phone: await db.getKeyValue('auth_userPhone') ?? '+91 98470 11223',
+          businessId: await db.getKeyValue('auth_businessId') ?? 'biz_101',
           role: 'OWNER',
           createdAt: DateTime.now(),
         );
@@ -103,9 +100,8 @@ class AuthRepositoryImpl implements AuthRepository {
       } catch (_) {}
     }
 
-    final box = hiveService.getBox(HiveService.boxBusiness);
-    final id = box.get('id')?.toString();
-    final name = box.get('name')?.toString();
+    final id = await db.getKeyValue('biz_id');
+    final name = await db.getKeyValue('biz_name');
     if (id == null || id.isEmpty || name == null || name.isEmpty) {
       return null;
     }
@@ -113,13 +109,13 @@ class AuthRepositoryImpl implements AuthRepository {
     return BusinessEntity(
       id: id,
       name: name,
-      email: box.get('email')?.toString(),
-      gstin: box.get('gstin')?.toString(),
-      category: box.get('category')?.toString() ?? '',
-      currency: box.get('currency')?.toString() ?? '₹',
-      phone: box.get('phone')?.toString() ?? '',
-      address: box.get('address')?.toString() ?? '',
-      logoUrl: box.get('logoUrl')?.toString(),
+      email: await db.getKeyValue('biz_email'),
+      gstin: await db.getKeyValue('biz_gstin'),
+      category: await db.getKeyValue('biz_category') ?? '',
+      currency: await db.getKeyValue('biz_currency') ?? '₹',
+      phone: await db.getKeyValue('biz_phone') ?? '',
+      address: await db.getKeyValue('biz_address') ?? '',
+      logoUrl: await db.getKeyValue('biz_logoUrl'),
       createdAt: DateTime.now(),
     );
   }
@@ -154,29 +150,27 @@ class AuthRepositoryImpl implements AuthRepository {
           createdAt: DateTime.tryParse(userData['createdAt']?.toString() ?? userData['created_at']?.toString() ?? '') ?? DateTime.now(),
         );
 
-        final boxAuth = hiveService.getBox(HiveService.boxAuth);
-        await boxAuth.put('userId', user.id);
-        await boxAuth.put('userName', user.name);
-        await boxAuth.put('userEmail', user.email);
-        await boxAuth.put('userPhone', user.phone);
+        await db.putKeyValue('auth_userId', user.id);
+        await db.putKeyValue('auth_userName', user.name);
+        await db.putKeyValue('auth_userEmail', user.email);
+        await db.putKeyValue('auth_userPhone', user.phone);
         if (user.businessId != null) {
-          await boxAuth.put('businessId', user.businessId);
+          await db.putKeyValue('auth_businessId', user.businessId!);
         } else {
-          await boxAuth.delete('businessId');
+          await db.deleteKeyValue('auth_businessId');
         }
 
-        final boxBiz = hiveService.getBox(HiveService.boxBusiness);
         if (bizData != null) {
-          await boxBiz.put('id', bizData['id']?.toString() ?? '');
-          await boxBiz.put('name', bizData['name']?.toString() ?? '');
-          await boxBiz.put('email', bizData['email']?.toString());
-          await boxBiz.put('gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString());
-          await boxBiz.put('category', (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString());
-          await boxBiz.put('currency', (bizData['currency'] ?? '₹').toString());
-          await boxBiz.put('phone', bizData['phone']?.toString() ?? '');
-          await boxBiz.put('address', bizData['address']?.toString() ?? '');
+          await db.putKeyValue('biz_id', bizData['id']?.toString() ?? '');
+          await db.putKeyValue('biz_name', bizData['name']?.toString() ?? '');
+          await db.putKeyValue('biz_email', bizData['email']?.toString() ?? '');
+          await db.putKeyValue('biz_gstin', (bizData['gstin'] ?? bizData['tax_number'])?.toString() ?? '');
+          await db.putKeyValue('biz_category', (bizData['category'] ?? bizData['business_type'] ?? 'Retail Store').toString());
+          await db.putKeyValue('biz_currency', (bizData['currency'] ?? '₹').toString());
+          await db.putKeyValue('biz_phone', bizData['phone']?.toString() ?? '');
+          await db.putKeyValue('biz_address', bizData['address']?.toString() ?? '');
         } else {
-          await boxBiz.clear();
+          await db.clearKeyValuesWithPrefix('biz_');
         }
 
         return user;
@@ -223,11 +217,10 @@ class AuthRepositoryImpl implements AuthRepository {
           createdAt: DateTime.now(),
         );
 
-        final boxAuth = hiveService.getBox(HiveService.boxAuth);
-        await boxAuth.put('userId', user.id);
-        await boxAuth.put('userName', user.name);
-        await boxAuth.put('userEmail', user.email);
-        await boxAuth.put('userPhone', user.phone);
+        await db.putKeyValue('auth_userId', user.id);
+        await db.putKeyValue('auth_userName', user.name);
+        await db.putKeyValue('auth_userEmail', user.email);
+        await db.putKeyValue('auth_userPhone', user.phone);
 
         return user;
       } else {
@@ -235,7 +228,6 @@ class AuthRepositoryImpl implements AuthRepository {
       }
     } on DioException catch (e) {
       if (e.response == null) {
-        // Offline / server unreachable fallback
         final userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
         final user = UserEntity(
           id: userId,
@@ -250,11 +242,10 @@ class AuthRepositoryImpl implements AuthRepository {
         final offlineToken = 'offline_token_$userId';
         await secureStorage.saveAccessToken(offlineToken);
 
-        final boxAuth = hiveService.getBox(HiveService.boxAuth);
-        await boxAuth.put('userId', user.id);
-        await boxAuth.put('userName', user.name);
-        await boxAuth.put('userEmail', user.email);
-        await boxAuth.put('userPhone', user.phone);
+        await db.putKeyValue('auth_userId', user.id);
+        await db.putKeyValue('auth_userName', user.name);
+        await db.putKeyValue('auth_userEmail', user.email);
+        await db.putKeyValue('auth_userPhone', user.phone);
 
         return user;
       }
@@ -293,53 +284,47 @@ class AuthRepositoryImpl implements AuthRepository {
           createdAt: DateTime.tryParse(b['createdAt']?.toString() ?? b['created_at']?.toString() ?? '') ?? DateTime.now(),
         );
 
-        final box = hiveService.getBox(HiveService.boxBusiness);
-        await box.put('id', saved.id);
-        await box.put('name', saved.name);
-        await box.put('email', saved.email);
-        await box.put('gstin', saved.gstin);
-        await box.put('category', saved.category);
-        await box.put('currency', saved.currency);
-        await box.put('phone', saved.phone);
-        await box.put('address', saved.address);
+        await db.putKeyValue('biz_id', saved.id);
+        await db.putKeyValue('biz_name', saved.name);
+        await db.putKeyValue('biz_email', saved.email ?? '');
+        await db.putKeyValue('biz_gstin', saved.gstin ?? '');
+        await db.putKeyValue('biz_category', saved.category);
+        await db.putKeyValue('biz_currency', saved.currency);
+        await db.putKeyValue('biz_phone', saved.phone);
+        await db.putKeyValue('biz_address', saved.address);
 
         return saved;
       }
     } catch (_) {}
 
-    // Local save fallback
-    final box = hiveService.getBox(HiveService.boxBusiness);
-    await box.put('id', business.id);
-    await box.put('name', business.name);
-    await box.put('email', business.email);
-    await box.put('gstin', business.gstin);
-    await box.put('category', business.category);
-    await box.put('currency', business.currency);
-    await box.put('phone', business.phone);
-    await box.put('address', business.address);
+    await db.putKeyValue('biz_id', business.id);
+    await db.putKeyValue('biz_name', business.name);
+    await db.putKeyValue('biz_email', business.email ?? '');
+    await db.putKeyValue('biz_gstin', business.gstin ?? '');
+    await db.putKeyValue('biz_category', business.category);
+    await db.putKeyValue('biz_currency', business.currency);
+    await db.putKeyValue('biz_phone', business.phone);
+    await db.putKeyValue('biz_address', business.address);
 
     return business;
   }
 
   @override
   Future<BusinessEntity> updateBusinessProfile(BusinessEntity business) async {
-    // 1. Store in Hive local storage (single source of truth for app)
-    final box = hiveService.getBox(HiveService.boxBusiness);
-    await box.put('id', business.id);
-    await box.put('name', business.name);
-    await box.put('email', business.email);
-    await box.put('gstin', business.gstin);
-    await box.put('category', business.category);
-    await box.put('currency', business.currency);
-    await box.put('phone', business.phone);
-    await box.put('address', business.address);
+    await db.putKeyValue('biz_id', business.id);
+    await db.putKeyValue('biz_name', business.name);
+    await db.putKeyValue('biz_email', business.email ?? '');
+    await db.putKeyValue('biz_gstin', business.gstin ?? '');
+    await db.putKeyValue('biz_category', business.category);
+    await db.putKeyValue('biz_currency', business.currency);
+    await db.putKeyValue('biz_phone', business.phone);
+    await db.putKeyValue('biz_address', business.address);
     if (business.logoUrl != null && business.logoUrl!.isNotEmpty) {
-      await box.put('logoUrl', business.logoUrl);
+      await db.putKeyValue('biz_logoUrl', business.logoUrl!);
     } else {
-      await box.delete('logoUrl');
+      await db.deleteKeyValue('biz_logoUrl');
     }
 
-    // 2. Synchronize to Node-PGSQL backend
     try {
       final response = await dioClient.dio.put(
         ApiEndpoints.profile,
@@ -372,9 +357,7 @@ class AuthRepositoryImpl implements AuthRepository {
         );
         return synced;
       }
-    } catch (_) {
-      // Offline fallback: profile updated locally and will sync when backend is reachable
-    }
+    } catch (_) {}
 
     return business;
   }
@@ -385,14 +368,12 @@ class AuthRepositoryImpl implements AuthRepository {
     required String email,
     required String phone,
   }) async {
-    // 1. Save locally to Hive boxAuth
-    final boxAuth = hiveService.getBox(HiveService.boxAuth);
-    await boxAuth.put('userName', name);
-    await boxAuth.put('userEmail', email);
-    await boxAuth.put('userPhone', phone);
+    await db.putKeyValue('auth_userName', name);
+    await db.putKeyValue('auth_userEmail', email);
+    await db.putKeyValue('auth_userPhone', phone);
 
-    final userId = boxAuth.get('userId')?.toString() ?? '';
-    final businessId = boxAuth.get('businessId')?.toString();
+    final userId = await db.getKeyValue('auth_userId') ?? '';
+    final businessId = await db.getKeyValue('auth_businessId');
 
     final localUser = UserEntity(
       id: userId,
@@ -404,7 +385,6 @@ class AuthRepositoryImpl implements AuthRepository {
       createdAt: DateTime.now(),
     );
 
-    // 2. Synchronize to Node-PGSQL backend
     try {
       final response = await dioClient.dio.put(
         ApiEndpoints.profile,
@@ -437,7 +417,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String currentPassword,
     required String newPassword,
   }) async {
-    // Synchronize password update to Node-PGSQL backend
     try {
       final response = await dioClient.dio.post(
         ApiEndpoints.changePassword,
@@ -456,14 +435,11 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 
-
   @override
   Future<void> logout() async {
     await secureStorage.clearTokens();
-    final boxAuth = hiveService.getBox(HiveService.boxAuth);
-    await boxAuth.clear();
-    final boxBiz = hiveService.getBox(HiveService.boxBusiness);
-    await boxBiz.clear();
+    await db.clearKeyValuesWithPrefix('auth_');
+    await db.clearKeyValuesWithPrefix('biz_');
   }
 
   @override
@@ -474,13 +450,12 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<bool> isTrialOnboardingCompleted() async {
-    final boxAuth = hiveService.getBox(HiveService.boxAuth);
-    return boxAuth.get('trialOnboardingCompleted') == true;
+    final val = await db.getKeyValue('auth_trialOnboardingCompleted');
+    return val == 'true';
   }
 
   @override
   Future<void> setTrialOnboardingCompleted(bool completed) async {
-    final boxAuth = hiveService.getBox(HiveService.boxAuth);
-    await boxAuth.put('trialOnboardingCompleted', completed);
+    await db.putKeyValue('auth_trialOnboardingCompleted', completed.toString());
   }
 }

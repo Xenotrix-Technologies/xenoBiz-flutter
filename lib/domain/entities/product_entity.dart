@@ -12,6 +12,7 @@ class ProductEntity extends Equatable {
   final int reorderLevel;
   final String unit; // Pcs, Kg, Box, etc.
   final double? taxPercentage; // Configured GST rate for product if set
+  final String hsnCode; // HSN Code for Products / SAC for Services
   final String description;
   final bool isActive;
   final DateTime createdAt;
@@ -29,15 +30,19 @@ class ProductEntity extends Equatable {
     this.reorderLevel = 5,
     this.unit = 'Pcs',
     this.taxPercentage,
+    this.hsnCode = '',
     this.description = '',
     this.isActive = true,
     required this.createdAt,
     this.updatedAt,
   });
 
-  bool get isOutOfStock => stockQuantity <= 0;
-  bool get isLowStock => stockQuantity > 0 && stockQuantity <= reorderLevel;
-  bool get isHealthy => stockQuantity > reorderLevel;
+  bool get isService => unit.trim().toLowerCase() == 'service';
+  bool get isProduct => !isService;
+
+  bool get isOutOfStock => isProduct && stockQuantity <= 0;
+  bool get isLowStock => isProduct && stockQuantity > 0 && stockQuantity <= reorderLevel;
+  bool get isHealthy => isProduct && stockQuantity > reorderLevel;
 
   ProductEntity copyWith({
     String? id,
@@ -51,6 +56,7 @@ class ProductEntity extends Equatable {
     int? reorderLevel,
     String? unit,
     double? taxPercentage,
+    String? hsnCode,
     String? description,
     bool? isActive,
     DateTime? createdAt,
@@ -68,6 +74,7 @@ class ProductEntity extends Equatable {
       reorderLevel: reorderLevel ?? this.reorderLevel,
       unit: unit ?? this.unit,
       taxPercentage: taxPercentage ?? this.taxPercentage,
+      hsnCode: hsnCode ?? this.hsnCode,
       description: description ?? this.description,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
@@ -88,6 +95,7 @@ class ProductEntity extends Equatable {
         reorderLevel,
         unit,
         taxPercentage,
+        hsnCode,
         description,
         isActive,
         createdAt,

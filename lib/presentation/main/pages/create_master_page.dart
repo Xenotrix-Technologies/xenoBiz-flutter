@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -11,7 +10,6 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../../domain/entities/purchase_entity.dart';
-import '../../../infrastructure/services/stock_import_service.dart';
 import '../../widgets/app_card.dart';
 
 class CreateMasterPage extends StatefulWidget {
@@ -21,6 +19,7 @@ class CreateMasterPage extends StatefulWidget {
   final CustomerEntity? customerToEdit;
   final SupplierEntity? supplierToEdit;
   final ExpenseAccountSummary? expenseToEdit;
+  final bool initialIsService;
 
   const CreateMasterPage({
     super.key,
@@ -29,6 +28,7 @@ class CreateMasterPage extends StatefulWidget {
     this.customerToEdit,
     this.supplierToEdit,
     this.expenseToEdit,
+    this.initialIsService = false,
   });
 
   @override
@@ -51,7 +51,11 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   // Product / Item Form Controllers
   final _prodNameCtrl = TextEditingController();
   final _prodSkuCtrl = TextEditingController();
-  final _prodCategoryCtrl = TextEditingController(text: 'Grocery');
+  final _prodBarcodeCtrl = TextEditingController();
+  final _prodCategoryCtrl = TextEditingController(text: 'General');
+  final _prodHsnCtrl = TextEditingController();
+  final _prodUnitCtrl = TextEditingController(text: 'PCS');
+  final _prodTaxCtrl = TextEditingController(text: '0.00');
   final _prodPurchasePriceCtrl = TextEditingController(text: '0.00');
   final _prodSellingPriceCtrl = TextEditingController(text: '0.00');
   final _prodStockCtrl = TextEditingController(text: '0');
@@ -113,10 +117,14 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     if (widget.productToEdit != null) {
       _activeTab = 0;
       final p = widget.productToEdit!;
-      _itemOrServiceIndex = (p.unit == 'Service') ? 1 : 0;
+      _itemOrServiceIndex = p.isService ? 1 : 0;
       _prodNameCtrl.text = p.name;
       _prodSkuCtrl.text = p.sku;
-      _prodCategoryCtrl.text = p.category;
+      _prodBarcodeCtrl.text = p.barcode;
+      _prodHsnCtrl.text = p.hsnCode;
+      _prodUnitCtrl.text = p.unit.isNotEmpty ? p.unit.toUpperCase() : (p.isService ? 'SERVICE' : 'PCS');
+      _prodCategoryCtrl.text = p.category.isNotEmpty ? p.category : 'General';
+      _serviceSacCtrl.text = p.hsnCode;
       _prodPurchasePriceCtrl.text = p.purchasePrice > 0
           ? (p.purchasePrice % 1 == 0
               ? p.purchasePrice.toInt().toString()
@@ -129,9 +137,11 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       _prodLowStockCtrl.text = p.reorderLevel.toString();
       _prodDescCtrl.text = p.description;
       if (p.taxPercentage != null) {
-        _serviceTaxCtrl.text = p.taxPercentage! % 1 == 0
+        final taxStr = p.taxPercentage! % 1 == 0
             ? p.taxPercentage!.toInt().toString()
             : p.taxPercentage!.toStringAsFixed(2);
+        _prodTaxCtrl.text = taxStr;
+        _serviceTaxCtrl.text = taxStr;
       }
     } else if (widget.customerToEdit != null) {
       _activeTab = 1;
@@ -166,6 +176,10 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           : e.outstandingBalance.toStringAsFixed(2);
     } else {
       _activeTab = widget.initialTabIndex;
+      if (widget.initialIsService) {
+        _itemOrServiceIndex = 1;
+        _prodCategoryCtrl.text = 'Services';
+      }
     }
   }
 
@@ -269,14 +283,9 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       _showErrorSnackBar('Please enter a valid service price');
       return;
     }
-    final category = _prodCategoryCtrl.text.trim().isNotEmpty
-        ? _prodCategoryCtrl.text.trim()
-        : 'Services';
-    final sku = _prodSkuCtrl.text.trim().isNotEmpty
-        ? _prodSkuCtrl.text.trim()
-        : (_serviceSacCtrl.text.trim().isNotEmpty
-            ? _serviceSacCtrl.text.trim()
-            : 'SRV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
+    final sku = _prodSkuCtrl.text.trim();
+    final sacCode = _serviceSacCtrl.text.trim();
+    final unit = _prodUnitCtrl.text.trim().isNotEmpty ? _prodUnitCtrl.text.trim() : 'Service';
     final tax = double.tryParse(_serviceTaxCtrl.text.trim()) ?? 0.0;
 
     if (widget.productToEdit != null) {
@@ -284,14 +293,15 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       final updatedService = existing.copyWith(
         name: name,
         sku: sku,
-        barcode: sku,
-        category: category,
+        barcode: sacCode,
+        category: 'Services',
         sellingPrice: sellingPrice,
         purchasePrice: 0.0,
         stockQuantity: 0,
         reorderLevel: 0,
-        unit: 'Service',
+        unit: unit,
         taxPercentage: tax,
+        hsnCode: sacCode,
         description: _prodDescCtrl.text.trim(),
         updatedAt: DateTime.now(),
       );
@@ -305,14 +315,15 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         id: 'srv_${DateTime.now().millisecondsSinceEpoch}',
         name: name,
         sku: sku,
-        barcode: sku,
-        category: category,
+        barcode: sacCode,
+        category: 'Services',
         sellingPrice: sellingPrice,
         purchasePrice: 0.0,
         stockQuantity: 0,
         reorderLevel: 0,
-        unit: 'Service',
+        unit: unit,
         taxPercentage: tax,
+        hsnCode: sacCode,
         description: _prodDescCtrl.text.trim(),
         createdAt: DateTime.now(),
       );
@@ -325,7 +336,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     if (context.canPop()) {
       context.pop();
     } else {
-      context.go(RouteNames.stockManagement);
+      context.go(RouteNames.services);
     }
   }
 
@@ -347,22 +358,27 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     final lowStock = int.tryParse(_prodLowStockCtrl.text.trim()) ?? 10;
     final category = _prodCategoryCtrl.text.trim().isNotEmpty
         ? _prodCategoryCtrl.text.trim()
-        : 'Grocery';
-    final sku = _prodSkuCtrl.text.trim().isNotEmpty
-        ? _prodSkuCtrl.text.trim()
-        : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+        : 'General';
+    final sku = _prodSkuCtrl.text.trim();
+    final barcode = _prodBarcodeCtrl.text.trim();
+    final hsnCode = _prodHsnCtrl.text.trim();
+    final unit = _prodUnitCtrl.text.trim().isNotEmpty ? _prodUnitCtrl.text.trim() : 'PCS';
+    final tax = double.tryParse(_prodTaxCtrl.text.trim());
 
     if (widget.productToEdit != null) {
       final existing = widget.productToEdit!;
       final updatedProduct = existing.copyWith(
         name: name,
         sku: sku,
-        barcode: sku,
+        barcode: barcode,
         category: category,
         sellingPrice: sellingPrice,
         purchasePrice: purchasePrice,
         stockQuantity: stock,
         reorderLevel: lowStock,
+        unit: unit,
+        taxPercentage: tax,
+        hsnCode: hsnCode,
         description: _prodDescCtrl.text.trim(),
         updatedAt: DateTime.now(),
       );
@@ -376,13 +392,15 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
         name: name,
         sku: sku,
-        barcode: sku,
+        barcode: barcode,
         category: category,
         sellingPrice: sellingPrice,
         purchasePrice: purchasePrice,
         stockQuantity: stock,
         reorderLevel: lowStock,
-        unit: 'Pcs',
+        unit: unit,
+        taxPercentage: tax,
+        hsnCode: hsnCode,
         description: _prodDescCtrl.text.trim(),
         createdAt: DateTime.now(),
       );
@@ -596,7 +614,9 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                                     ? 'Edit Supplier'
                                     : 'Edit Account')))
                         : (_activeTab == 0
-                            ? 'Create Item'
+                            ? (_itemOrServiceIndex == 0
+                                ? 'Create Item'
+                                : 'Create Service')
                             : (_activeTab == 1 || _activeTab == 2
                                 ? 'Create Party'
                                 : 'Create Account')),
@@ -623,9 +643,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // UPPERCASE TAG INDICATOR
-                                _buildTypeIndicatorTag(),
-                                const SizedBox(height: 8),
 
                                 if (_activeTab == 0) _buildAddProductForm(),
                                 if (_activeTab == 1) _buildAddSaleAccountForm(),
@@ -693,49 +710,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildTypeIndicatorTag() {
-    String tagText;
-    switch (_activeTab) {
-      case 0:
-        tagText = 'CREATETYPE.PRODUCT';
-        break;
-      case 1:
-        tagText = 'CREATETYPE.CUSTOMER';
-        break;
-      case 2:
-        tagText = 'CREATETYPE.SUPPLIER';
-        break;
-      case 3:
-        tagText = 'CREATETYPE.INCOME_EXPENSE';
-        break;
-      default:
-        tagText = 'CREATETYPE.ACCOUNT';
-    }
-
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: Color(0xFF0099FF),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          tagText,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0099FF),
-            letterSpacing: 0.6,
-          ),
-        ),
-      ],
     );
   }
 
@@ -994,77 +968,39 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Segmented Switch [ Item | Service ]
-        _buildItemServiceSegmentedControl(),
-        const SizedBox(height: 16),
+        // Segmented Switch [ Item | Service ] - ONLY shown when creating new record
+        if (!isEditMode) ...[
+          _buildItemServiceSegmentedControl(),
+          const SizedBox(height: 16),
+        ],
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.productToEdit != null
-                        ? (isItem ? 'Edit Item' : 'Edit Service')
-                        : (isItem ? 'Add Item' : 'Add Service'),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF050B20),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.productToEdit != null
-                        ? (isItem
-                            ? 'Update item information'
-                            : 'Update service details')
-                        : (isItem
-                            ? 'Add a new item to your inventory'
-                            : 'Add a new service to your business'),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
+            Text(
+              widget.productToEdit != null
+                  ? (isItem ? 'Edit Item' : 'Edit Service')
+                  : (isItem ? 'Add Item' : 'Add Service'),
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF050B20),
               ),
             ),
-            if (isItem)
-              InkWell(
-                onTap: () => _showImportStockDialog(context),
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.file_upload_outlined,
-                          size: 16, color: AppColors.primaryBlue),
-                      SizedBox(width: 4),
-                      Text(
-                        'Upload Excel/CSV',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            const SizedBox(height: 2),
+            Text(
+              widget.productToEdit != null
+                  ? (isItem
+                      ? 'Update item information'
+                      : 'Update service details')
+                  : (isItem
+                      ? 'Add a new item to your inventory'
+                      : 'Add a new service to your business'),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF6B7280),
               ),
+            ),
           ],
         ),
         const SizedBox(height: 14),
@@ -1072,7 +1008,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         if (isItem && _isSkuCameraOn) _buildSkuScannerHeader(),
 
         if (isItem) ...[
-          // Item Name *
+          // ITEM FORM
           _buildFormFieldLabel('Item Name', required: true),
           const SizedBox(height: 6),
           _buildCustomTextField(
@@ -1092,7 +1028,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     const SizedBox(height: 6),
                     _buildCustomTextField(
                       controller: _prodSkuCtrl,
-                      hint: 'Scan or enter',
+                      hint: 'Scan or enter SKU',
                       suffixIcon: InkWell(
                         onTap: _toggleSkuScanner,
                         borderRadius: BorderRadius.circular(8),
@@ -1128,15 +1064,16 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: [
+                            'General',
                             'Grocery',
                             'Beverages',
                             'Electronics',
                             'Clothing',
                             'Services',
-                            'General'
+                            'Other'
                           ].contains(_prodCategoryCtrl.text)
                               ? _prodCategoryCtrl.text
-                              : 'Grocery',
+                              : 'General',
                           isExpanded: true,
                           style: const TextStyle(
                             fontSize: 14,
@@ -1144,12 +1081,13 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                             color: Color(0xFF050B20),
                           ),
                           items: [
+                            'General',
                             'Grocery',
                             'Beverages',
                             'Electronics',
                             'Clothing',
                             'Services',
-                            'General'
+                            'Other'
                           ].map((cat) {
                             return DropdownMenuItem(
                                 value: cat, child: Text(cat));
@@ -1157,6 +1095,82 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                           onChanged: (val) {
                             if (val != null) {
                               setState(() => _prodCategoryCtrl.text = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // HSN Code + Unit Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('HSN Code'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodHsnCtrl,
+                      hint: 'e.g. 1001',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Unit'),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: [
+                            'PCS',
+                            'KG',
+                            'G',
+                            'L',
+                            'M',
+                            'BOX',
+                            'SET'
+                          ].contains(_prodUnitCtrl.text.toUpperCase())
+                              ? _prodUnitCtrl.text.toUpperCase()
+                              : 'PCS',
+                          isExpanded: true,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF050B20),
+                          ),
+                          items: [
+                            'PCS',
+                            'KG',
+                            'G',
+                            'L',
+                            'M',
+                            'BOX',
+                            'SET'
+                          ].map((u) {
+                            return DropdownMenuItem(value: u, child: Text(u));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _prodUnitCtrl.text = val);
                             }
                           },
                         ),
@@ -1207,9 +1221,59 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           ),
           const SizedBox(height: 14),
 
-          // Opening Stock + Low-stock Alert Side-by-Side
+          // Tax / GST Rate + Opening Stock Side-by-Side
           Row(
             children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Tax / GST Rate'),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: [
+                            '0.00',
+                            '5.00',
+                            '12.00',
+                            '18.00',
+                            '28.00'
+                          ].contains(_prodTaxCtrl.text)
+                              ? _prodTaxCtrl.text
+                              : '0.00',
+                          isExpanded: true,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF050B20),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: '0.00', child: Text('Exempt / 0%')),
+                            DropdownMenuItem(value: '5.00', child: Text('5% GST')),
+                            DropdownMenuItem(value: '12.00', child: Text('12% GST')),
+                            DropdownMenuItem(value: '18.00', child: Text('18% GST')),
+                            DropdownMenuItem(value: '28.00', child: Text('28% GST')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _prodTaxCtrl.text = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1224,22 +1288,17 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Low-stock Alert'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodLowStockCtrl,
-                      hint: 'e.g. 10',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ],
-                ),
-              ),
             ],
+          ),
+          const SizedBox(height: 14),
+
+          // Low-stock Alert
+          _buildFormFieldLabel('Low-stock Alert'),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodLowStockCtrl,
+            hint: 'e.g. 10',
+            keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 14),
 
@@ -1251,8 +1310,7 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
             maxLines: 3,
           ),
         ] else ...[
-          // SERVICE FORM
-          // Service Name *
+          // SERVICE FORM (Strictly No Category, Stock, Low Stock, or Inventory controls)
           _buildFormFieldLabel('Service Name', required: true),
           const SizedBox(height: 6),
           _buildCustomTextField(
@@ -1261,82 +1319,23 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           ),
           const SizedBox(height: 14),
 
-          // Service Code + Category Side-by-Side
+          // Service Code + SAC Code Side-by-Side
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildFormFieldLabel('Service Code'),
+                    _buildFormFieldLabel('Service Code / SKU'),
                     const SizedBox(height: 6),
                     _buildCustomTextField(
                       controller: _prodSkuCtrl,
-                      hint: 'e.g. SRV-001',
+                      hint: 'Optional code',
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Category'),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: [
-                            'Services',
-                            'Consulting',
-                            'Maintenance',
-                            'Installation',
-                            'General'
-                          ].contains(_prodCategoryCtrl.text)
-                              ? _prodCategoryCtrl.text
-                              : 'Services',
-                          isExpanded: true,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20),
-                          ),
-                          items: [
-                            'Services',
-                            'Consulting',
-                            'Maintenance',
-                            'Installation',
-                            'General'
-                          ].map((cat) {
-                            return DropdownMenuItem(
-                                value: cat, child: Text(cat));
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _prodCategoryCtrl.text = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // SAC Code + Tax / GST % Side-by-Side
-          Row(
-            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1350,33 +1349,79 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Service Price * + Tax Rate Side-by-Side
+          Row(
+            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildFormFieldLabel('Tax / GST %'),
+                    _buildFormFieldLabel('Service Charge', required: true),
                     const SizedBox(height: 6),
                     _buildCustomTextField(
-                      controller: _serviceTaxCtrl,
-                      hint: 'e.g. 18',
+                      controller: _prodSellingPriceCtrl,
+                      hint: '₹ 0.00',
                       keyboardType: const TextInputType.numberWithOptions(
                           decimal: true),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('GST / Tax Rate'),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: [
+                            '0.00',
+                            '5.00',
+                            '12.00',
+                            '18.00',
+                            '28.00'
+                          ].contains(_serviceTaxCtrl.text)
+                              ? _serviceTaxCtrl.text
+                              : '0.00',
+                          isExpanded: true,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF050B20),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: '0.00', child: Text('Exempt / 0%')),
+                            DropdownMenuItem(value: '5.00', child: Text('5% GST')),
+                            DropdownMenuItem(value: '12.00', child: Text('12% GST')),
+                            DropdownMenuItem(value: '18.00', child: Text('18% GST')),
+                            DropdownMenuItem(value: '28.00', child: Text('28% GST')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _serviceTaxCtrl.text = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: 14),
-
-          // Service Price *
-          _buildFormFieldLabel('Service Price', required: true),
-          const SizedBox(height: 6),
-          _buildCustomTextField(
-            controller: _prodSellingPriceCtrl,
-            hint: '₹ 0.00',
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 14),
 
@@ -1915,509 +1960,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   // ==========================================
   // HELPER WIDGETS
   // ==========================================
-  void _showImportStockDialog(BuildContext context) {
-    final prodState = context.read<ProductBloc>().state;
-    List<ProductEntity> existingProducts = [];
-    if (prodState is ProductsLoadedState) {
-      existingProducts = prodState.allProducts;
-    }
-
-    final textController = TextEditingController(
-      text: StockImportService.generateSampleCsvTemplate(),
-    );
-    StockImportAnalysis analysis = StockImportService.parseAndValidateCsv(
-      textController.text,
-      existingProducts,
-    );
-    DuplicateImportStrategy strategy = DuplicateImportStrategy.addStock;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (sheetCtx, setSheetState) {
-            void reanalyze() {
-              setSheetState(() {
-                analysis = StockImportService.parseAndValidateCsv(
-                  textController.text,
-                  existingProducts,
-                );
-              });
-            }
-
-            return SafeArea(
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(sheetCtx).size.height * 0.88,
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.file_upload_outlined,
-                                  color: AppColors.primaryBlue, size: 22),
-                            ),
-                            const SizedBox(width: 10),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Import Stock (Excel / CSV)',
-                                    style: TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF050B20))),
-                                Text('Upload or paste CSV stock data',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF6B7280))),
-                              ],
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(sheetCtx),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primaryBlue,
-                        side: const BorderSide(color: AppColors.primaryBlue),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(
-                            text: StockImportService
-                                .generateSampleCsvTemplate()));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Sample CSV template copied to clipboard! Paste it into Excel or CSV file.'),
-                            backgroundColor: AppColors.primaryBlue,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text('Download / Copy Excel Template',
-                          style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Paste or Edit CSV Stock Data:',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF050B20))),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: textController,
-                              maxLines: 5,
-                              style: const TextStyle(
-                                  fontSize: 12, fontFamily: 'monospace'),
-                              decoration: InputDecoration(
-                                hintText:
-                                    'Product Name,SKU,Barcode,Category,Selling Price,Cost Price,Opening Stock,Unit,Low Stock Threshold,Description',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                contentPadding: const EdgeInsets.all(10),
-                              ),
-                              onChanged: (_) => reanalyze(),
-                            ),
-                            const SizedBox(height: 14),
-                            const Text('Validation Results:',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF050B20))),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                _ImportMetricChip(
-                                    label: 'Total Rows',
-                                    count: analysis.totalRows,
-                                    color: const Color(0xFF050B20)),
-                                _ImportMetricChip(
-                                    label: 'Valid',
-                                    count: analysis.validRows,
-                                    color: AppColors.success),
-                                _ImportMetricChip(
-                                    label: 'Invalid',
-                                    count: analysis.invalidRows,
-                                    color: analysis.invalidRows > 0
-                                        ? AppColors.danger
-                                        : const Color(0xFF6B7280)),
-                                _ImportMetricChip(
-                                    label: 'Duplicates',
-                                    count: analysis.duplicateRows,
-                                    color: analysis.duplicateRows > 0
-                                        ? AppColors.warning
-                                        : const Color(0xFF6B7280)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (analysis.errorSummary.isNotEmpty) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppColors.danger.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Row Errors:',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            color: AppColors.danger)),
-                                    const SizedBox(height: 4),
-                                    ...analysis.errorSummary.take(3).map(
-                                        (err) => Text('• $err',
-                                            style: const TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors.danger))),
-                                    if (analysis.errorSummary.length > 3)
-                                      Text(
-                                          '+ ${analysis.errorSummary.length - 3} more errors...',
-                                          style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.danger)),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            if (analysis.duplicateRows > 0) ...[
-                              const Text('Duplicate Product Handling Strategy:',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF050B20))),
-                              const SizedBox(height: 6),
-                              Column(
-                                children: [
-                                  ListTile(
-                                    title: const Text('Add Stock (Recommended)',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700)),
-                                    subtitle: const Text(
-                                        'Add imported stock to existing product stock level',
-                                        style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy ==
-                                              DuplicateImportStrategy.addStock
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: strategy ==
-                                              DuplicateImportStrategy.addStock
-                                          ? AppColors.primaryBlue
-                                          : const Color(0xFF6B7280),
-                                    ),
-                                    onTap: () => setSheetState(() => strategy =
-                                        DuplicateImportStrategy.addStock),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                  ListTile(
-                                    title: const Text('Update Existing',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700)),
-                                    subtitle: const Text(
-                                        'Update price, category & overwrite stock level',
-                                        style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy ==
-                                              DuplicateImportStrategy
-                                                  .updateExisting
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: strategy ==
-                                              DuplicateImportStrategy
-                                                  .updateExisting
-                                          ? AppColors.primaryBlue
-                                          : const Color(0xFF6B7280),
-                                    ),
-                                    onTap: () => setSheetState(() => strategy =
-                                        DuplicateImportStrategy.updateExisting),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                  ListTile(
-                                    title: const Text('Skip Duplicates',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700)),
-                                    subtitle: const Text(
-                                        'Ignore duplicate rows and do not import',
-                                        style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy == DuplicateImportStrategy.skip
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: strategy ==
-                                              DuplicateImportStrategy.skip
-                                          ? AppColors.primaryBlue
-                                          : const Color(0xFF6B7280),
-                                    ),
-                                    onTap: () => setSheetState(() => strategy =
-                                        DuplicateImportStrategy.skip),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            const Text('Parsed Rows Preview:',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF050B20))),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 180,
-                              decoration: BoxDecoration(
-                                border:
-                                    Border.all(color: const Color(0xFFE5E7EB)),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.vertical,
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    columnSpacing: 16,
-                                    headingRowHeight: 32,
-                                    dataRowMinHeight: 32,
-                                    dataRowMaxHeight: 36,
-                                    columns: const [
-                                      DataColumn(
-                                          label: Text('Row',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Product Name',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('SKU',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Selling Price',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Opening Stock',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Status',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                    ],
-                                    rows: analysis.rows.map((row) {
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text('#${row.rowIndex}',
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(Text(row.productName,
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w700))),
-                                          DataCell(Text(row.sku,
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(Text(
-                                              '₹${row.sellingPrice.toStringAsFixed(0)}',
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(Text(
-                                              '${row.openingStock} ${row.unit}',
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(
-                                            Text(
-                                              !row.isValid
-                                                  ? 'INVALID'
-                                                  : (row.isDuplicate
-                                                      ? 'DUPLICATE'
-                                                      : 'NEW'),
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w800,
-                                                color: !row.isValid
-                                                    ? AppColors.danger
-                                                    : (row.isDuplicate
-                                                        ? AppColors.warning
-                                                        : AppColors.success),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: analysis.validRows == 0
-                            ? null
-                            : () {
-                                int importedCount = 0;
-                                for (var r in analysis.rows) {
-                                  if (!r.isValid) continue;
-
-                                  if (r.isDuplicate) {
-                                    if (strategy ==
-                                        DuplicateImportStrategy.skip) {
-                                      continue;
-                                    } else if (strategy ==
-                                            DuplicateImportStrategy.addStock &&
-                                        r.existingProductId != null) {
-                                      context.read<ProductBloc>().add(
-                                            AdjustStockEvent(
-                                              productId: r.existingProductId!,
-                                              change: r.openingStock,
-                                              reason: 'Excel/CSV Import',
-                                            ),
-                                          );
-                                      importedCount++;
-                                    } else if (strategy ==
-                                            DuplicateImportStrategy
-                                                .updateExisting &&
-                                        r.existingProductId != null) {
-                                      final updated = ProductEntity(
-                                        id: r.existingProductId!,
-                                        name: r.productName,
-                                        sku: r.sku,
-                                        barcode: r.barcode,
-                                        category: r.category,
-                                        sellingPrice: r.sellingPrice,
-                                        purchasePrice: r.costPrice,
-                                        stockQuantity: r.openingStock,
-                                        unit: r.unit,
-                                        reorderLevel: r.reorderLevel,
-                                        description: r.description,
-                                        createdAt: DateTime.now(),
-                                      );
-                                      context
-                                          .read<ProductBloc>()
-                                          .add(UpdateProductEvent(updated));
-                                      importedCount++;
-                                    }
-                                  } else {
-                                    final newProd = ProductEntity(
-                                      id: 'prod_imp_${DateTime.now().millisecondsSinceEpoch}_$importedCount',
-                                      name: r.productName,
-                                      sku: r.sku,
-                                      barcode: r.barcode,
-                                      category: r.category,
-                                      sellingPrice: r.sellingPrice,
-                                      purchasePrice: r.costPrice,
-                                      stockQuantity: r.openingStock,
-                                      unit: r.unit,
-                                      reorderLevel: r.reorderLevel,
-                                      description: r.description,
-                                      createdAt: DateTime.now(),
-                                    );
-                                    context
-                                        .read<ProductBloc>()
-                                        .add(CreateProductEvent(newProd));
-                                    importedCount++;
-                                  }
-                                }
-
-                                context
-                                    .read<ProductBloc>()
-                                    .add(const FetchProductsEvent());
-                                Navigator.pop(sheetCtx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        'Successfully imported $importedCount products into inventory!'),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
-                              },
-                        child: Text(
-                          'Confirm & Import ${analysis.validRows} Products',
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildSkuScannerHeader() {
     if (!_isSkuCameraOn || _skuScannerController == null) {
       return const SizedBox.shrink();
@@ -2647,46 +2189,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
         ),
-      ),
-    );
-  }
-}
-
-class _ImportMetricChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
-
-  const _ImportMetricChip(
-      {required this.label, required this.count, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(10)),
-            child: Text('$count',
-                style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white)),
-          ),
-        ],
       ),
     );
   }

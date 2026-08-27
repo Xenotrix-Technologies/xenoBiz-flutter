@@ -7,7 +7,7 @@ import '../../domain/entities/invoice_entity.dart';
 import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/expense_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
-import '../../infrastructure/storage/hive_service.dart';
+import '../../infrastructure/database/app_database.dart';
 
 class ExpenseAccountSummary extends Equatable {
   final String id;
@@ -267,7 +267,7 @@ class AccountsBloc extends Bloc<AccountsEvent, AccountsState> {
   final CustomerRepository customerRepository;
   final ExpenseRepository expenseRepository;
   final InvoiceRepository invoiceRepository;
-  final HiveService hiveService;
+  final AppDatabase db;
 
   static const List<String> defaultExpenseCategories = [
     'Electricity',
@@ -289,7 +289,7 @@ class AccountsBloc extends Bloc<AccountsEvent, AccountsState> {
     required this.customerRepository,
     required this.expenseRepository,
     required this.invoiceRepository,
-    required this.hiveService,
+    required this.db,
   }) : super(AccountsInitialState()) {
     on<FetchAccountsEvent>(_onFetchAccounts);
     on<CreateCustomerAccountEvent>(_onCreateCustomerAccount);
@@ -346,7 +346,6 @@ class AccountsBloc extends Bloc<AccountsEvent, AccountsState> {
   Future<void> _onCreateExpenseAccount(
       CreateExpenseAccountEvent event, Emitter<AccountsState> emit) async {
     try {
-      final expBox = hiveService.getBox(HiveService.boxExpenses);
       final String id = 'exp_acc_${DateTime.now().millisecondsSinceEpoch}';
 
       if (event.openingBalance > 0) {
@@ -363,12 +362,7 @@ class AccountsBloc extends Bloc<AccountsEvent, AccountsState> {
         );
       }
 
-      await expBox.put('cat_${event.category}', {
-        'id': id,
-        'title': event.title,
-        'category': event.category,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
+      await db.putKeyValue('exp_cat_${event.category}', event.title);
 
       await _loadAccountsData(emit: emit);
     } catch (e) {
@@ -379,16 +373,10 @@ class AccountsBloc extends Bloc<AccountsEvent, AccountsState> {
   Future<void> _onUpdateExpenseAccount(
       UpdateExpenseAccountEvent event, Emitter<AccountsState> emit) async {
     try {
-      final expBox = hiveService.getBox(HiveService.boxExpenses);
-      await expBox.put('cat_${event.newCategory}', {
-        'id': 'exp_acc_${DateTime.now().millisecondsSinceEpoch}',
-        'title': event.newTitle,
-        'category': event.newCategory,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
+      await db.putKeyValue('exp_cat_${event.newCategory}', event.newTitle);
 
       if (event.oldCategory != event.newCategory) {
-        await expBox.delete('cat_${event.oldCategory}');
+        await db.deleteKeyValue('exp_cat_${event.oldCategory}');
       }
 
       await _loadAccountsData(emit: emit);
@@ -400,8 +388,7 @@ class AccountsBloc extends Bloc<AccountsEvent, AccountsState> {
   Future<void> _onDeleteExpenseAccount(
       DeleteExpenseAccountEvent event, Emitter<AccountsState> emit) async {
     try {
-      final expBox = hiveService.getBox(HiveService.boxExpenses);
-      await expBox.delete('cat_${event.category}');
+      await db.deleteKeyValue('exp_cat_${event.category}');
       await _loadAccountsData(emit: emit);
     } catch (e) {
       emit(AccountsErrorState(e.toString().replaceAll('Exception: ', '')));
