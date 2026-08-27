@@ -99,7 +99,10 @@ class _PaymentPageState extends State<PaymentPage> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.go(RouteNames.dashboard);
+        Navigator.of(context).pop();
+        if (context.mounted) {
+          _safePop();
+        }
       }
       return;
     }
@@ -199,6 +202,14 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
+  void _safePop() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RouteNames.dashboard);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isCashSale = widget.customer == null;
@@ -229,21 +240,27 @@ class _PaymentPageState extends State<PaymentPage> {
 
     final isPurchase = widget.invoice.type == InvoiceType.purchase;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                children: [
-                  // Back Button Card
-                  InkWell(
-                    onTap: () => context.pop(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _safePop();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  children: [
+                    // Back Button Card
+                    InkWell(
+                      onTap: _safePop,
                     borderRadius:
                         BorderRadius.circular(AppSizes.radiusMedium),
                     child: Container(
@@ -657,16 +674,19 @@ class _PaymentPageState extends State<PaymentPage> {
                 ),
               );
               final enteredAmt = double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0;
-              context.go(
-                RouteNames.invoiceResult,
-                extra: {
-                  'invoice': _finalInvoiceCreated ?? widget.invoice,
-                  'customer': widget.customer,
-                  'paymentMethod': _selectedPaymentMethod,
-                  'amountPaid': enteredAmt,
-                  'previousBalance': widget.customer?.outstandingBalance ?? 0.0,
-                },
-              );
+              Navigator.of(context).pop();
+              if (context.mounted) {
+                context.pushReplacement(
+                  RouteNames.invoiceResult,
+                  extra: {
+                    'invoice': _finalInvoiceCreated ?? widget.invoice,
+                    'customer': widget.customer,
+                    'paymentMethod': _selectedPaymentMethod,
+                    'amountPaid': enteredAmt,
+                    'previousBalance': widget.customer?.outstandingBalance ?? 0.0,
+                  },
+                );
+              }
             } else if (state is InvoiceErrorState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -685,8 +705,9 @@ class _PaymentPageState extends State<PaymentPage> {
           },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SummaryRow extends StatelessWidget {

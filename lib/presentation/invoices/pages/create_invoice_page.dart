@@ -637,14 +637,38 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     );
   }
 
+  bool get _hasUnsavedData {
+    return _items.isNotEmpty ||
+        _selectedCustomer != null ||
+        _notesCtrl.text.trim().isNotEmpty ||
+        _discountAmount > 0 ||
+        _extraExpenseAmount > 0;
+  }
+
+  void _safePop() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RouteNames.dashboard);
+    }
+  }
+
+  void _handleBackPressed() {
+    if (!isEditMode && _hasUnsavedData) {
+      _confirmDiscardInvoice();
+    } else {
+      _safePop();
+    }
+  }
+
   void _confirmDiscardInvoice() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Discard Invoice?',
             style: TextStyle(fontWeight: FontWeight.w800)),
-        content: Text(
-            'Are you sure you want to discard "$_headerLabel"? Any unsaved changes will be lost.'),
+        content: const Text(
+            'Are you sure you want to quit? The data you entered will be lost.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -657,9 +681,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.pop(context);
+              _safePop();
             },
-            child: const Text('Discard'),
+            child: const Text('Quit'),
           ),
         ],
       ),
@@ -1401,29 +1425,35 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<InvoiceBloc, InvoiceState>(
-      listener: (context, state) {
-        if (isEditMode && state is InvoiceOperationSuccessState) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text(state.message),
-                backgroundColor: AppColors.success),
-          );
-          if (context.mounted && Navigator.canPop(context)) {
-            Navigator.pop(context);
-          }
-        }
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBackPressed();
       },
-      child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        behavior: HitTestBehavior.translucent,
-        child: Scaffold(
-          backgroundColor: AppColors.background,
-          appBar: CommonVoucherAppBar(
-            title: _docType.getAppBarTitle(isEditMode: isEditMode),
-            onBackPressed: () => Navigator.pop(context),
-            onMorePressed: _showMoreBottomSheet,
-          ),
+      child: BlocListener<InvoiceBloc, InvoiceState>(
+        listener: (context, state) {
+          if (isEditMode && state is InvoiceOperationSuccessState) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: AppColors.success),
+            );
+            if (context.mounted && Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          }
+        },
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: CommonVoucherAppBar(
+              title: _docType.getAppBarTitle(isEditMode: isEditMode),
+              onBackPressed: _handleBackPressed,
+              onMorePressed: _showMoreBottomSheet,
+            ),
           body: SafeArea(
             child: SingleChildScrollView(
               padding:
@@ -3733,6 +3763,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

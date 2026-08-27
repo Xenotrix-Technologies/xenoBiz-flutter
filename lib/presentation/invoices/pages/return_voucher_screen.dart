@@ -807,6 +807,14 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
     );
   }
 
+  void _safePop() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RouteNames.dashboard);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = isSalesReturn
@@ -817,13 +825,19 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
         ? (double.tryParse(_expenseAmountCtrl.text) ?? 0.0)
         : 0.0;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: CommonVoucherAppBar(
-        title: title,
-        onBackPressed: () => Navigator.pop(context),
-        onMorePressed: _showMoreBottomSheet,
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _safePop();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: CommonVoucherAppBar(
+          title: title,
+          onBackPressed: _safePop,
+          onMorePressed: _showMoreBottomSheet,
+        ),
       bottomNavigationBar: Container(
         padding: EdgeInsets.only(
           left: 16.0,
@@ -916,8 +930,9 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildVoucherIdBanner(String voucherId) {
     return Container(

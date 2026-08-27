@@ -692,6 +692,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+  void _safePop() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RouteNames.dashboard);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = isExpense
@@ -702,13 +710,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final partyHint = isExpense ? 'Search supplier name or phone' : 'Search customer name or phone';
     final amount = double.tryParse(_amountCtrl.text) ?? 0.0;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: CommonVoucherAppBar(
-        title: title,
-        onBackPressed: () => Navigator.pop(context),
-        onMorePressed: _showMoreBottomSheet,
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _safePop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: CommonVoucherAppBar(
+          title: title,
+          onBackPressed: _safePop,
+          onMorePressed: _showMoreBottomSheet,
+        ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -1178,6 +1192,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
