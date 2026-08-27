@@ -1403,13 +1403,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   Widget build(BuildContext context) {
     return BlocListener<InvoiceBloc, InvoiceState>(
       listener: (context, state) {
-        if (state is InvoiceOperationSuccessState) {
+        if (isEditMode && state is InvoiceOperationSuccessState) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
                 content: Text(state.message),
                 backgroundColor: AppColors.success),
           );
-          Navigator.pop(context);
+          if (context.mounted && Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
         }
       },
       child: GestureDetector(
