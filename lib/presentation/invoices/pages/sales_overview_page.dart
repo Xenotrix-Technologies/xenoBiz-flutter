@@ -546,7 +546,10 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
               decoration: InputDecoration(
                 hintText: 'Search invoice, customer or transaction...',
                 hintStyle: const TextStyle(
-                    fontSize: 13, color: AppColors.secondaryText),
+                  fontSize: 12,
+                  color: AppColors.secondaryText,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 prefixIcon: const Icon(Icons.search,
                     size: 20, color: AppColors.secondaryText),
                 suffixIcon: _searchController.text.isNotEmpty
@@ -830,31 +833,71 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     Color iconBgColor;
     Color iconColor;
     Color amountColor;
+    String amountPrefix = '';
 
-    if (tx.isReturn) {
-      icon = Icons.u_turn_left_rounded;
-      iconBgColor = Colors.purple.withValues(alpha: 0.1);
-      iconColor = Colors.purple.shade700;
-      amountColor = AppColors.danger;
-    } else if (tx.isPayment) {
-      icon = Icons.arrow_downward_rounded;
-      iconBgColor = AppColors.success.withValues(alpha: 0.1);
-      iconColor = AppColors.success;
-      amountColor = AppColors.success;
-    } else {
-      icon = Icons.receipt_long_rounded;
-      iconBgColor = AppColors.primaryBlue.withValues(alpha: 0.1);
-      iconColor = AppColors.primaryBlue;
-      amountColor = AppColors.darkBlueText;
+    switch (tx.type) {
+      case SalesTransactionType.sale:
+        icon = Icons.receipt_long_rounded;
+        iconBgColor = AppColors.primaryBlue.withValues(alpha: 0.1);
+        iconColor = AppColors.primaryBlue;
+        amountColor = AppColors.darkBlueText;
+        amountPrefix = '';
+        break;
+
+      case SalesTransactionType.salesReturn:
+        icon = Icons.u_turn_left_rounded;
+        iconBgColor = Colors.purple.withValues(alpha: 0.1);
+        iconColor = Colors.purple.shade700;
+        amountColor = AppColors.danger;
+        amountPrefix = '-';
+        break;
+
+      case SalesTransactionType.purchase:
+        icon = Icons.shopping_bag_outlined;
+        iconBgColor = Colors.teal.withValues(alpha: 0.1);
+        iconColor = Colors.teal.shade700;
+        amountColor = AppColors.darkBlueText;
+        amountPrefix = '';
+        break;
+
+      case SalesTransactionType.purchaseReturn:
+        icon = Icons.assignment_return_outlined;
+        iconBgColor = Colors.orange.withValues(alpha: 0.1);
+        iconColor = Colors.orange.shade700;
+        amountColor = Colors.orange.shade800;
+        amountPrefix = '-';
+        break;
+
+      case SalesTransactionType.payment:
+        // Payment = Money OUT
+        icon = Icons.arrow_upward_rounded;
+        iconBgColor = AppColors.danger.withValues(alpha: 0.1);
+        iconColor = AppColors.danger;
+        amountColor = AppColors.danger;
+        amountPrefix = '-';
+        break;
+
+      case SalesTransactionType.receipt:
+        // Receipt = Money IN
+        icon = Icons.arrow_downward_rounded;
+        iconBgColor = AppColors.success.withValues(alpha: 0.1);
+        iconColor = AppColors.success;
+        amountColor = AppColors.success;
+        amountPrefix = '+';
+        break;
     }
 
     // Dot Status indicator
     Color statusDotColor;
-    String statusText;
-    if (tx.isReturn) {
-      statusDotColor = Colors.purple.shade700;
-      statusText = 'Completed';
+    String statusText = tx.statusText;
+
+    if (tx.isSalesReturn || tx.isPurchaseReturn) {
+      statusDotColor = tx.isSalesReturn ? Colors.purple.shade700 : Colors.orange.shade700;
+      statusText = 'Returned';
     } else if (tx.isPayment) {
+      statusDotColor = AppColors.danger;
+      statusText = 'Paid';
+    } else if (tx.isReceipt) {
       statusDotColor = AppColors.success;
       statusText = 'Received';
     } else {
@@ -918,12 +961,16 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          '• ${tx.transactionNumber}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.darkBlueText,
+                        Expanded(
+                          child: Text(
+                            '• ${tx.transactionNumber}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -951,9 +998,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        tx.isReturn
-                            ? '-${_formatCurrency(tx.totalAmount)}'
-                            : _formatCurrency(tx.totalAmount),
+                        '$amountPrefix${_formatCurrency(tx.totalAmount)}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,

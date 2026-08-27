@@ -7,6 +7,7 @@ import '../../domain/entities/payment_entity.dart';
 import '../../domain/entities/sales_transaction_wrapper.dart';
 import '../../domain/repositories/customer_repository.dart';
 import '../../domain/repositories/expense_repository.dart';
+import '../../domain/repositories/income_repository.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/repositories/returns_repository.dart';
 import '../../infrastructure/database/app_database.dart';
@@ -239,6 +240,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
   final ExpenseRepository expenseRepository;
   final CustomerRepository customerRepository;
   final ReturnsRepository returnsRepository;
+  final IncomeRepository incomeRepository;
   final AppDatabase db;
 
   SalesOverviewBloc({
@@ -246,6 +248,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
     required this.expenseRepository,
     required this.customerRepository,
     required this.returnsRepository,
+    required this.incomeRepository,
     required this.db,
   }) : super(SalesOverviewInitialState()) {
     on<FetchSalesOverviewDataEvent>(_onFetchSalesOverviewData);
@@ -261,8 +264,10 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
     try {
       final invoices = await invoiceRepository.getInvoices();
       final expenses = await expenseRepository.getExpenses();
+      final incomes = await incomeRepository.getIncomes();
       final customers = await customerRepository.getCustomers();
       final salesReturns = await returnsRepository.getReturns(InvoiceType.sale);
+      final purchaseReturns = await returnsRepository.getReturns(InvoiceType.purchase);
 
       final paymentRows = await db.select(db.payments).get();
       final List<PaymentEntity> paymentsList = paymentRows.map((val) => PaymentEntity(
@@ -282,7 +287,8 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
       final todayInvoices = invoices.where((i) {
-        return i.issueDate.isAfter(todayStart.subtract(const Duration(seconds: 1))) &&
+        return i.isSale &&
+            i.issueDate.isAfter(todayStart.subtract(const Duration(seconds: 1))) &&
             i.issueDate.isBefore(todayEnd.add(const Duration(seconds: 1)));
       }).toList();
 
@@ -303,7 +309,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       double totalOutstanding = customers.fold(0.0, (sum, c) => sum + c.outstandingBalance);
       if (totalOutstanding == 0.0) {
         totalOutstanding = invoices
-            .where((i) => i.status == InvoiceStatus.unpaid || i.status == InvoiceStatus.partiallyPaid)
+            .where((i) => i.isSale && (i.status == InvoiceStatus.unpaid || i.status == InvoiceStatus.partiallyPaid))
             .fold(0.0, (sum, i) => sum + i.dueAmount);
       }
 
@@ -317,7 +323,8 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         final dayEnd = DateTime(dayDate.year, dayDate.month, dayDate.day, 23, 59, 59);
 
         final daySales = invoices.where((inv) {
-          return inv.issueDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
+          return inv.isSale &&
+              inv.issueDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
               inv.issueDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
         }).fold(0.0, (sum, inv) => sum + inv.grandTotal);
 
@@ -341,13 +348,18 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       final weeklyNet = weeklySales - weeklyExpenses;
 
       final List<SalesTransactionWrapper> transactionsList = [];
+      final invoiceIdsSet = invoices.map((i) => i.id).toSet();
 
+      // 1. Invoices (Sale & Purchase)
       for (var inv in invoices) {
+        final isPurch = inv.isPurchase || inv.type == InvoiceType.purchase;
         transactionsList.add(SalesTransactionWrapper(
           id: inv.id,
-          type: SalesTransactionType.invoice,
+          type: isPurch ? SalesTransactionType.purchase : SalesTransactionType.sale,
           transactionNumber: inv.invoiceNumber,
-          customerName: inv.customerName.isNotEmpty ? inv.customerName : 'General Customer',
+          customerName: inv.customerName.isNotEmpty
+              ? inv.customerName
+              : (isPurch ? 'General Supplier' : 'General Customer'),
           customerPhone: inv.customerPhone,
           totalAmount: inv.grandTotal,
           paidAmount: inv.paidAmount,
@@ -364,6 +376,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         ));
       }
 
+      // 2. Sales Returns
       for (var ret in salesReturns) {
         transactionsList.add(SalesTransactionWrapper(
           id: ret.id,
@@ -379,18 +392,103 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         ));
       }
 
+      // 3. Purchase Returns
+      for (var ret in purchaseReturns) {
+        transactionsList.add(SalesTransactionWrapper(
+          id: ret.id,
+          type: SalesTransactionType.purchaseReturn,
+          transactionNumber: ret.returnNumber,
+          customerName: ret.partyName.isNotEmpty ? ret.partyName : 'General Supplier',
+          totalAmount: ret.totalAmount,
+          paidAmount: 0.0,
+          dueAmount: 0.0,
+          statusText: 'Returned',
+          date: ret.returnDate,
+          originalEntity: ret,
+        ));
+      }
+
+      // 4. Standalone Payments from db.payments (Do NOT duplicate invoice payments)
       for (var pay in paymentsList) {
+        if (pay.invoiceId.isNotEmpty && invoiceIdsSet.contains(pay.invoiceId)) {
+          continue; // Already represented by the Invoice card!
+        }
+
+        final isMoneyOut = pay.notes.toLowerCase().contains('payment') ||
+            pay.notes.toLowerCase().contains('vendor') ||
+            pay.notes.toLowerCase().contains('supplier') ||
+            pay.id.toLowerCase().startsWith('pay_exp_');
+
+        final txType = isMoneyOut
+            ? SalesTransactionType.payment
+            : SalesTransactionType.receipt;
+
+        final refNum = pay.referenceNumber.isNotEmpty
+            ? pay.referenceNumber
+            : (isMoneyOut
+                ? 'PAY-${pay.id.length > 6 ? pay.id.substring(0, 6) : pay.id}'
+                : 'REC-${pay.id.length > 6 ? pay.id.substring(0, 6) : pay.id}');
+
         transactionsList.add(SalesTransactionWrapper(
           id: pay.id,
-          type: SalesTransactionType.payment,
-          transactionNumber: pay.referenceNumber.isNotEmpty ? pay.referenceNumber : 'PAY-${pay.id.length > 6 ? pay.id.substring(0, 6) : pay.id}',
-          customerName: pay.customerName.isNotEmpty ? pay.customerName : 'General Customer',
+          type: txType,
+          transactionNumber: refNum,
+          customerName: pay.customerName.isNotEmpty ? pay.customerName : 'General Account',
           totalAmount: pay.amount,
           paidAmount: pay.amount,
           dueAmount: 0.0,
-          statusText: 'Received',
+          statusText: isMoneyOut ? 'Paid' : 'Received',
           date: pay.paymentDate,
           originalEntity: pay,
+        ));
+      }
+
+      // 5. Standalone Income (Receipts - Money IN)
+      for (var inc in incomes) {
+        final txNum = inc.title.startsWith('REC-')
+            ? inc.title
+            : 'REC-${inc.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+        transactionsList.add(SalesTransactionWrapper(
+          id: inc.id,
+          type: SalesTransactionType.receipt,
+          transactionNumber: txNum.length > 16 ? txNum.substring(0, 16) : txNum,
+          customerName: inc.partyName?.isNotEmpty == true
+              ? inc.partyName!
+              : (inc.category.isNotEmpty ? inc.category : 'General Customer'),
+          totalAmount: inc.amount,
+          paidAmount: inc.amount,
+          dueAmount: 0.0,
+          statusText: 'Received',
+          date: inc.incomeDate,
+          originalEntity: inc,
+        ));
+      }
+
+      // 6. Standalone Expenses (Payments - Money OUT)
+      for (var exp in expenses) {
+        if (exp.id.startsWith('exp_ret_amt_') ||
+            exp.id.startsWith('exp_sr_') ||
+            exp.id.startsWith('exp_pur_')) {
+          continue; // Skip auto-generated return/purchase expenses to avoid duplicates
+        }
+
+        final txNum = exp.title.startsWith('PAY-')
+            ? exp.title
+            : 'PAY-${exp.id.replaceAll(RegExp(r'[^0-9]'), '')}';
+
+        transactionsList.add(SalesTransactionWrapper(
+          id: exp.id,
+          type: SalesTransactionType.payment,
+          transactionNumber: txNum.length > 16 ? txNum.substring(0, 16) : txNum,
+          customerName: exp.partyName?.isNotEmpty == true
+              ? exp.partyName!
+              : (exp.category.isNotEmpty ? exp.category : 'Vendor / Account'),
+          totalAmount: exp.amount,
+          paidAmount: exp.amount,
+          dueAmount: 0.0,
+          statusText: 'Paid',
+          date: exp.expenseDate,
+          originalEntity: exp,
         ));
       }
 
@@ -559,30 +657,24 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
   }) {
     List<SalesTransactionWrapper> result = List.from(allTransactions);
 
-    if (query.trim().isNotEmpty) {
-      final q = query.toLowerCase().trim();
-      result = result.where((item) {
-        return item.transactionNumber.toLowerCase().contains(q) ||
-            item.customerName.toLowerCase().contains(q) ||
-            item.customerPhone.toLowerCase().contains(q) ||
-            item.totalAmount.toString().contains(q);
-      }).toList();
-    }
-
+    // 1. Filter by Active Tab / Type Filter
     if (typeFilter != 'All') {
       if (typeFilter == 'Invoices' || typeFilter == 'Invoice') {
         result = result.where((item) => item.isInvoice).toList();
       } else if (typeFilter == 'Returns' || typeFilter == 'Return') {
         result = result.where((item) => item.isReturn).toList();
       } else if (typeFilter == 'Payments' || typeFilter == 'Payment') {
-        result = result.where((item) => item.isPayment).toList();
+        result = result.where((item) => item.isPayment || item.isReceipt).toList();
       }
     }
 
+    // 2. Filter by Payment Status
     if (statusFilter != 'All') {
       final now = DateTime.now();
       if (statusFilter == 'Paid') {
-        result = result.where((item) => item.statusText == 'Paid' || item.statusText == 'Received').toList();
+        result = result.where((item) => item.statusText == 'Paid').toList();
+      } else if (statusFilter == 'Received') {
+        result = result.where((item) => item.statusText == 'Received').toList();
       } else if (statusFilter == 'Unpaid') {
         result = result.where((item) => item.statusText == 'Unpaid').toList();
       } else if (statusFilter == 'Partially Paid') {
@@ -599,6 +691,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
+    // 3. Filter by Invoice Status
     if (invoiceStatusFilter != 'All') {
       if (invoiceStatusFilter == 'Draft') {
         result = result.where((item) => item.isInvoice && item.asInvoice?.status == InvoiceStatus.draft).toList();
@@ -611,11 +704,13 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
+    // 4. Filter by Customer / Party
     if (customer != 'All' && customer.trim().isNotEmpty) {
       final cust = customer.toLowerCase().trim();
       result = result.where((item) => item.customerName.toLowerCase().contains(cust)).toList();
     }
 
+    // 5. Filter by Date Range
     if (dateRangeFilter != 'All') {
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
@@ -642,6 +737,20 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       }
     }
 
+    // 6. Filter by Search Query (Applies on top of active filters)
+    if (query.trim().isNotEmpty) {
+      final q = query.toLowerCase().trim();
+      result = result.where((item) {
+        return item.transactionNumber.toLowerCase().contains(q) ||
+            item.customerName.toLowerCase().contains(q) ||
+            item.customerPhone.toLowerCase().contains(q) ||
+            item.typeLabel.toLowerCase().contains(q) ||
+            item.statusText.toLowerCase().contains(q) ||
+            item.totalAmount.toString().contains(q);
+      }).toList();
+    }
+
+    // 7. Sort
     switch (sortOption) {
       case 'oldest':
         result.sort((a, b) => a.date.compareTo(b.date));

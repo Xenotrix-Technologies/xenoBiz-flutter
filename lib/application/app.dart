@@ -63,6 +63,7 @@ class XenoBizApp extends StatelessWidget {
               expenseRepository: getIt(),
               customerRepository: getIt(),
               returnsRepository: getIt(),
+              incomeRepository: getIt(),
               db: getIt(),
             )..add(FetchSalesOverviewDataEvent()),
           ),
