@@ -432,7 +432,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Sales',
+          'Transactions',
           style: TextStyle(
               fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
         ),
@@ -477,7 +477,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                       _buildSearchAndFilterRow(context, state),
                       const SizedBox(height: 12),
 
-                      // Quick Transaction Type Filter Chips (All, Invoices, Returns, Payments)
+                      // Quick Transaction Type Filter Chips
                       _buildQuickTypeChipsRow(context, state),
                       const SizedBox(height: 10),
 
@@ -544,7 +544,7 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
                     .add(SearchSalesOverviewEvent(val));
               },
               decoration: InputDecoration(
-                hintText: 'Search invoice, customer or transaction...',
+                hintText: 'Search party, transaction or number...',
                 hintStyle: const TextStyle(
                   fontSize: 12,
                   color: AppColors.secondaryText,
@@ -595,10 +595,18 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
     );
   }
 
-  // QUICK TYPE CHIPS ROW (All, Invoices, Returns, Payments)
+  // QUICK TYPE CHIPS ROW (All, Sales, Sale Returns, Purchases, Purchase Returns, Money In, Money Out)
   Widget _buildQuickTypeChipsRow(
       BuildContext context, SalesOverviewLoadedState state) {
-    final chips = ['All', 'Invoices', 'Returns', 'Payments'];
+    final chips = [
+      'All',
+      'Sales',
+      'Sale Returns',
+      'Purchases',
+      'Purchase Returns',
+      'Money In',
+      'Money Out'
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,

@@ -52,9 +52,9 @@ abstract class AppStrings {
   static const String recentTransactions = 'Recent Transactions';
 
   // Customer & Timeline
-  static const String customerTitle = 'Customers';
-  static const String addCustomer = 'Add Customer';
-  static const String customerDetails = 'Customer Details';
+  static const String customerTitle = 'Parties';
+  static const String addCustomer = 'Add Party';
+  static const String customerDetails = 'Party Details';
   static const String customerTimeline = 'Activity Timeline';
   static const String outstandingBalance = 'Outstanding Balance';
 
@@ -65,15 +65,15 @@ abstract class AppStrings {
   static const String lowStockAlert = 'Low Stock Alert';
 
   // Invoices & Billing
-  static const String invoiceTitle = 'Invoices';
-  static const String createInvoice = 'Create Invoice';
-  static const String newInvoice = 'New Invoice';
+  static const String invoiceTitle = 'Transactions';
+  static const String createInvoice = 'Add Sale';
+  static const String newInvoice = 'New Transaction';
   static const String cashSale = 'Cash Sale';
-  static const String customer = 'Customer';
-  static const String invoiceDetails = 'Invoice Details';
+  static const String customer = 'Party';
+  static const String invoiceDetails = 'Transaction Details';
   static const String shareWhatsApp = 'Share via WhatsApp';
   static const String downloadPDF = 'Download PDF';
-  static const String recordPayment = 'Record Payment';
+  static const String recordPayment = 'Record Money Out';
 
   // CRM & Leads
   static const String leadPipeline = 'Lead Pipeline';

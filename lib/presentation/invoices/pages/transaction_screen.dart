@@ -703,11 +703,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
   @override
   Widget build(BuildContext context) {
     final title = isExpense
-        ? (isEditMode ? 'Edit Payment Voucher' : 'Add Payment Voucher')
-        : (isEditMode ? 'Edit Receipt Voucher' : 'Add Receipt Voucher');
-    final amountLabel = isExpense ? 'EXPENSE AMOUNT' : 'INCOME AMOUNT';
-    final partyLabel = isExpense ? 'Supplier / Account' : 'Customer / Account';
-    final partyHint = isExpense ? 'Search supplier name or phone' : 'Search customer name or phone';
+        ? (isEditMode ? 'Edit Money Out' : 'Add Money Out')
+        : (isEditMode ? 'Edit Money In' : 'Add Money In');
+    final amountLabel = isExpense ? 'MONEY OUT AMOUNT' : 'MONEY IN AMOUNT';
+    final partyLabel = 'Party / Account';
+    final partyHint = 'Search party name or phone';
     final amount = double.tryParse(_amountCtrl.text) ?? 0.0;
 
     return PopScope(

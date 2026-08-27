@@ -612,9 +612,11 @@ class InvoiceResultPage extends ConsumerWidget {
                   );
                 },
                 icon: const Icon(Icons.add_circle_outline, size: 20),
-                label: const Text(
-                  'CREATE ANOTHER INVOICE',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                label: Text(
+                  invoice.type == InvoiceType.purchase
+                      ? 'CREATE ANOTHER PURCHASE'
+                      : 'CREATE ANOTHER SALE',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                 ),
               ),
             ),

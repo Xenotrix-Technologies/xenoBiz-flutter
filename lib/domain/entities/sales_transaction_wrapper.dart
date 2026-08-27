@@ -63,7 +63,7 @@ class SalesTransactionWrapper extends Equatable {
   String get typeLabel {
     switch (type) {
       case SalesTransactionType.sale:
-        return 'INVOICE';
+        return 'SALE';
       case SalesTransactionType.salesReturn:
         return 'SALES RETURN';
       case SalesTransactionType.purchase:
@@ -71,9 +71,9 @@ class SalesTransactionWrapper extends Equatable {
       case SalesTransactionType.purchaseReturn:
         return 'PURCHASE RETURN';
       case SalesTransactionType.payment:
-        return 'PAYMENT';
+        return 'MONEY OUT';
       case SalesTransactionType.receipt:
-        return 'RECEIPT';
+        return 'MONEY IN';
     }
   }
 

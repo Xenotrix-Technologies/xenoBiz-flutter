@@ -818,9 +818,9 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
   @override
   Widget build(BuildContext context) {
     final title = isSalesReturn
-        ? (isEditMode ? 'Edit Sales Return Voucher' : 'Add Sales Return Voucher')
-        : (isEditMode ? 'Edit Purchase Return Voucher' : 'Add Purchase Return Voucher');
-    final partyLabel = isSalesReturn ? 'Customer / Account' : 'Supplier / Account';
+        ? (isEditMode ? 'Edit Sales Return' : 'Add Sales Return')
+        : (isEditMode ? 'Edit Purchase Return' : 'Add Purchase Return');
+    final partyLabel = 'Party / Account';
     final extraCharges = _hasAdditionalExpense
         ? (double.tryParse(_expenseAmountCtrl.text) ?? 0.0)
         : 0.0;

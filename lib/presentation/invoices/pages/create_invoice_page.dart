@@ -56,7 +56,7 @@ extension DocumentTypeExt on DocumentType {
 
   String getAppBarTitle({bool isEditMode = false}) {
     final prefix = titlePrefix;
-    return isEditMode ? 'Edit $prefix Voucher' : 'Add $prefix Voucher';
+    return isEditMode ? 'Edit $prefix' : 'Add $prefix';
   }
 
   InvoiceType toInvoiceType() {
@@ -552,8 +552,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.receipt_long_outlined,
                 iconColor: AppColors.primary,
                 iconBgColor: AppColors.primary.withValues(alpha: 0.1),
-                title: 'Add Sale Voucher',
-                subtitle: 'Create a sales invoice / bill',
+                title: 'Add Sale',
+                subtitle: 'Create a sale bill',
                 onTap: () {
                   Navigator.pop(ctx);
                   context.push(
@@ -567,7 +567,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.assignment_return_outlined,
                 iconColor: const Color(0xFF7C3AED),
                 iconBgColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
-                title: 'Add Sales Return Voucher',
+                title: 'Add Sales Return',
                 subtitle: 'Create a sales return / credit note',
                 onTap: () {
                   Navigator.pop(ctx);
@@ -582,8 +582,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.shopping_bag_outlined,
                 iconColor: const Color(0xFF0D9488),
                 iconBgColor: const Color(0xFF0D9488).withValues(alpha: 0.1),
-                title: 'Add Purchase Voucher',
-                subtitle: 'Create a purchase invoice / bill',
+                title: 'Add Purchase',
+                subtitle: 'Create a purchase bill',
                 onTap: () {
                   Navigator.pop(ctx);
                   context.push(
@@ -597,7 +597,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.assignment_return_outlined,
                 iconColor: const Color(0xFFD97706),
                 iconBgColor: const Color(0xFFD97706).withValues(alpha: 0.1),
-                title: 'Add Purchase Return Voucher',
+                title: 'Add Purchase Return',
                 subtitle: 'Create a purchase return / debit note',
                 onTap: () {
                   Navigator.pop(ctx);
@@ -612,8 +612,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.arrow_upward_rounded,
                 iconColor: AppColors.danger,
                 iconBgColor: AppColors.danger.withValues(alpha: 0.1),
-                title: 'Add Payment Voucher',
-                subtitle: 'Record an expense / payment made',
+                title: 'Add Money Out',
+                subtitle: 'Record an expense / money out',
                 onTap: () {
                   Navigator.pop(ctx);
                   context.push(RouteNames.expense);
@@ -624,8 +624,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                 icon: Icons.arrow_downward_rounded,
                 iconColor: AppColors.success,
                 iconBgColor: AppColors.success.withValues(alpha: 0.1),
-                title: 'Add Receipt Voucher',
-                subtitle: 'Record an income / receipt received',
+                title: 'Add Money In',
+                subtitle: 'Record an income / money in',
                 onTap: () {
                   Navigator.pop(ctx);
                   context.push(RouteNames.income);
@@ -1479,9 +1479,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              isPurchase
-                                  ? 'Supplier / Account'
-                                  : 'Customer / Account',
+                              'Party / Account',
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -1646,9 +1644,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                       color: AppColors.onSurface,
                                     ),
                                     decoration: InputDecoration(
-                                      hintText: isPurchase
-                                          ? 'Search supplier name or phone'
-                                          : 'Search customer name or phone',
+                                      hintText: 'Search party name or phone',
                                       hintStyle: const TextStyle(
                                         fontSize: 13,
                                         color: AppColors.outline,
