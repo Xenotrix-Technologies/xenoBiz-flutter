@@ -193,18 +193,19 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       }
     });
 
+    TransactionStackManager.instance.registerSession(
+      TransactionSession(
+        id: _sessionId,
+        type: isPurchase
+            ? TransactionTypeCategory.purchase
+            : TransactionTypeCategory.sale,
+        isEdit: isEditMode,
+        entityId: widget.invoiceToEdit?.id,
+        hasMeaningfulData: () => _hasUnsavedData,
+      ),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      TransactionStackManager.instance.registerSession(
-        TransactionSession(
-          id: _sessionId,
-          type: isPurchase
-              ? TransactionTypeCategory.purchase
-              : TransactionTypeCategory.sale,
-          isEdit: isEditMode,
-          entityId: widget.invoiceToEdit?.id,
-          hasMeaningfulData: () => _hasUnsavedData,
-        ),
-      );
       if (widget.invoiceToEdit != null) {
         final inv = widget.invoiceToEdit!;
         final party = CustomerEntity(
@@ -703,6 +704,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    TransactionStackManager.instance.unregisterSession(_sessionId);
     _scannerController?.dispose();
     _inlineSearchCtrl.dispose();
     _inlinePriceCtrl.dispose();

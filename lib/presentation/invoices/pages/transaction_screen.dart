@@ -90,21 +90,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     _loadData();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      TransactionStackManager.instance.registerSession(
-        TransactionSession(
-          id: _sessionId,
-          type: isExpense
-              ? TransactionTypeCategory.moneyOut
-              : TransactionTypeCategory.moneyIn,
-          isEdit: isEditMode,
-          entityId: isExpense
-              ? (widget.existingTransaction as ExpenseEntity?)?.id
-              : (widget.existingTransaction as IncomeEntity?)?.id,
-          hasMeaningfulData: () => _hasUnsavedData,
-        ),
-      );
-    });
+    TransactionStackManager.instance.registerSession(
+      TransactionSession(
+        id: _sessionId,
+        type: isExpense
+            ? TransactionTypeCategory.moneyOut
+            : TransactionTypeCategory.moneyIn,
+        isEdit: isEditMode,
+        entityId: isExpense
+            ? (widget.existingTransaction as ExpenseEntity?)?.id
+            : (widget.existingTransaction as IncomeEntity?)?.id,
+        hasMeaningfulData: () => _hasUnsavedData,
+      ),
+    );
   }
 
   Future<void> _loadData() async {

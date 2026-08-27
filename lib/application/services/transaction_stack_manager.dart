@@ -82,6 +82,23 @@ class TransactionStackManager {
   TransactionSession? get currentSession =>
       _stack.isNotEmpty ? _stack.last : null;
 
+  /// Clears all registered sessions (useful for tests or hard resets).
+  void clear() {
+    _stack.clear();
+  }
+
+  /// Prunes completed or non-meaningful sessions from top of stack.
+  void pruneStaleSessions() {
+    while (_stack.isNotEmpty) {
+      final top = _stack.last;
+      if (top.isCompleted || !top.hasMeaningfulData()) {
+        _stack.removeLast();
+      } else {
+        break;
+      }
+    }
+  }
+
   /// Handles Back button from Checkout / InvoiceResultPage.
   Future<void> handleBackFromCheckout(BuildContext context) async {
     if (_stack.isNotEmpty && _stack.last.isCompleted) {
@@ -92,22 +109,17 @@ class TransactionStackManager {
       final top = _stack.last;
       if (top.isCompleted || !top.hasMeaningfulData()) {
         _stack.removeLast();
-        if (context.canPop()) {
-          context.pop();
-        }
       } else {
-        // Found meaningful unfinished session!
-        if (context.canPop()) {
-          return;
-        }
+        break;
       }
     }
 
-    // No meaningful session left
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.dashboard);
+    if (context.mounted) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(RouteNames.dashboard);
+      }
     }
   }
 
@@ -143,26 +155,22 @@ class TransactionStackManager {
       _stack.removeAt(idx);
     }
 
-    // Skip any empty sessions underneath!
+    // Skip any empty or completed sessions underneath
     while (_stack.isNotEmpty) {
       final top = _stack.last;
       if (top.isCompleted || !top.hasMeaningfulData()) {
         _stack.removeLast();
-        if (context.canPop()) {
-          context.pop();
-        }
       } else {
-        if (context.canPop()) {
-          context.pop();
-        }
-        return;
+        break;
       }
     }
 
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.dashboard);
+    if (context.mounted) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(RouteNames.dashboard);
+      }
     }
   }
 }

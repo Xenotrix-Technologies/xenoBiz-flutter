@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/create_invoice_provider.dart';
+import '../services/transaction_route_observer.dart';
 import '../bloc/accounts_bloc.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
@@ -136,6 +137,7 @@ class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: RouteNames.splash,
+    observers: [TransactionRouteObserver.instance],
     routes: [
       GoRoute(
         path: RouteNames.splash,
