@@ -1402,7 +1402,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     );
   }
 
-  void _onCreateInvoice() {
+  Future<void> _onCreateInvoice() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1471,13 +1471,24 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         extraExpenseDescription: _extraExpenseDescription,
       );
 
-      context.push(
+      final result = await context.push<Map<String, dynamic>>(
         RouteNames.payment,
         extra: {
           'invoice': invoiceToProcess,
           'customer': _selectedCustomer,
         },
       );
+
+      if (result != null && context.mounted) {
+        if (result['isPurchaseDone'] == true) {
+          _safePop();
+        } else {
+          context.pushReplacement(
+            RouteNames.invoiceResult,
+            extra: result,
+          );
+        }
+      }
     }
   }
 

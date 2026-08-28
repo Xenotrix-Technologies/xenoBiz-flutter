@@ -27,7 +27,7 @@ void main() {
       expect(manager.currentSession, isNull);
     });
 
-    test('TC-01: Empty A -> B -> Complete B -> Back (Prune empty & completed)', () {
+    test('TC-01: Empty A -> B -> Complete B -> Back (Retain A on stack)', () {
       bool emptyAHasData = false;
       bool bHasData = true;
 
@@ -53,14 +53,15 @@ void main() {
       manager.markCompleted('session_B');
       expect(manager.currentSession?.isCompleted, isTrue);
 
-      // Prune stale sessions
+      // Prune stale sessions (completed B is pruned)
       manager.pruneStaleSessions();
 
-      // B completed and A empty -> both pruned
-      expect(manager.stack.length, 0);
+      // Session A remains on stack for the user to return to
+      expect(manager.stack.length, 1);
+      expect(manager.currentSession?.id, 'session_A');
     });
 
-    test('TC-02: Dirty A -> Empty B -> Dirty C -> Complete C -> Prune B & restore A', () {
+    test('TC-02: Dirty A -> Empty B -> Dirty C -> Complete C -> Unwind stack correctly', () {
       bool dirtyAData = true;
       bool emptyBData = false;
       bool dirtyCData = true;
@@ -100,13 +101,17 @@ void main() {
         manager.unregisterSession(manager.stack.last.id);
       }
 
-      // Prune remaining empty session B
+      // Prune completed sessions
       manager.pruneStaleSessions();
 
-      // Session A should remain as active current session
+      // Unfinished sessions B and A remain on stack
+      expect(manager.stack.length, 2);
+      expect(manager.currentSession?.id, 'session_B');
+
+      // When B is popped/unregistered
+      manager.unregisterSession('session_B');
       expect(manager.stack.length, 1);
       expect(manager.currentSession?.id, 'session_A');
-      expect(manager.currentSession?.isCompleted, isFalse);
     });
 
     test('TC-03: Edit A -> Create B -> Complete B -> Restore Edit A', () {
@@ -142,7 +147,7 @@ void main() {
       expect(manager.currentSession?.entityId, 'inv_123');
     });
 
-    test('TC-05: Multi-level stack pruning (Dirty A -> Empty B -> Empty C -> Complete D)', () {
+    test('TC-05: Multi-level stack pruning (A -> B -> C -> Complete D)', () {
       manager.registerSession(TransactionSession(
         id: 'A',
         type: TransactionTypeCategory.sale,
@@ -177,12 +182,12 @@ void main() {
       manager.markCompleted('D');
       manager.unregisterSession('D');
 
-      // Prune B and C
+      // Prune completed sessions
       manager.pruneStaleSessions();
 
-      // Only A remains
-      expect(manager.stack.length, 1);
-      expect(manager.currentSession?.id, 'A');
+      // Stack contains C, B, A in reverse order
+      expect(manager.stack.length, 3);
+      expect(manager.currentSession?.id, 'C');
     });
 
     test('TC-08: Completed session does not trigger discard dialog evaluation', () {

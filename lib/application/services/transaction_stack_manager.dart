@@ -87,11 +87,11 @@ class TransactionStackManager {
     _stack.clear();
   }
 
-  /// Prunes completed or non-meaningful sessions from top of stack.
+  /// Prunes completed sessions from top of stack.
   void pruneStaleSessions() {
     while (_stack.isNotEmpty) {
       final top = _stack.last;
-      if (top.isCompleted || !top.hasMeaningfulData()) {
+      if (top.isCompleted) {
         _stack.removeLast();
       } else {
         break;
@@ -107,7 +107,7 @@ class TransactionStackManager {
 
     while (_stack.isNotEmpty) {
       final top = _stack.last;
-      if (top.isCompleted || !top.hasMeaningfulData()) {
+      if (top.isCompleted) {
         _stack.removeLast();
       } else {
         break;
