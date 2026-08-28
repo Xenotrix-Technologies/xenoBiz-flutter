@@ -97,6 +97,11 @@ class PurchaseRepositoryImpl implements PurchaseRepository {
   }
 
   @override
+  Future<void> deleteSupplier(String supplierId) async {
+    await (db.delete(db.suppliers)..where((s) => s.id.equals(supplierId))).go();
+  }
+
+  @override
   Future<List<PurchaseEntity>> getPurchaseOrders() async {
     final q = db.select(db.purchases)..orderBy([(t) => OrderingTerm.desc(t.orderDate)]);
     final rows = await q.get();

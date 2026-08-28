@@ -39,6 +39,13 @@ class UpdateSupplierSubmittedEvent extends PurchaseEvent {
   List<Object?> get props => [supplier];
 }
 
+class DeleteSupplierEvent extends PurchaseEvent {
+  final String supplierId;
+  const DeleteSupplierEvent(this.supplierId);
+  @override
+  List<Object?> get props => [supplierId];
+}
+
 // --- States ---
 abstract class PurchaseState extends Equatable {
   const PurchaseState();
@@ -80,6 +87,7 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
     on<CreatePurchaseOrderSubmittedEvent>(_onCreatePurchaseOrder);
     on<CreateSupplierSubmittedEvent>(_onCreateSupplier);
     on<UpdateSupplierSubmittedEvent>(_onUpdateSupplier);
+    on<DeleteSupplierEvent>(_onDeleteSupplier);
   }
 
   Future<void> _onFetchPurchases(
@@ -137,6 +145,19 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
     emit(PurchaseLoadingState());
     try {
       await purchaseRepository.updateSupplier(event.supplier);
+      final suppliers = await purchaseRepository.getSuppliers();
+      final purchases = await purchaseRepository.getPurchaseOrders();
+      emit(PurchaseLoadedState(purchases: purchases, suppliers: suppliers));
+    } catch (e) {
+      emit(PurchaseErrorState(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onDeleteSupplier(
+      DeleteSupplierEvent event, Emitter<PurchaseState> emit) async {
+    emit(PurchaseLoadingState());
+    try {
+      await purchaseRepository.deleteSupplier(event.supplierId);
       final suppliers = await purchaseRepository.getSuppliers();
       final purchases = await purchaseRepository.getPurchaseOrders();
       emit(PurchaseLoadedState(purchases: purchases, suppliers: suppliers));
