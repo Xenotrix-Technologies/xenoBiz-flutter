@@ -287,30 +287,6 @@ class _StockManagementPageState extends State<StockManagementPage> {
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
-            tooltip: 'Add Product',
-            onPressed: () async {
-              await context.push(RouteNames.createMaster, extra: 0);
-              if (context.mounted) {
-                final currentState = context.read<ProductBloc>().state;
-                if (currentState is ProductsLoadedState) {
-                  context.read<ProductBloc>().add(
-                        FetchProductsEvent(
-                          query: _searchController.text,
-                          stockFilter: currentState.selectedStockFilter,
-                          category: currentState.selectedCategory,
-                          sortBy: currentState.sortBy,
-                        ),
-                      );
-                } else {
-                  context.read<ProductBloc>().add(const FetchProductsEvent());
-                }
-              }
-            },
-          ),
-        ],
       ),
       body: BlocConsumer<ProductBloc, ProductState>(
         listener: (context, state) {

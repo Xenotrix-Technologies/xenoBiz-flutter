@@ -1,21 +1,61 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+
 import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/bloc/purchase_bloc.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/purchase_entity.dart';
-import '../../../infrastructure/services/account_import_service.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
 
+enum AccountTypeFilter { all, customers, suppliers }
+
+class AccountItem {
+  final String id;
+  final String name;
+  final String? companyName;
+  final String phone;
+  final String email;
+  final String address;
+  final bool isCustomer; // true = Customer, false = Supplier
+  final DateTime createdAt;
+  final double balance;
+  final CustomerEntity? customer;
+  final SupplierEntity? supplier;
+
+  const AccountItem({
+    required this.id,
+    required this.name,
+    this.companyName,
+    required this.phone,
+    required this.email,
+    required this.address,
+    required this.isCustomer,
+    required this.createdAt,
+    required this.balance,
+    this.customer,
+    this.supplier,
+  });
+
+  String get initials {
+    final clean = name.trim();
+    if (clean.isEmpty) return 'A';
+    final parts = clean.split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return clean.substring(0, clean.length >= 2 ? 2 : 1).toUpperCase();
+  }
+}
+
 class AccountsPage extends StatefulWidget {
-  const AccountsPage({super.key});
+  final int initialTab;
+  const AccountsPage({super.key, this.initialTab = 0});
 
   @override
   State<AccountsPage> createState() => _AccountsPageState();
@@ -23,12 +63,15 @@ class AccountsPage extends StatefulWidget {
 
 class _AccountsPageState extends State<AccountsPage> {
   final TextEditingController _searchController = TextEditingController();
-  int _activeTab =
-      0; // 0 = Sale Accounts (Customers), 1 = Purchase Accounts (Suppliers)
+  late AccountTypeFilter _selectedFilter;
+  String _sortBy = 'Created Date — Newest';
 
   @override
   void initState() {
     super.initState();
+    _selectedFilter = widget.initialTab == 1
+        ? AccountTypeFilter.suppliers
+        : AccountTypeFilter.all;
     context.read<AccountsBloc>().add(const FetchAccountsEvent());
     context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
   }
@@ -39,567 +82,52 @@ class _AccountsPageState extends State<AccountsPage> {
     super.dispose();
   }
 
-  void _showAddAccountChoicesModal(BuildContext context) {
-    showModalBottomSheet(
+  Future<void> _handleRefresh() async {
+    context.read<AccountsBloc>().add(const FetchAccountsEvent());
+    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+    await Future.delayed(const Duration(milliseconds: 600));
+  }
+
+  void _confirmDeleteAccount(BuildContext context, AccountItem item) {
+    showDialog(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Add Account',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: AppColors.border),
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.person_add_alt_1_rounded,
-                      color: AppColors.primaryBlue),
-                ),
-                title: const Text('Sale Account (Customer)',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text(
-                    'Add a customer for sales and credit tracking',
-                    style: TextStyle(fontSize: 12)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await context.push(RouteNames.createMaster, extra: 1);
-                  if (context.mounted) {
-                    context
-                        .read<AccountsBloc>()
-                        .add(const FetchAccountsEvent());
-                    context
-                        .read<PurchaseBloc>()
-                        .add(const FetchPurchasesEvent());
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: AppColors.border),
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.business_outlined,
-                      color: AppColors.warning),
-                ),
-                title: const Text('Purchase Account (Supplier)',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text(
-                    'Add a vendor/supplier for purchases and payables',
-                    style: TextStyle(fontSize: 12)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await context.push(RouteNames.createMaster, extra: 2);
-                  if (context.mounted) {
-                    context
-                        .read<AccountsBloc>()
-                        .add(const FetchAccountsEvent());
-                    context
-                        .read<PurchaseBloc>()
-                        .add(const FetchPurchasesEvent());
-                  }
-                },
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Account?', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text('Are you sure you want to delete "${item.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
-        );
-      },
-    );
-  }
-
-  void _showImportAccountsDialog(
-      BuildContext context, AccountsLoadedState state) {
-    final textController = TextEditingController(
-        text: AccountImportService.generateSampleCsvTemplate());
-    DuplicateAccountStrategy strategy = DuplicateAccountStrategy.addBalance;
-
-    final pBloc = context.read<PurchaseBloc>();
-    final List<SupplierEntity> suppliers = (pBloc.state is PurchaseLoadedState)
-        ? (pBloc.state as PurchaseLoadedState).suppliers
-        : [];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (item.isCustomer) {
+                context.read<AccountsBloc>().add(DeleteCustomerAccountEvent(item.id));
+              } else {
+                context.read<PurchaseBloc>().add(DeleteSupplierEvent(item.id));
+              }
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Account "${item.name}" deleted.'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
       ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (sheetCtx, setSheetState) {
-            final analysis = AccountImportService.parseAndValidateCsv(
-              csvContent: textController.text,
-              existingCustomers: state.allCustomers,
-              existingSuppliers: suppliers,
-              existingExpenses: state.expenseAccounts,
-            );
-
-            return SafeArea(
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(sheetCtx).size.height * 0.88,
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Import Accounts (CSV / Excel)',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.darkBlueText)),
-                        IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(sheetCtx)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Import Sale (Customer) and Purchase (Supplier) accounts in bulk.',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.secondaryText),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primaryBlue,
-                        side: const BorderSide(color: AppColors.primaryBlue),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(
-                            text: AccountImportService
-                                .generateSampleCsvTemplate()));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Sample CSV template copied to clipboard! Paste it into Excel or CSV file.'),
-                            backgroundColor: AppColors.primaryBlue,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text('Download / Copy Excel Template',
-                          style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Paste or Edit CSV Account Data:',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText)),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: textController,
-                              maxLines: 5,
-                              style: const TextStyle(
-                                  fontSize: 12, fontFamily: 'monospace'),
-                              decoration: InputDecoration(
-                                hintText:
-                                    'Account Type,Account Name,Company Name,Phone,Email,Address,Category,Opening Balance,Notes',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                contentPadding: const EdgeInsets.all(10),
-                              ),
-                              onChanged: (_) => setSheetState(() {}),
-                            ),
-                            const SizedBox(height: 14),
-                            const Text('Validation Results:',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText)),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                _AccountMetricChip(
-                                    label: 'Total Rows',
-                                    count: analysis.totalRows,
-                                    color: AppColors.darkBlueText),
-                                _AccountMetricChip(
-                                    label: 'Valid',
-                                    count: analysis.validRows,
-                                    color: AppColors.success),
-                                _AccountMetricChip(
-                                    label: 'Invalid',
-                                    count: analysis.invalidRows,
-                                    color: analysis.invalidRows > 0
-                                        ? AppColors.danger
-                                        : AppColors.secondaryText),
-                                _AccountMetricChip(
-                                    label: 'Duplicates',
-                                    count: analysis.duplicateRows,
-                                    color: analysis.duplicateRows > 0
-                                        ? AppColors.warning
-                                        : AppColors.secondaryText),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (analysis.errorSummary.isNotEmpty) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.errorContainer,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Row Errors:',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            color: AppColors.danger)),
-                                    const SizedBox(height: 4),
-                                    ...analysis.errorSummary.take(3).map(
-                                        (err) => Text('• $err',
-                                            style: const TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors.danger))),
-                                    if (analysis.errorSummary.length > 3)
-                                      Text(
-                                          '+ ${analysis.errorSummary.length - 3} more errors...',
-                                          style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.danger)),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            if (analysis.duplicateRows > 0) ...[
-                              const Text('Duplicate Account Strategy:',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.darkBlueText)),
-                              const SizedBox(height: 6),
-                              Column(
-                                children: [
-                                  ListTile(
-                                    title: const Text(
-                                        'Add Balance (Recommended)',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700)),
-                                    subtitle: const Text(
-                                        'Add imported balance to existing account balance',
-                                        style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy ==
-                                              DuplicateAccountStrategy
-                                                  .addBalance
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: strategy ==
-                                              DuplicateAccountStrategy
-                                                  .addBalance
-                                          ? AppColors.primaryBlue
-                                          : AppColors.secondaryText,
-                                    ),
-                                    onTap: () => setSheetState(() => strategy =
-                                        DuplicateAccountStrategy.addBalance),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                  ListTile(
-                                    title: const Text('Update Existing',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700)),
-                                    subtitle: const Text(
-                                        'Update contact details & overwrite opening balance',
-                                        style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy ==
-                                              DuplicateAccountStrategy
-                                                  .updateExisting
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: strategy ==
-                                              DuplicateAccountStrategy
-                                                  .updateExisting
-                                          ? AppColors.primaryBlue
-                                          : AppColors.secondaryText,
-                                    ),
-                                    onTap: () => setSheetState(() => strategy =
-                                        DuplicateAccountStrategy
-                                            .updateExisting),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                  ListTile(
-                                    title: const Text('Skip Duplicates',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700)),
-                                    subtitle: const Text(
-                                        'Ignore duplicate rows and do not import',
-                                        style: TextStyle(fontSize: 11)),
-                                    leading: Icon(
-                                      strategy == DuplicateAccountStrategy.skip
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked,
-                                      color: strategy ==
-                                              DuplicateAccountStrategy.skip
-                                          ? AppColors.primaryBlue
-                                          : AppColors.secondaryText,
-                                    ),
-                                    onTap: () => setSheetState(() => strategy =
-                                        DuplicateAccountStrategy.skip),
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            const Text('Parsed Accounts Preview:',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText)),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 180,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: AppColors.border),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.vertical,
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    columnSpacing: 16,
-                                    headingRowHeight: 32,
-                                    dataRowMinHeight: 32,
-                                    dataRowMaxHeight: 36,
-                                    columns: const [
-                                      DataColumn(
-                                          label: Text('Row',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Type',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Account Name',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Phone',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Opening Balance',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                      DataColumn(
-                                          label: Text('Status',
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w800))),
-                                    ],
-                                    rows: analysis.rows.map((row) {
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text('#${row.rowIndex}',
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(Text(row.accountType,
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w700))),
-                                          DataCell(Text(row.accountName,
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w700))),
-                                          DataCell(Text(
-                                              row.phone.isNotEmpty
-                                                  ? row.phone
-                                                  : '-',
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(Text(
-                                              '₹${row.openingBalance.toStringAsFixed(0)}',
-                                              style: const TextStyle(
-                                                  fontSize: 11))),
-                                          DataCell(
-                                            Text(
-                                              !row.isValid
-                                                  ? 'INVALID'
-                                                  : (row.isDuplicate
-                                                      ? 'DUPLICATE'
-                                                      : 'NEW'),
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w800,
-                                                color: !row.isValid
-                                                    ? AppColors.danger
-                                                    : (row.isDuplicate
-                                                        ? AppColors.warning
-                                                        : AppColors.success),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: analysis.validRows == 0
-                            ? null
-                            : () {
-                                int importedCount = 0;
-                                for (var r in analysis.rows) {
-                                  if (!r.isValid) continue;
-
-                                  if (r.isDuplicate &&
-                                      strategy ==
-                                          DuplicateAccountStrategy.skip) {
-                                    continue;
-                                  }
-
-                                  if (r.accountType == 'Sale Account') {
-                                    final cust = CustomerEntity(
-                                      id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}-$importedCount',
-                                      name: r.accountName,
-                                      phone: r.phone,
-                                      email: r.email,
-                                      address: r.address,
-                                      outstandingBalance: r.openingBalance,
-                                      createdAt: DateTime.now(),
-                                    );
-                                    context
-                                        .read<AccountsBloc>()
-                                        .add(CreateCustomerAccountEvent(cust));
-                                    importedCount++;
-                                  } else if (r.accountType ==
-                                      'Purchase Account') {
-                                    final sup = SupplierEntity(
-                                      id: 'sup_${DateTime.now().millisecondsSinceEpoch}_$importedCount',
-                                      name: r.accountName,
-                                      companyName: r.companyName.isNotEmpty
-                                          ? r.companyName
-                                          : r.accountName,
-                                      phone: r.phone,
-                                      email: r.email,
-                                      address: r.address,
-                                      payableBalance: r.openingBalance,
-                                      createdAt: DateTime.now(),
-                                    );
-                                    context
-                                        .read<PurchaseBloc>()
-                                        .add(CreateSupplierSubmittedEvent(sup));
-                                    importedCount++;
-                                  }
-                                }
-
-                                Navigator.pop(sheetCtx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        'Successfully imported $importedCount accounts!'),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
-                              },
-                        child: Text(
-                            'Confirm Import (${analysis.validRows} Accounts)',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w800)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
-  void _showFilterBottomSheet(BuildContext context, AccountsLoadedState state) {
-    String tempFilter = state.selectedFilterStatus;
-    String tempSort = state.sortBy;
+  void _showFilterBottomSheet(BuildContext context) {
+    AccountTypeFilter tempFilter = _selectedFilter;
+    String tempSort = _sortBy;
 
     showModalBottomSheet(
       context: context,
@@ -623,65 +151,100 @@ class _AccountsPageState extends State<AccountsPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Filter & Sort Accounts',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.darkBlueText)),
+                        const Text(
+                          'Filter & Sort Accounts',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.darkBlueText,
+                          ),
+                        ),
                         IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(sheetCtx)),
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(sheetCtx),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    Expanded(
+                    Flexible(
                       child: SingleChildScrollView(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Filter Status',
-                                style: TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w700)),
+                            const Text(
+                              'Account Type',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.darkBlueText,
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
-                              children: ['All', 'With Due', 'Paid'].map((st) {
-                                final isSelected = tempFilter == st;
+                              runSpacing: 6,
+                              children: [
+                                AccountTypeFilter.all,
+                                AccountTypeFilter.customers,
+                                AccountTypeFilter.suppliers,
+                              ].map((f) {
+                                final isSelected = tempFilter == f;
+                                final labelText = f == AccountTypeFilter.all
+                                    ? 'All'
+                                    : f == AccountTypeFilter.customers
+                                        ? 'Customers'
+                                        : 'Suppliers';
                                 return ChoiceChip(
-                                  label: Text(st),
+                                  label: Text(labelText),
                                   selected: isSelected,
                                   selectedColor: AppColors.primaryBlue,
                                   labelStyle: TextStyle(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : AppColors.darkBlueText,
-                                      fontWeight: FontWeight.w700),
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.darkBlueText,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                   onSelected: (val) {
                                     if (val) {
-                                      setSheetState(() => tempFilter = st);
+                                      setSheetState(() => tempFilter = f);
                                     }
                                   },
                                 );
                               }).toList(),
                             ),
-                            const SizedBox(height: 16),
-                            const Text('Sort By',
-                                style: TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Sort By',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.darkBlueText,
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
-                              children: ['Name', 'Highest Due'].map((sortOpt) {
+                              runSpacing: 6,
+                              children: [
+                                'Created Date — Newest',
+                                'Created Date — Oldest',
+                                'Name — A to Z',
+                                'Name — Z to A',
+                                'Highest Outstanding',
+                                'Lowest Outstanding',
+                              ].map((sortOpt) {
                                 final isSelected = tempSort == sortOpt;
                                 return ChoiceChip(
                                   label: Text(sortOpt),
                                   selected: isSelected,
                                   selectedColor: AppColors.primaryBlue,
                                   labelStyle: TextStyle(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : AppColors.darkBlueText,
-                                      fontWeight: FontWeight.w700),
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.darkBlueText,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                   onSelected: (val) {
                                     if (val) {
                                       setSheetState(() => tempSort = sortOpt);
@@ -704,21 +267,20 @@ class _AccountsPageState extends State<AccountsPage> {
                           backgroundColor: AppColors.primaryBlue,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                         onPressed: () {
-                          context.read<AccountsBloc>().add(
-                                FetchAccountsEvent(
-                                  query: state.searchQuery,
-                                  filterStatus: tempFilter,
-                                  sortBy: tempSort,
-                                ),
-                              );
+                          setState(() {
+                            _selectedFilter = tempFilter;
+                            _sortBy = tempSort;
+                          });
                           Navigator.pop(sheetCtx);
                         },
-                        child: const Text('Apply Filter',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w800)),
+                        child: const Text(
+                          'Apply Filter',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        ),
                       ),
                     ),
                   ],
@@ -731,36 +293,83 @@ class _AccountsPageState extends State<AccountsPage> {
     );
   }
 
-  void _confirmDeleteCustomer(BuildContext context, CustomerEntity customer) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Customer Account'),
-        content: Text('Are you sure you want to delete "${customer.name}"?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                foregroundColor: Colors.white),
-            onPressed: () {
-              context
-                  .read<AccountsBloc>()
-                  .add(DeleteCustomerAccountEvent(customer.id));
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
+  List<AccountItem> _getFilteredAndSortedAccounts(
+    List<CustomerEntity> customers,
+    List<SupplierEntity> suppliers,
+  ) {
+    final List<AccountItem> items = [];
 
-  String _formatCurrency(double amount) {
-    final formatter =
-        NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
-    return formatter.format(amount);
+    if (_selectedFilter == AccountTypeFilter.all ||
+        _selectedFilter == AccountTypeFilter.customers) {
+      for (var c in customers) {
+        items.add(
+          AccountItem(
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            email: c.email,
+            address: c.address,
+            isCustomer: true,
+            createdAt: c.createdAt,
+            balance: c.outstandingBalance,
+            customer: c,
+          ),
+        );
+      }
+    }
+
+    if (_selectedFilter == AccountTypeFilter.all ||
+        _selectedFilter == AccountTypeFilter.suppliers) {
+      for (var s in suppliers) {
+        items.add(
+          AccountItem(
+            id: s.id,
+            name: s.name,
+            companyName: s.companyName,
+            phone: s.phone,
+            email: s.email,
+            address: s.address,
+            isCustomer: false,
+            createdAt: s.createdAt,
+            balance: s.payableBalance,
+            supplier: s,
+          ),
+        );
+      }
+    }
+
+    // Filter by Search Query
+    final query = _searchController.text.trim().toLowerCase();
+    List<AccountItem> filtered = items;
+    if (query.isNotEmpty) {
+      filtered = items.where((item) {
+        final matchName = item.name.toLowerCase().contains(query);
+        final matchCompany = item.companyName?.toLowerCase().contains(query) ?? false;
+        final matchPhone = item.phone.toLowerCase().contains(query);
+        final matchEmail = item.email.toLowerCase().contains(query);
+        final matchAddress = item.address.toLowerCase().contains(query);
+        final matchId = item.id.toLowerCase().contains(query);
+        return matchName || matchCompany || matchPhone || matchEmail || matchAddress || matchId;
+      }).toList();
+    }
+
+    // Sort
+    if (_sortBy == 'Created Date — Oldest') {
+      filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    } else if (_sortBy == 'Name — A to Z') {
+      filtered.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } else if (_sortBy == 'Name — Z to A') {
+      filtered.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+    } else if (_sortBy == 'Highest Outstanding') {
+      filtered.sort((a, b) => b.balance.compareTo(a.balance));
+    } else if (_sortBy == 'Lowest Outstanding') {
+      filtered.sort((a, b) => a.balance.compareTo(b.balance));
+    } else {
+      // Default: Created Date — Newest
+      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+
+    return filtered;
   }
 
   @override
@@ -768,641 +377,458 @@ class _AccountsPageState extends State<AccountsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Accounts'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              'Accounts',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                letterSpacing: -0.2,
+              ),
+            ),
+            SizedBox(height: 1),
+            Text(
+              'Manage your customers and suppliers',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: Colors.white70,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          BlocBuilder<AccountsBloc, AccountsState>(
-            builder: (context, state) {
-              if (state is AccountsLoadedState) {
-                return IconButton(
-                  icon: const Icon(Icons.file_download_outlined),
-                  tooltip: 'Import Accounts (CSV/Excel)',
-                  onPressed: () => _showImportAccountsDialog(context, state),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          )
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: null,
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: Colors.white,
-        onPressed: () => _showAddAccountChoicesModal(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Account',
-            style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: BlocBuilder<AccountsBloc, AccountsState>(
-        builder: (context, state) {
-          if (state is AccountsLoadingState || state is AccountsInitialState) {
-            return const AccountsPageSkeleton();
-          }
+        builder: (context, accState) {
+          return BlocBuilder<PurchaseBloc, PurchaseState>(
+            builder: (context, purState) {
+              if (accState is AccountsLoadingState ||
+                  purState is PurchaseLoadingState ||
+                  accState is AccountsInitialState) {
+                return const AccountsPageSkeleton();
+              }
 
-          if (state is AccountsErrorState) {
-            return ErrorState(
-              message: state.message,
-              onRetry: () =>
-                  context.read<AccountsBloc>().add(const FetchAccountsEvent()),
-            );
-          }
+              if (accState is AccountsErrorState) {
+                return ErrorState(
+                  message: accState.message,
+                  onRetry: () {
+                    context.read<AccountsBloc>().add(const FetchAccountsEvent());
+                    context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+                  },
+                );
+              }
 
-          if (state is AccountsLoadedState) {
-            return Column(
-              children: [
-                // Top Summary Header (Customer Due & Supplier Payable)
-                _buildTopSummaryBar(context, state),
-                const Divider(height: 1, color: AppColors.border),
+              final customers = (accState is AccountsLoadedState)
+                  ? accState.allCustomers
+                  : <CustomerEntity>[];
+              final suppliers = (purState is PurchaseLoadedState)
+                  ? purState.suppliers
+                  : <SupplierEntity>[];
 
-                // Search Bar + Filter Button Row
-                Container(
-                  color: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (val) {
-                            context.read<AccountsBloc>().add(
-                                  FetchAccountsEvent(
-                                    query: val,
-                                    filterStatus: state.selectedFilterStatus,
-                                    sortBy: state.sortBy,
-                                  ),
-                                );
-                          },
-                          decoration: InputDecoration(
-                            hintText: 'Search accounts by name or phone...',
-                            hintStyle: const TextStyle(
-                                fontSize: 13, color: AppColors.secondaryText),
-                            prefixIcon: const Icon(Icons.search,
-                                color: AppColors.secondaryText, size: 20),
-                            border: OutlineInputBorder(
+              final processedAccounts =
+                  _getFilteredAndSortedAccounts(customers, suppliers);
+
+              return Column(
+                children: [
+                  // Search Bar + Filter Button Row
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText: 'Search accounts by name or phone...',
+                              hintStyle: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.secondaryText,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                color: AppColors.secondaryText,
+                                size: 20,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppColors.border),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          style: IconButton.styleFrom(
+                            backgroundColor: _selectedFilter != AccountTypeFilter.all ||
+                                    _sortBy != 'Created Date — Newest'
+                                ? AppColors.primaryBlue.withValues(alpha: 0.15)
+                                : AppColors.surfaceContainerLow,
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  const BorderSide(color: AppColors.border),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        style: IconButton.styleFrom(
-                          backgroundColor: state.selectedFilterStatus != 'All'
-                              ? AppColors.primaryBlue.withValues(alpha: 0.15)
-                              : AppColors.surfaceContainerLow,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: Icon(
-                          Icons.filter_list,
-                          color: state.selectedFilterStatus != 'All'
-                              ? AppColors.primaryBlue
-                              : AppColors.darkBlueText,
-                        ),
-                        onPressed: () => _showFilterBottomSheet(context, state),
-                        tooltip: 'Filter & Sort Accounts',
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Sale vs Purchase Accounts Filter Sub-bar
-                Container(
-                  color: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ChoiceChip(
-                          padding: EdgeInsets.zero,
-                          labelPadding:
-                              const EdgeInsets.symmetric(horizontal: 4),
-                          label: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.person_outline, size: 15),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    'Sale Accounts (${state.customerCount})',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
-                          selected: _activeTab == 0,
-                          selectedColor: AppColors.primaryBlue,
-                          labelStyle: TextStyle(
-                            color: _activeTab == 0
-                                ? Colors.white
+                          icon: Icon(
+                            Icons.filter_list,
+                            color: _selectedFilter != AccountTypeFilter.all ||
+                                    _sortBy != 'Created Date — Newest'
+                                ? AppColors.primaryBlue
                                 : AppColors.darkBlueText,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
                           ),
-                          onSelected: (val) {
-                            if (val) setState(() => _activeTab = 0);
-                          },
+                          onPressed: () => _showFilterBottomSheet(context),
+                          tooltip: 'Filter & Sort Accounts',
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: BlocBuilder<PurchaseBloc, PurchaseState>(
-                          builder: (context, pState) {
-                            final supCount = (pState is PurchaseLoadedState)
-                                ? pState.suppliers.length
-                                : 0;
-                            return ChoiceChip(
-                              padding: EdgeInsets.zero,
-                              labelPadding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
-                              label: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.business_outlined,
-                                        size: 15),
-                                    const SizedBox(width: 4),
-                                    Flexible(
-                                      child: Text(
-                                        'Purchase Accounts ($supCount)',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              selected: _activeTab == 1,
-                              selectedColor: AppColors.primaryBlue,
-                              labelStyle: TextStyle(
-                                color: _activeTab == 1
-                                    ? Colors.white
-                                    : AppColors.darkBlueText,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                              onSelected: (val) {
-                                if (val) setState(() => _activeTab = 1);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const Divider(height: 1, color: AppColors.border),
 
-                // Main Accounts List View
-                Expanded(
-                  child: _activeTab == 0
-                      ? _buildCustomerAccountsList(context, state)
-                      : _buildSupplierAccountsList(context),
-                ),
-              ],
-            );
-          }
+                  // Horizontally Scrollable Filter Chips Bar
+                  _buildFilterChipsBar(customers.length, suppliers.length),
 
-          return const SizedBox.shrink();
+                  // Sort Sub-header
+                  Container(
+                    color: AppColors.background,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sort_rounded, size: 14, color: AppColors.secondaryText),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Sort by: $_sortBy',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Main Account List View
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _handleRefresh,
+                      color: AppColors.primaryBlue,
+                      child: _buildAccountListView(processedAccounts),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
         },
       ),
     );
   }
 
-  // TOP OVERVIEW SUMMARY BAR (Customer Due & Supplier Payable)
-  Widget _buildTopSummaryBar(BuildContext context, AccountsLoadedState state) {
-    final pState = context.watch<PurchaseBloc>().state;
-    final suppliers =
-        (pState is PurchaseLoadedState) ? pState.suppliers : <SupplierEntity>[];
-    final double supplierPayableTotal =
-        suppliers.fold(0.0, (sum, sup) => sum + sup.payableBalance);
-    final int supplierCount = suppliers.length;
+  // HORIZONTALLY SCROLLABLE FILTER CHIPS BAR
+  Widget _buildFilterChipsBar(int customerCount, int supplierCount) {
+    final totalCount = customerCount + supplierCount;
+
+    final filterOptions = [
+      {'type': AccountTypeFilter.all, 'label': 'All ($totalCount)'},
+      {'type': AccountTypeFilter.customers, 'label': 'Customers ($customerCount)'},
+      {'type': AccountTypeFilter.suppliers, 'label': 'Suppliers ($supplierCount)'},
+    ];
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SummaryBox(
-              label: 'Customer Due',
-              value: _formatCurrency(state.customerDueTotal),
-              subText: '${state.customerCount} Accounts',
-              valueColor: state.customerDueTotal > 0
-                  ? AppColors.danger
-                  : AppColors.success,
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: filterOptions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (ctx, idx) {
+          final option = filterOptions[idx];
+          final fType = option['type'] as AccountTypeFilter;
+          final isSelected = _selectedFilter == fType;
+
+          return ChoiceChip(
+            label: Text(option['label'] as String),
+            selected: isSelected,
+            selectedColor: AppColors.primaryBlue,
+            backgroundColor: AppColors.surfaceContainerLow,
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? Colors.white : AppColors.darkBlueText,
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _SummaryBox(
-              label: 'Supplier Payable',
-              value: _formatCurrency(supplierPayableTotal),
-              subText: '$supplierCount Accounts',
-              valueColor: supplierPayableTotal > 0
-                  ? AppColors.warning
-                  : AppColors.secondaryText,
-            ),
-          ),
-        ],
+            onSelected: (val) {
+              if (val) {
+                setState(() => _selectedFilter = fType);
+              }
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildCustomerAccountsList(
-      BuildContext context, AccountsLoadedState state) {
-    if (state.filteredCustomers.isEmpty) {
-      return const EmptyState(
-        title: 'No Customer Accounts',
-        message:
-            'Use the + Add Account button below to start tracking customer credit and sales.',
-        icon: Icons.people_outline,
+  // MAIN ACCOUNT LIST VIEW
+  Widget _buildAccountListView(List<AccountItem> accounts) {
+    if (accounts.isEmpty) {
+      String title = 'No accounts yet';
+      String msg = 'Create a customer or supplier to start managing your business accounts.';
+
+      if (_selectedFilter == AccountTypeFilter.customers) {
+        title = 'No customers yet';
+        msg = 'Tap + in the bottom navigation bar to add a customer.';
+      } else if (_selectedFilter == AccountTypeFilter.suppliers) {
+        title = 'No suppliers yet';
+        msg = 'Tap + in the bottom navigation bar to add a supplier.';
+      }
+
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.55,
+          alignment: Alignment.center,
+          child: EmptyState(
+            title: title,
+            message: msg,
+            icon: Icons.person_search_outlined,
+          ),
+        ),
       );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: state.filteredCustomers.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+      itemCount: accounts.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (ctx, idx) {
-        final cust = state.filteredCustomers[idx];
-        final isDue = cust.outstandingBalance > 0;
+        final account = accounts[idx];
+        return _buildAccountCard(context, account);
+      },
+    );
+  }
 
-        return AppCard(
-          onTap: () async {
-            await context.push(RouteNames.customerDetails, extra: cust);
-            if (context.mounted) {
-              context.read<AccountsBloc>().add(const FetchAccountsEvent());
-            }
-          },
-          padding: const EdgeInsets.all(14),
+  // ACCOUNT CARD ITEM
+  Widget _buildAccountCard(BuildContext context, AccountItem account) {
+    final isCustomer = account.isCustomer;
+    final typeLabel = isCustomer ? 'Customer' : 'Supplier';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (isCustomer && account.customer != null) {
+            context.push(RouteNames.customerDetails, extra: account.customer);
+          } else if (!isCustomer && account.supplier != null) {
+            context.push(RouteNames.supplierDetails, extra: account.supplier);
+          }
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.12),
+              // Avatar Icon Container
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isCustomer
+                      ? AppColors.primaryBlue.withValues(alpha: 0.08)
+                      : Colors.purple.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
                 child: Text(
-                  cust.name.isNotEmpty
-                      ? cust.name.substring(0, 1).toUpperCase()
-                      : 'C',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryBlue),
+                  account.initials,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'PlusJakartaSans',
+                    color: isCustomer ? AppColors.primaryBlue : Colors.purple,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
+
+              // Middle Column Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Row 1: TYPE BADGE • Account Name
                     Row(
                       children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isCustomer
+                                ? AppColors.primaryBlue.withValues(alpha: 0.1)
+                                : Colors.purple.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            typeLabel.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'PlusJakartaSans',
+                              color: isCustomer ? AppColors.primaryBlue : Colors.purple,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            cust.name,
+                            account.name,
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: FontWeight.w800,
+                              fontFamily: 'PlusJakartaSans',
                               color: AppColors.darkBlueText,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        if (isDue)
-                          StatusChip.unpaid(label: 'Due')
-                        else
-                          StatusChip.paid(label: 'Paid'),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
+
+                    // Row 2: Phone & Email/Address
+                    Row(
+                      children: [
+                        Icon(Icons.phone_outlined, size: 12, color: AppColors.secondaryText),
+                        const SizedBox(width: 4),
+                        Text(
+                          account.phone.isNotEmpty ? account.phone : 'No phone number',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (account.email.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          const Text('•', style: TextStyle(fontSize: 10, color: AppColors.secondaryText)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              account.email,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.secondaryText,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+
+                    // Row 3: Created Date
                     Text(
-                      'ID: ${cust.id} ${cust.phone.isNotEmpty ? "• ${cust.phone}" : ""}',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.secondaryText),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      'Created: ${DateFormat('dd MMM yyyy').format(account.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.secondaryText.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text('Outstanding',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.secondaryText)),
-                  const SizedBox(height: 2),
-                  Text(
-                    _formatCurrency(cust.outstandingBalance),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: isDue ? AppColors.danger : AppColors.success,
+
+              // Three-Dot More Menu
+              PopupMenuButton<String>(
+                icon: const Icon(
+                  Icons.more_vert_rounded,
+                  size: 20,
+                  color: AppColors.secondaryText,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                onSelected: (action) {
+                  if (action == 'view') {
+                    if (isCustomer && account.customer != null) {
+                      context.push(RouteNames.customerDetails, extra: account.customer);
+                    } else if (!isCustomer && account.supplier != null) {
+                      context.push(RouteNames.supplierDetails, extra: account.supplier);
+                    }
+                  } else if (action == 'edit') {
+                    if (isCustomer && account.customer != null) {
+                      context.push(RouteNames.createMaster, extra: account.customer);
+                    } else if (!isCustomer && account.supplier != null) {
+                      context.push(RouteNames.createMaster, extra: account.supplier);
+                    }
+                  } else if (action == 'delete') {
+                    _confirmDeleteAccount(context, account);
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 18, color: AppColors.darkBlueText),
+                        SizedBox(width: 10),
+                        Text('View', style: TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18, color: AppColors.primaryBlue),
+                        SizedBox(width: 10),
+                        Text('Edit', style: TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger),
+                        SizedBox(width: 10),
+                        Text('Delete', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.danger)),
+                      ],
                     ),
                   ),
                 ],
               ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert,
-                    size: 20, color: AppColors.secondaryText),
-                onSelected: (val) async {
-                  if (val == 'edit') {
-                    await context.push(RouteNames.createMaster, extra: cust);
-                    if (context.mounted) {
-                      context
-                          .read<AccountsBloc>()
-                          .add(const FetchAccountsEvent());
-                    }
-                  } else if (val == 'delete') {
-                    _confirmDeleteCustomer(context, cust);
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                      value: 'edit',
-                      child: Row(children: [
-                        Icon(Icons.edit, size: 18),
-                        SizedBox(width: 8),
-                        Text('Edit Account')
-                      ])),
-                  PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [
-                        Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete Account',
-                            style: TextStyle(color: Colors.red))
-                      ])),
-                ],
-              ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSupplierAccountsList(BuildContext context) {
-    return BlocBuilder<PurchaseBloc, PurchaseState>(
-      builder: (context, pState) {
-        if (pState is PurchaseLoadingState) {
-          return const AccountsPageSkeleton();
-        }
-        if (pState is PurchaseLoadedState) {
-          if (pState.suppliers.isEmpty) {
-            return const EmptyState(
-              title: 'No Purchase Accounts',
-              message:
-                  'Add supplier accounts to manage purchase orders, stock bills, and vendor payables.',
-              icon: Icons.business_outlined,
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: pState.suppliers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (ctx, idx) {
-              final sup = pState.suppliers[idx];
-              final isDue = sup.payableBalance > 0;
-
-              return AppCard(
-                onTap: () async {
-                  await context.push(RouteNames.supplierDetails, extra: sup);
-                  if (context.mounted) {
-                    context
-                        .read<PurchaseBloc>()
-                        .add(const FetchPurchasesEvent());
-                  }
-                },
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor:
-                          AppColors.warning.withValues(alpha: 0.12),
-                      child: Text(
-                        sup.name.isNotEmpty
-                            ? sup.name.substring(0, 1).toUpperCase()
-                            : 'S',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.warning),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  sup.name,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.darkBlueText,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              if (isDue)
-                                StatusChip.unpaid(label: 'Payable')
-                              else
-                                StatusChip.paid(label: 'Clear'),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Company: ${sup.companyName} ${sup.phone.isNotEmpty ? "• ${sup.phone}" : ""}',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.secondaryText),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          _formatCurrency(sup.payableBalance),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: isDue
-                                ? AppColors.warning
-                                : AppColors.secondaryText,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isDue ? 'Payable Due' : 'No Due',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDue
-                                ? AppColors.warning
-                                : AppColors.secondaryText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert,
-                          size: 20, color: AppColors.secondaryText),
-                      onSelected: (val) async {
-                        if (val == 'edit') {
-                          await context.push(RouteNames.createMaster,
-                              extra: sup);
-                          if (context.mounted) {
-                            context
-                                .read<PurchaseBloc>()
-                                .add(const FetchPurchasesEvent());
-                          }
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                            value: 'edit',
-                            child: Row(children: [
-                              Icon(Icons.edit, size: 18),
-                              SizedBox(width: 8),
-                              Text('Edit Account')
-                            ])),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        }
-        return const SizedBox.shrink();
-      },
-    );
-  }
-}
-
-// SUMMARY BOX WIDGET
-class _SummaryBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final String subText;
-  final Color valueColor;
-
-  const _SummaryBox({
-    required this.label,
-    required this.value,
-    required this.subText,
-    required this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.secondaryText)),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w800, color: valueColor),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(subText,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.secondaryText)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccountMetricChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
-
-  const _AccountMetricChip({
-    required this.label,
-    required this.count,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700, color: color),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              '$count',
-              style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

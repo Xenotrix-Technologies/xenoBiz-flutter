@@ -27,7 +27,7 @@ class _MainShellPageState extends State<MainShellPage> {
     }
     widget.navigationShell.goBranch(
       index,
-      initialLocation: index == widget.navigationShell.currentIndex,
+      initialLocation: index == 4 || index == widget.navigationShell.currentIndex,
     );
   }
 

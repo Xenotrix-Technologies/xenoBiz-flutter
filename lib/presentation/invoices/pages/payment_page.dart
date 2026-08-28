@@ -100,10 +100,7 @@ class _PaymentPageState extends State<PaymentPage> {
             backgroundColor: AppColors.success,
           ),
         );
-        Navigator.of(context).pop();
-        if (context.mounted) {
-          _safePop();
-        }
+        Navigator.of(context).pop({'isPurchaseDone': true});
       }
       return;
     }
@@ -678,23 +675,15 @@ class _PaymentPageState extends State<PaymentPage> {
               final targetPrevBalance =
                   widget.customer?.outstandingBalance ?? 0.0;
 
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
+              if (context.mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop({
+                  'invoice': targetInvoice,
+                  'customer': targetCustomer,
+                  'paymentMethod': targetPaymentMethod,
+                  'amountPaid': enteredAmt,
+                  'previousBalance': targetPrevBalance,
+                });
               }
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (context.mounted) {
-                  context.pushReplacement(
-                    RouteNames.invoiceResult,
-                    extra: {
-                      'invoice': targetInvoice,
-                      'customer': targetCustomer,
-                      'paymentMethod': targetPaymentMethod,
-                      'amountPaid': enteredAmt,
-                      'previousBalance': targetPrevBalance,
-                    },
-                  );
-                }
-              });
             } else if (state is InvoiceErrorState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

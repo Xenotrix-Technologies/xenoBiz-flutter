@@ -1,17 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../application/bloc/auth_bloc.dart';
 import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
-import '../../../domain/entities/business_entity.dart';
-import '../../../domain/entities/invoice_entity.dart';
-import '../../../domain/repositories/auth_repository.dart';
 import '../../../infrastructure/database/app_database.dart';
-import '../../widgets/app_card.dart';
+
+enum BusinessHubViewMode { list, grid }
 
 class MoreMenuPage extends StatefulWidget {
   const MoreMenuPage({super.key});
@@ -20,110 +16,326 @@ class MoreMenuPage extends StatefulWidget {
   State<MoreMenuPage> createState() => _MoreMenuPageState();
 }
 
+class _MenuItem {
+  final IconData icon;
+  final String title;
+  final String description;
+  final String? route;
+  final Color color;
+  final Object? extra;
+  final bool isSecondarySelection;
+  final bool isComplianceTool;
+  final bool isReportTool;
+
+  const _MenuItem({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.route,
+    required this.color,
+    this.extra,
+    this.isSecondarySelection = false,
+    this.isComplianceTool = false,
+    this.isReportTool = false,
+  });
+}
+
+class _MenuCategory {
+  final String categoryTitle;
+  final String categorySubtitle;
+  final List<_MenuItem> items;
+
+  const _MenuCategory({
+    required this.categoryTitle,
+    required this.categorySubtitle,
+    required this.items,
+  });
+}
+
 class _MoreMenuPageState extends State<MoreMenuPage> {
-  static const List<_MenuCategory> _allSections = [
+  static const List<_MenuCategory> _categories = [
     _MenuCategory(
-      categoryTitle: 'Sales & Invoicing',
+      categoryTitle: 'General',
+      categorySubtitle: 'Core business operations & account management',
       items: [
-        _MenuItem(icon: Icons.receipt_long_outlined, title: 'All Invoices', route: RouteNames.invoices, color: AppColors.primaryBlue),
-        _MenuItem(icon: Icons.people_alt_outlined, title: 'Customers', route: RouteNames.customers, color: AppColors.primaryBlue),
-        _MenuItem(icon: Icons.assignment_return_outlined, title: 'Sales Returns', route: RouteNames.salesReturns, color: AppColors.danger),
-        _MenuItem(icon: Icons.analytics_outlined, title: 'Sales Analytics', route: RouteNames.salesAnalytics, color: AppColors.success),
-        _MenuItem(icon: Icons.repeat_outlined, title: 'Recurring Invoices', route: RouteNames.recurringInvoices, color: AppColors.primaryBlue, subtitle: 'Auto-recurring billing'),
-        _MenuItem(icon: Icons.request_quote_outlined, title: 'Quotations', route: RouteNames.quotations, color: AppColors.primaryBlue, subtitle: 'Price estimates & quotes'),
-        _MenuItem(icon: Icons.description_outlined, title: 'Proforma Invoices', route: RouteNames.proformaInvoices, color: AppColors.primaryBlue, subtitle: 'Preliminary invoices'),
-        _MenuItem(icon: Icons.local_shipping_outlined, title: 'Delivery Challans', route: RouteNames.deliveryChallans, color: AppColors.primaryBlue, subtitle: 'Goods dispatch notes'),
-        _MenuItem(icon: Icons.design_services_outlined, title: 'Services', route: RouteNames.services, color: AppColors.primaryBlue, subtitle: 'Service catalog & pricing'),
-        _MenuItem(icon: Icons.note_alt_outlined, title: 'Credit Notes', route: RouteNames.creditNotes, color: AppColors.danger, subtitle: 'Return credit vouchers'),
-        _MenuItem(icon: Icons.note_add_outlined, title: 'Debit Notes', route: RouteNames.debitNotes, color: AppColors.warning, subtitle: 'Vendor debit vouchers'),
-      ],
-    ),
-    _MenuCategory(
-      categoryTitle: 'Inventory & Purchasing',
-      items: [
-        _MenuItem(icon: Icons.inventory_2_outlined, title: 'Product Catalog', route: RouteNames.products, color: AppColors.deepNavy, subtitle: 'SKU inventory list'),
-        _MenuItem(icon: Icons.shopping_cart_outlined, title: 'Purchases', route: RouteNames.invoices, extra: {'initialType': InvoiceType.purchase}, color: AppColors.primaryBlue, subtitle: 'Vendor purchase bills'),
-        _MenuItem(icon: Icons.store_outlined, title: 'Suppliers', route: RouteNames.supplierDirectory, color: AppColors.primaryBlue, subtitle: 'Supplier directory'),
-        _MenuItem(icon: Icons.settings_backup_restore_outlined, title: 'Purchase Returns', route: RouteNames.purchaseReturns, color: AppColors.danger, subtitle: 'Goods returned to vendor'),
-        _MenuItem(icon: Icons.swap_horiz_outlined, title: 'Stock Transfer', route: RouteNames.stockTransfer, color: AppColors.deepNavy, subtitle: 'Inter-warehouse transfer'),
-        _MenuItem(icon: Icons.assessment_outlined, title: 'Stock Valuation', route: RouteNames.stockValuation, color: AppColors.warning, subtitle: 'Inventory valuation report'),
-        _MenuItem(icon: Icons.warning_amber_outlined, title: 'Low Stock Report', route: RouteNames.lowStockReport, color: AppColors.danger, subtitle: 'Reorder point alerts'),
-        _MenuItem(icon: Icons.compare_arrows_outlined, title: 'Stock Movement', route: RouteNames.stockMovement, color: AppColors.primaryBlue, subtitle: 'Inward & outward log'),
+        _MenuItem(
+          icon: Icons.people_alt_outlined,
+          title: 'Customers & Suppliers',
+          description: 'Manage customers, suppliers accounts',
+          route: RouteNames.moreCustomers,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.category_outlined,
+          title: 'Income & Expense Accounts',
+          description: 'Manage income & expense categories',
+          route: RouteNames.categories,
+          color: Colors.purple,
+        ),
+        _MenuItem(
+          icon: Icons.analytics_outlined,
+          title: 'Sales Analytics',
+          description: 'Track sales performance',
+          route: RouteNames.salesAnalytics,
+          color: Colors.teal,
+        ),
+        _MenuItem(
+          icon: Icons.request_quote_outlined,
+          title: 'Quotations',
+          description: 'Create and manage quotations',
+          route: RouteNames.quotations,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.local_shipping_outlined,
+          title: 'Delivery Challans',
+          description: 'Manage goods dispatch documents',
+          route: RouteNames.deliveryChallans,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.design_services_outlined,
+          title: 'Services',
+          description: 'Manage service items',
+          route: RouteNames.services,
+          color: Colors.indigo,
+        ),
+        _MenuItem(
+          icon: Icons.note_alt_outlined,
+          title: 'Credit Note',
+          description: 'Create and manage credit notes',
+          route: RouteNames.creditNotes,
+          color: AppColors.danger,
+        ),
+        _MenuItem(
+          icon: Icons.note_add_outlined,
+          title: 'Debit Note',
+          description: 'Create and manage debit notes',
+          route: RouteNames.debitNotes,
+          color: AppColors.warning,
+        ),
       ],
     ),
     _MenuCategory(
       categoryTitle: 'Finance & Accounting',
+      categorySubtitle: 'Double-entry bookkeeping & statement ledgers',
       items: [
-        _MenuItem(icon: Icons.edit_note_outlined, title: 'Journal', route: RouteNames.journal, color: Colors.purple, subtitle: 'Manual accounting entries'),
-        _MenuItem(icon: Icons.swap_horizontal_circle_outlined, title: 'Contra', route: RouteNames.contra, color: Colors.teal, subtitle: 'Cash & bank transfers'),
-        _MenuItem(icon: Icons.auto_stories_outlined, title: 'Daily Book', route: RouteNames.dailyBook, color: AppColors.primaryBlue, subtitle: 'Daily financial transactions'),
-        _MenuItem(icon: Icons.account_balance_wallet_outlined, title: 'Ledger', route: RouteNames.ledger, color: AppColors.primaryBlue, subtitle: 'Account-wise history'),
-        _MenuItem(icon: Icons.account_balance_outlined, title: 'Cash & Bank', route: RouteNames.cashBank, color: AppColors.success, subtitle: 'Balances & accounts'),
-        _MenuItem(icon: Icons.call_received_outlined, title: 'Receivables', route: RouteNames.receivables, color: AppColors.success, subtitle: 'Outstanding customer money'),
-        _MenuItem(icon: Icons.call_made_outlined, title: 'Payables', route: RouteNames.payables, color: AppColors.danger, subtitle: 'Outstanding supplier bills'),
-        _MenuItem(icon: Icons.balance_outlined, title: 'Trial Balance', route: RouteNames.trialBalance, color: AppColors.primaryBlue, subtitle: 'Debit & credit balances'),
+        _MenuItem(
+          icon: Icons.edit_note_outlined,
+          title: 'Journal',
+          description: 'Record adjustment entries',
+          route: RouteNames.journal,
+          color: Colors.purple,
+        ),
+        _MenuItem(
+          icon: Icons.swap_horizontal_circle_outlined,
+          title: 'Contra',
+          description: 'Manage cash and bank transfers',
+          route: RouteNames.contra,
+          color: Colors.teal,
+        ),
+        _MenuItem(
+          icon: Icons.auto_stories_outlined,
+          title: 'Daily Book',
+          description: 'View daily account transactions',
+          route: RouteNames.dailyBook,
+          color: Color(0xFF0066CC),
+          isSecondarySelection: true,
+        ),
+        _MenuItem(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Ledger',
+          description: 'View account-wise transactions',
+          route: RouteNames.ledger,
+          color: Color(0xFF0066CC),
+          isSecondarySelection: true,
+        ),
+        _MenuItem(
+          icon: Icons.call_received_outlined,
+          title: 'Receivables',
+          description: 'Track money to receive',
+          route: RouteNames.receivables,
+          color: AppColors.success,
+        ),
+        _MenuItem(
+          icon: Icons.call_made_outlined,
+          title: 'Payables',
+          description: 'Track money to pay',
+          route: RouteNames.payables,
+          color: AppColors.danger,
+        ),
       ],
     ),
     _MenuCategory(
-      categoryTitle: 'Reports',
+      categoryTitle: 'Report Hub',
+      categorySubtitle: 'Business performance analytics & insights',
       items: [
-        _MenuItem(icon: Icons.point_of_sale_outlined, title: 'Reports Hub', route: RouteNames.reports, color: AppColors.warning, subtitle: 'Business & accounting reports'),
-        _MenuItem(icon: Icons.bar_chart_outlined, title: 'Sales Reports', route: RouteNames.reports, extra: 0, color: AppColors.primaryBlue, subtitle: 'Revenue & customer reports'),
-        _MenuItem(icon: Icons.shopping_bag_outlined, title: 'Purchase Reports', route: RouteNames.reports, extra: 1, color: AppColors.primaryBlue, subtitle: 'Supplier & purchase analytics'),
-        _MenuItem(icon: Icons.inventory_outlined, title: 'Inventory Reports', route: RouteNames.reports, extra: 2, color: AppColors.warning, subtitle: 'Stock movement & valuation'),
-        _MenuItem(icon: Icons.analytics_outlined, title: 'Accounting Reports', route: RouteNames.reports, extra: 3, color: AppColors.success, subtitle: 'P&L, Balance Sheet & Ledger'),
-        _MenuItem(icon: Icons.receipt_long_outlined, title: 'GST & Tax Reports', route: RouteNames.reports, extra: 4, color: Colors.indigo, subtitle: 'Tax summary & returns'),
+        _MenuItem(
+          icon: Icons.bar_chart_outlined,
+          title: 'Sales Report',
+          description: 'View detailed sales performance',
+          route: RouteNames.reports,
+          extra: 0,
+          color: Color(0xFF0066CC),
+          isReportTool: true,
+        ),
+        _MenuItem(
+          icon: Icons.shopping_bag_outlined,
+          title: 'Purchase Report',
+          description: 'Analyze purchase transactions',
+          route: RouteNames.reports,
+          extra: 1,
+          color: Color(0xFF0066CC),
+          isReportTool: true,
+        ),
+        _MenuItem(
+          icon: Icons.inventory_outlined,
+          title: 'Inventory Report',
+          description: 'Stock and inventory insights',
+          route: RouteNames.reports,
+          extra: 2,
+          color: Colors.orange,
+          isReportTool: true,
+        ),
+        _MenuItem(
+          icon: Icons.analytics_outlined,
+          title: 'Account Report',
+          description: 'Financial account reports',
+          route: RouteNames.reports,
+          extra: 3,
+          color: Colors.teal,
+          isReportTool: true,
+        ),
       ],
     ),
     _MenuCategory(
       categoryTitle: 'GST & Taxation',
+      categorySubtitle: 'Tax summaries, HSN codes & compliance tools',
       items: [
-        _MenuItem(icon: Icons.receipt_long_outlined, title: 'GST Reports', route: RouteNames.gstTaxation, color: AppColors.primaryBlue, subtitle: 'Tax filings & GSTR returns'),
-        _MenuItem(icon: Icons.summarize_outlined, title: 'GST Summary', route: RouteNames.gstTaxation, color: AppColors.success, subtitle: 'Output vs Input tax summary'),
-        _MenuItem(icon: Icons.percent_outlined, title: 'Tax Summary', route: RouteNames.taxGstSettings, color: Colors.purple, subtitle: 'Tax rate breakdown'),
-        _MenuItem(icon: Icons.grid_view_outlined, title: 'HSN/SAC Summary', route: RouteNames.gstTaxation, color: Colors.teal, subtitle: 'HSN code summary report'),
-        _MenuItem(icon: Icons.qr_code_2_outlined, title: 'E-Invoice', route: RouteNames.eInvoice, color: Colors.deepOrange, subtitle: 'Generate IRN e-invoices'),
-        _MenuItem(icon: Icons.local_shipping_outlined, title: 'E-Way Bill', route: RouteNames.eWayBill, color: AppColors.primaryBlue, subtitle: 'Goods transport bills'),
-        _MenuItem(icon: Icons.credit_score_outlined, title: 'Input Tax Credit', route: RouteNames.inputTaxCredit, color: Colors.indigo, subtitle: 'Eligible & claimed ITC'),
-        _MenuItem(icon: Icons.settings_applications_outlined, title: 'Tax Settings', route: RouteNames.taxGstSettings, color: AppColors.secondaryText, subtitle: 'GSTIN & tax rates'),
+        _MenuItem(
+          icon: Icons.receipt_long_outlined,
+          title: 'GST Report',
+          description: 'GST transaction and filing reports',
+          route: RouteNames.gstTaxation,
+          color: Colors.indigo,
+        ),
+        _MenuItem(
+          icon: Icons.summarize_outlined,
+          title: 'GST Summary',
+          description: 'Overview of GST values',
+          route: RouteNames.gstTaxation,
+          color: Colors.indigo,
+        ),
+        _MenuItem(
+          icon: Icons.percent_outlined,
+          title: 'Tax Summary',
+          description: 'Tax collection and liability summary',
+          route: RouteNames.taxGstSettings,
+          color: Colors.purple,
+        ),
+        _MenuItem(
+          icon: Icons.grid_view_outlined,
+          title: 'HSN/SAC Summary',
+          description: 'HSN and SAC-wise summary',
+          route: RouteNames.gstTaxation,
+          color: Colors.teal,
+        ),
+        _MenuItem(
+          icon: Icons.local_shipping_outlined,
+          title: 'E-Way Bill',
+          description: 'Create and manage e-way bills',
+          route: RouteNames.eWayBill,
+          color: Color(0xFF0066CC),
+          isComplianceTool: true,
+        ),
       ],
     ),
     _MenuCategory(
       categoryTitle: 'Business Tools',
+      categorySubtitle: 'Utilities, data management & settings',
       items: [
-        _MenuItem(icon: Icons.repeat_outlined, title: 'Recurring Invoices', route: RouteNames.recurringInvoices, color: AppColors.primaryBlue, subtitle: 'Auto-billing schedules'),
-        _MenuItem(icon: Icons.notifications_active_outlined, title: 'Payment Reminders', route: RouteNames.automatedReminders, color: AppColors.primaryBlue, subtitle: 'Customer SMS/WhatsApp reminders'),
-        _MenuItem(icon: Icons.file_upload_outlined, title: 'Import Data', route: RouteNames.importData, color: AppColors.primaryBlue, subtitle: 'Bulk Excel/CSV data import'),
-        _MenuItem(icon: Icons.file_download_outlined, title: 'Export Data', route: RouteNames.exportData, color: AppColors.primaryBlue, subtitle: 'Backup & report export'),
-        _MenuItem(icon: Icons.cloud_upload_outlined, title: 'Data Backup', route: RouteNames.backupRestore, color: AppColors.primaryBlue, subtitle: 'Cloud & offline backup'),
-        _MenuItem(icon: Icons.sync_outlined, title: 'Offline Sync', route: RouteNames.offlineSync, color: AppColors.primaryBlue, subtitle: 'Local database sync status'),
-        _MenuItem(icon: Icons.article_outlined, title: 'Document Templates', route: RouteNames.documentTemplates, color: AppColors.primaryBlue, subtitle: 'Invoice & print designs'),
-      ],
-    ),
-    _MenuCategory(
-      categoryTitle: 'System & Settings',
-      items: [
-        _MenuItem(icon: Icons.cloud_upload_outlined, title: 'Backup & Restore', route: RouteNames.backupRestore, color: AppColors.primaryBlue),
-        _MenuItem(icon: Icons.sync_outlined, title: 'Offline Sync', route: RouteNames.offlineSync, color: AppColors.primaryBlue),
-        _MenuItem(icon: Icons.people_outline, title: 'Staff & Users', route: RouteNames.staffUsers, color: AppColors.primaryBlue, subtitle: 'Employee roles & access'),
-        _MenuItem(icon: Icons.business_outlined, title: 'Business Settings', route: RouteNames.businessProfile, color: AppColors.primaryBlue, subtitle: 'Store profile & address'),
-        _MenuItem(icon: Icons.receipt_outlined, title: 'Invoice Settings', route: RouteNames.invoiceSettings, color: AppColors.primaryBlue, subtitle: 'Prefix, Terms & Signatures'),
-        _MenuItem(icon: Icons.numbers_outlined, title: 'Voucher Prefix Settings', route: RouteNames.voucherPrefixSettings, color: AppColors.primaryBlue, subtitle: 'Edit voucher prefixes & sequence'),
-        _MenuItem(icon: Icons.percent_outlined, title: 'Tax Settings', route: RouteNames.taxGstSettings, color: AppColors.primaryBlue, subtitle: 'GST & tax configuration'),
-        _MenuItem(icon: Icons.print_outlined, title: 'Printer Settings', route: RouteNames.printerSettings, color: AppColors.primaryBlue, subtitle: 'Thermal & A4 printer setup'),
-        _MenuItem(icon: Icons.notifications_none_outlined, title: 'Notification Settings', route: RouteNames.notificationSettings, color: AppColors.primaryBlue),
-        _MenuItem(icon: Icons.settings_outlined, title: 'Settings', route: RouteNames.settings, color: AppColors.secondaryText),
+        _MenuItem(
+          icon: Icons.notifications_active_outlined,
+          title: 'Payment Reminder',
+          description: 'Remind parties about pending payments',
+          route: RouteNames.automatedReminders,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.file_upload_outlined,
+          title: 'Import Data',
+          description: 'Import business data',
+          route: RouteNames.importData,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.file_download_outlined,
+          title: 'Export Data',
+          description: 'Export your business data',
+          route: RouteNames.exportData,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.people_outline,
+          title: 'Staff & Users',
+          description: 'Manage staff access and permissions',
+          route: RouteNames.staffUsers,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.numbers_outlined,
+          title: 'Voucher Prefix',
+          description: 'Configure document numbering',
+          route: RouteNames.voucherPrefixSettings,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
+          icon: Icons.settings_outlined,
+          title: 'Settings',
+          description: 'Business, invoice, tax and app settings',
+          route: RouteNames.settings,
+          color: AppColors.secondaryText,
+        ),
       ],
     ),
   ];
 
   String _searchQuery = '';
   List<_MenuItem> _recentlyUsed = [];
+  BusinessHubViewMode _viewMode = BusinessHubViewMode.list;
 
   @override
   void initState() {
     super.initState();
     _loadRecentlyUsed();
+    _loadViewMode();
+  }
+
+  Future<void> _loadViewMode() async {
+    try {
+      final db = getIt<AppDatabase>();
+      final val = await db.getKeyValue('business_hub_view_mode');
+      if (val != null && val.toString() == 'grid') {
+        if (mounted) {
+          setState(() {
+            _viewMode = BusinessHubViewMode.grid;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleViewMode() async {
+    final nextMode = _viewMode == BusinessHubViewMode.list
+        ? BusinessHubViewMode.grid
+        : BusinessHubViewMode.list;
+    setState(() {
+      _viewMode = nextMode;
+    });
+    try {
+      final db = getIt<AppDatabase>();
+      await db.putKeyValue('business_hub_view_mode', nextMode.name);
+    } catch (_) {}
   }
 
   Future<void> _loadRecentlyUsed() async {
@@ -132,18 +344,22 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
       final raw = await db.getKeyValue('recently_used_tools');
       if (raw != null) {
         final List list = jsonDecode(raw.toString());
-        final allItems = _allSections.expand((cat) => cat.items).toList();
+        final allItems = _categories.expand((cat) => cat.items).toList();
         final loaded = <_MenuItem>[];
         for (var title in list) {
           for (var item in allItems) {
-            if (item.title == title.toString()) {
-              loaded.add(item);
+            if (item.title == title.toString() ||
+                (item.title == 'Customers & Suppliers' &&
+                    (title == 'Customers' || title == 'Suppliers'))) {
+              if (!loaded.contains(item)) {
+                loaded.add(item);
+              }
               break;
             }
           }
         }
         setState(() {
-          _recentlyUsed = loaded;
+          _recentlyUsed = loaded.take(4).toList();
         });
       }
     } catch (_) {}
@@ -153,8 +369,8 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     setState(() {
       _recentlyUsed.removeWhere((i) => i.title == item.title);
       _recentlyUsed.insert(0, item);
-      if (_recentlyUsed.length > 6) {
-        _recentlyUsed = _recentlyUsed.sublist(0, 6);
+      if (_recentlyUsed.length > 4) {
+        _recentlyUsed = _recentlyUsed.sublist(0, 4);
       }
     });
 
@@ -164,23 +380,98 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
       await db.putKeyValue('recently_used_tools', jsonEncode(titles));
     } catch (_) {}
 
-    if (mounted) {
-      context.push(item.route, extra: item.extra);
+    if (!mounted) return;
+
+    if (item.isSecondarySelection) {
+      _showSecondarySelectionModal(context, item);
+    } else if (item.route != null) {
+      context.push(item.route!, extra: item.extra);
     }
+  }
+
+  void _showSecondarySelectionModal(BuildContext context, _MenuItem item) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(item.icon, color: item.color, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.darkBlueText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Select view mode for ${item.title}:',
+              style:
+                  const TextStyle(fontSize: 13, color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading:
+                  const Icon(Icons.person_outline, color: Color(0xFF0066CC)),
+              title: const Text('Account Wise',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                  'View ${item.title.toLowerCase()} filtered by specific account'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (item.route != null) {
+                  context.push(item.route!, extra: {'type': 'account_wise'});
+                }
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.format_list_bulleted,
+                  color: Color(0xFF0066CC)),
+              title: const Text('All Accounts',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                  'View consolidated ${item.title.toLowerCase()} for all accounts'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (item.route != null) {
+                  context.push(item.route!, extra: {'type': 'all'});
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final allSections = _allSections;
     final isSearching = _searchQuery.trim().isNotEmpty;
     final searchResults = <_MenuItem>[];
 
     if (isSearching) {
       final q = _searchQuery.toLowerCase();
-      for (var cat in allSections) {
+      for (var cat in _categories) {
         for (var item in cat.items) {
           if (item.title.toLowerCase().contains(q) ||
-              (item.subtitle != null && item.subtitle!.toLowerCase().contains(q)) ||
+              item.description.toLowerCase().contains(q) ||
               cat.categoryTitle.toLowerCase().contains(q)) {
             searchResults.add(item);
           }
@@ -189,255 +480,546 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
-        title: const Text(
-          'More Options & Business Hub',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-        ),
-        backgroundColor: AppColors.deepNavy,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
         elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+        scrolledUnderElevation: 0.5,
+        titleSpacing: 20,
+        toolbarHeight: 64,
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. User & Store Profile Header Card
-            const _UserProfileHeaderCard(),
-            const SizedBox(height: 16),
-
-            // 2. Live Search Field (Section 14)
-            TextField(
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: InputDecoration(
-                hintText: 'Search tools, reports, accounting...',
-                prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText),
-                suffixIcon: isSearching
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: AppColors.secondaryText),
-                        onPressed: () => setState(() => _searchQuery = ''),
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              'Business Hub',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: AppColors.darkBlueText,
+                letterSpacing: -0.4,
               ),
             ),
-            const SizedBox(height: 14),
-
-            // 3. Recently Used Quick Access Chips (Section 14)
-            if (!isSearching && _recentlyUsed.isNotEmpty) ...[
-              const Row(
-                children: [
-                  Icon(Icons.history, size: 16, color: AppColors.secondaryText),
-                  SizedBox(width: 6),
-                  Text(
-                    'Recently Used',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.secondaryText,
-                      letterSpacing: 0.3,
+            SizedBox(height: 2),
+            Text(
+              'Manage your business, accounting, reports and compliance',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.secondaryText,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search tools, reports, accounting...',
+                      hintStyle: const TextStyle(
+                          fontSize: 14, color: AppColors.outline),
+                      prefixIcon: const Icon(Icons.search,
+                          color: Color(0xFF0066CC), size: 22),
+                      suffixIcon: isSearching
+                          ? IconButton(
+                              icon: const Icon(Icons.clear,
+                                  color: AppColors.secondaryText),
+                              onPressed: () =>
+                                  setState(() => _searchQuery = ''),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: const Color(0xFFF4F6F9),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            const BorderSide(color: AppColors.border, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF0066CC), width: 1.5),
+                      ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _recentlyUsed.map((item) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: InkWell(
-                        onTap: () => _trackToolTap(item),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                ),
+                const SizedBox(width: 10),
+                Material(
+                  color: const Color(0xFFF4F6F9),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: _toggleViewMode,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border, width: 1),
+                        color: Colors.white,
+                      ),
+                      child: Tooltip(
+                        message: _viewMode == BusinessHubViewMode.list
+                            ? 'Switch to Grid View'
+                            : 'Switch to List View',
+                        child: Icon(
+                          _viewMode == BusinessHubViewMode.list
+                              ? Icons.grid_view_rounded
+                              : Icons.view_list_rounded,
+                          color: const Color(0xFF0066CC),
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final crossCount = constraints.maxWidth > 900
+                ? 4
+                : constraints.maxWidth > 600
+                    ? 3
+                    : 2;
+
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1050),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeInCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  child: CustomScrollView(
+                    key: ValueKey(_viewMode),
+                    slivers: [
+                      // RECENTLY USED SHORTCUT ROW
+                      if (!isSearching && _recentlyUsed.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.history,
+                                    size: 15, color: AppColors.secondaryText),
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Recently Used',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.secondaryText,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: _recentlyUsed.map((item) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 8.0),
+                                          child: InkWell(
+                                            onTap: () => _trackToolTap(item),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                                border: Border.all(
+                                                    color: AppColors.border),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(item.icon,
+                                                      size: 14,
+                                                      color: item.color),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    item.title,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppColors
+                                                          .darkBlueText,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(item.icon, size: 14, color: item.color),
-                              const SizedBox(width: 6),
-                              Text(
-                                item.title,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.darkBlueText,
+                        ),
+
+                      // SEARCH RESULTS MODE VS CATEGORIZED HUBS
+                      if (isSearching) ...[
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                            child: Text(
+                              'Search Results (${searchResults.length})',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.darkBlueText,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (searchResults.isEmpty)
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.all(40.0),
+                              child: Center(
+                                child: Text(
+                                  'No matching tools, reports, or accounting items found.',
+                                  style: TextStyle(
+                                      color: AppColors.secondaryText,
+                                      fontSize: 14),
                                 ),
                               ),
-                            ],
+                            ),
+                          )
+                        else if (_viewMode == BusinessHubViewMode.list)
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (ctx, idx) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: _ToolListItem(
+                                    item: searchResults[idx],
+                                    onTap: () =>
+                                        _trackToolTap(searchResults[idx]),
+                                  ),
+                                ),
+                                childCount: searchResults.length,
+                              ),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            sliver: SliverGrid(
+                              delegate: SliverChildBuilderDelegate(
+                                (ctx, idx) => _ToolCard(
+                                  item: searchResults[idx],
+                                  onTap: () =>
+                                      _trackToolTap(searchResults[idx]),
+                                ),
+                                childCount: searchResults.length,
+                              ),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossCount,
+                                childAspectRatio: 2.2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Search Results Mode vs Full Categorized Hub
-            if (isSearching) ...[
-              Text(
-                'Search Results (${searchResults.length})',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
-                ),
-              ),
-              const SizedBox(height: 10),
-              searchResults.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(24.0),
-                      child: Center(
-                        child: Text(
-                          'No matching tools or reports found.',
-                          style: TextStyle(color: AppColors.secondaryText, fontSize: 14),
-                        ),
-                      ),
-                    )
-                  : _MenuGrid(
-                      items: searchResults,
-                      onTapItem: _trackToolTap,
-                    ),
-            ] else ...[
-              // Full Categorized Categories in exact strict order (Section 9)
-              ...allSections.map((sec) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      sec.categoryTitle,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.darkBlueText,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _MenuGrid(
-                      items: sec.items,
-                      onTapItem: _trackToolTap,
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                );
-              }),
-            ],
-
-            // 9. Sign Out of Account (Section 8 & 9)
-            Center(
-              child: TextButton.icon(
-                onPressed: () {
-                  context.read<AuthBloc>().add(LogoutEvent());
-                  context.go(RouteNames.login);
-                },
-                icon: const Icon(Icons.logout, color: AppColors.danger, size: 20),
-                label: const Text(
-                  'Sign Out of Account',
-                  style: TextStyle(
-                    color: AppColors.danger,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                      ] else ...[
+                        // RENDER EACH SECTION
+                        ..._categories.expand((sec) {
+                          return [
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      sec.categoryTitle,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.darkBlueText,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      sec.categorySubtitle,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.secondaryText,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (_viewMode == BusinessHubViewMode.list)
+                              SliverPadding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (ctx, idx) {
+                                      final item = sec.items[idx];
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8.0),
+                                        child: _ToolListItem(
+                                          item: item,
+                                          onTap: () => _trackToolTap(item),
+                                        ),
+                                      );
+                                    },
+                                    childCount: sec.items.length,
+                                  ),
+                                ),
+                              )
+                            else
+                              SliverPadding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
+                                sliver: SliverGrid(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (ctx, idx) {
+                                      final item = sec.items[idx];
+                                      return _ToolCard(
+                                        item: item,
+                                        onTap: () => _trackToolTap(item),
+                                      );
+                                    },
+                                    childCount: sec.items.length,
+                                  ),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossCount,
+                                    childAspectRatio: 2.2,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                  ),
+                                ),
+                              ),
+                          ];
+                        }),
+                      ],
+                      const SliverToBoxAdapter(child: SizedBox(height: 40)),
+                    ],
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _MenuCategory {
-  final String categoryTitle;
-  final List<_MenuItem> items;
+class _ToolListItem extends StatelessWidget {
+  final _MenuItem item;
+  final VoidCallback onTap;
 
-  const _MenuCategory({
-    required this.categoryTitle,
-    required this.items,
-  });
-}
-
-class _MenuItem {
-  final IconData icon;
-  final String title;
-  final String route;
-  final Color color;
-  final String? subtitle;
-  final Object? extra;
-
-  const _MenuItem({
-    required this.icon,
-    required this.title,
-    required this.route,
-    required this.color,
-    this.subtitle,
-    this.extra,
-  });
-}
-
-class _MenuGrid extends StatelessWidget {
-  final List<_MenuItem> items;
-  final Function(_MenuItem) onTapItem;
-
-  const _MenuGrid({
-    required this.items,
-    required this.onTapItem,
+  const _ToolListItem({
+    required this.item,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.1,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemBuilder: (ctx, idx) {
-        final item = items[idx];
-        return AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          onTap: () => onTapItem(item),
+    final isCompliance = item.isComplianceTool;
+    final isReport = item.isReportTool;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isCompliance
+                  ? const Color(0xFF0066CC).withValues(alpha: 0.3)
+                  : isReport
+                      ? Colors.teal.withValues(alpha: 0.2)
+                      : AppColors.border,
+              width: isCompliance ? 1.5 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.015),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.1),
+                  color: item.color.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
+                alignment: Alignment.center,
+                child: Icon(item.icon, color: item.color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isCompliance)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6F2FF),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'GOV',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0066CC),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.description,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.secondaryText,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.secondaryText.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolCard extends StatelessWidget {
+  final _MenuItem item;
+  final VoidCallback onTap;
+
+  const _ToolCard({
+    required this.item,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompliance = item.isComplianceTool;
+    final isReport = item.isReportTool;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isCompliance
+                  ? const Color(0xFF0066CC).withValues(alpha: 0.3)
+                  : isReport
+                      ? Colors.teal.withValues(alpha: 0.2)
+                      : AppColors.border,
+              width: isCompliance ? 1.5 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: item.color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
                 child: Icon(item.icon, color: item.color, size: 20),
               ),
               const SizedBox(width: 10),
@@ -446,202 +1028,47 @@ class _MenuGrid extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.darkBlueText,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (item.subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle!,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.secondaryText,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlueText,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _UserProfileHeaderCard extends StatefulWidget {
-  const _UserProfileHeaderCard();
-
-  @override
-  State<_UserProfileHeaderCard> createState() => _UserProfileHeaderCardState();
-}
-
-class _UserProfileHeaderCardState extends State<_UserProfileHeaderCard> {
-  BusinessEntity? _serverBusiness;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchProfileFromServer();
-  }
-
-  Future<void> _fetchProfileFromServer() async {
-    try {
-      final authRepo = getIt<AuthRepository>();
-      final business = await authRepo.getBusinessProfile();
-      if (mounted) {
-        setState(() {
-          _serverBusiness = business;
-        });
-      }
-    } catch (_) {}
-  }
-
-  String _getInitials(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return 'CN';
-    final parts = trimmed.split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    } else if (parts[0].isNotEmpty) {
-      return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
-    }
-    return 'CN';
-  }
-
-  Widget _buildLogoWidget(String? logoUrl, String businessName) {
-    final defaultLogo = Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: AppColors.deepNavy,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        _getInitials(businessName),
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 16,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-
-    if (logoUrl == null || logoUrl.trim().isEmpty) {
-      return defaultLogo;
-    }
-
-    final url = logoUrl.trim();
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          url,
-          width: 48,
-          height: 48,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => defaultLogo,
-        ),
-      );
-    } else if (url.startsWith('assets/')) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.asset(
-          url,
-          width: 48,
-          height: 48,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => defaultLogo,
-        ),
-      );
-    }
-
-    return defaultLogo;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        String? fetchedName;
-        String? fetchedCategory;
-        String? fetchedLogo;
-
-        if (_serverBusiness != null) {
-          if (_serverBusiness!.name.trim().isNotEmpty) {
-            fetchedName = _serverBusiness!.name.trim();
-          }
-          if (_serverBusiness!.category.trim().isNotEmpty) {
-            fetchedCategory = _serverBusiness!.category.trim();
-          }
-          if (_serverBusiness!.logoUrl != null &&
-              _serverBusiness!.logoUrl!.trim().isNotEmpty) {
-            fetchedLogo = _serverBusiness!.logoUrl!.trim();
-          }
-        } else if (state is AuthenticatedState && state.business != null) {
-          if (state.business!.name.trim().isNotEmpty) {
-            fetchedName = state.business!.name.trim();
-          }
-          if (state.business!.category.trim().isNotEmpty) {
-            fetchedCategory = state.business!.category.trim();
-          }
-          if (state.business!.logoUrl != null &&
-              state.business!.logoUrl!.trim().isNotEmpty) {
-            fetchedLogo = state.business!.logoUrl!.trim();
-          }
-        }
-
-        final displayBusinessName =
-            (fetchedName != null && fetchedName.isNotEmpty)
-                ? fetchedName
-                : 'Company Name';
-        final displayCategory =
-            (fetchedCategory != null && fetchedCategory.isNotEmpty)
-                ? fetchedCategory
-                : 'Company Category';
-
-        return AppCard(
-          onTap: () => context.push(RouteNames.businessProfile),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              _buildLogoWidget(fetchedLogo, displayBusinessName),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      displayBusinessName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: AppColors.darkBlueText,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                        if (isCompliance)
+                          Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6F2FF),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'GOV',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0066CC),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      displayCategory,
+                      item.description,
                       style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w400,
                         color: AppColors.secondaryText,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -649,11 +1076,16 @@ class _UserProfileHeaderCardState extends State<_UserProfileHeaderCard> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.secondaryText),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: AppColors.secondaryText.withValues(alpha: 0.4),
+              ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

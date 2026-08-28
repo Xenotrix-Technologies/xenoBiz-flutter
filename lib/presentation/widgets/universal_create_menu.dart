@@ -259,7 +259,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                           ),
                           // 6. Party
                           _ActionCard(
-                            title: 'Party',
+                            title: 'Account',
                             subtitle: 'Customer / Supplier',
                             icon: Icons.people_alt_outlined,
                             iconColor: AppColors.deepNavy,

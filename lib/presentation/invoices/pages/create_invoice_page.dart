@@ -119,6 +119,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   int _inlineQuantity = 1;
   bool _showSearchResultsOverlay = false;
 
+  bool _inlineProductError = false;
+  String? _inlineProductErrorMsg;
+  bool _inlineQuantityError = false;
+  String? _inlineQuantityErrorMsg;
+  bool _inlinePriceError = false;
+  String? _inlinePriceErrorMsg;
+
   void _scrollToInlineCard() {
     Future.delayed(const Duration(milliseconds: 150), () {
       if (mounted && _inlineCardKey.currentContext != null) {
@@ -193,18 +200,19 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       }
     });
 
+    TransactionStackManager.instance.registerSession(
+      TransactionSession(
+        id: _sessionId,
+        type: isPurchase
+            ? TransactionTypeCategory.purchase
+            : TransactionTypeCategory.sale,
+        isEdit: isEditMode,
+        entityId: widget.invoiceToEdit?.id,
+        hasMeaningfulData: () => _hasUnsavedData,
+      ),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      TransactionStackManager.instance.registerSession(
-        TransactionSession(
-          id: _sessionId,
-          type: isPurchase
-              ? TransactionTypeCategory.purchase
-              : TransactionTypeCategory.sale,
-          isEdit: isEditMode,
-          entityId: widget.invoiceToEdit?.id,
-          hasMeaningfulData: () => _hasUnsavedData,
-        ),
-      );
       if (widget.invoiceToEdit != null) {
         final inv = widget.invoiceToEdit!;
         final party = CustomerEntity(
@@ -654,9 +662,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   bool get _hasUnsavedData {
+    final customNotes = _notesCtrl.text.trim();
+    final hasCustomNotes = customNotes.isNotEmpty &&
+        customNotes != 'Thank you for your business!';
     return _items.isNotEmpty ||
-        (!_isCashSale && _selectedCustomer != null) ||
-        _notesCtrl.text.trim().isNotEmpty ||
+        (_selectedCustomer != null) ||
+        hasCustomNotes ||
         _discountAmount > 0 ||
         _extraExpenseAmount > 0;
   }
@@ -703,6 +714,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    TransactionStackManager.instance.unregisterSession(_sessionId);
     _scannerController?.dispose();
     _inlineSearchCtrl.dispose();
     _inlinePriceCtrl.dispose();
@@ -1114,6 +1126,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       _inlinePriceCtrl.text = prod.sellingPrice.toStringAsFixed(0);
       _inlineQuantity = 1;
       _showSearchResultsOverlay = false;
+      _inlineProductError = false;
+      _inlineProductErrorMsg = null;
+      _inlineQuantityError = false;
+      _inlineQuantityErrorMsg = null;
+      _inlinePriceError = false;
+      _inlinePriceErrorMsg = null;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1134,11 +1152,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     }).toList();
   }
 
-  bool get _isInlineAddEnabled => _inlineSelectedProduct != null;
-
   void _openInlineAddProductCard() {
     setState(() {
       _showInlineAddProduct = true;
+      _inlineProductError = false;
+      _inlineProductErrorMsg = null;
+      _inlineQuantityError = false;
+      _inlineQuantityErrorMsg = null;
+      _inlinePriceError = false;
+      _inlinePriceErrorMsg = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1159,27 +1181,49 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         _inlineSearchCtrl.clear();
         _inlinePriceCtrl.clear();
         _inlineQuantity = 1;
+        _inlineProductError = false;
+        _inlineProductErrorMsg = null;
+        _inlineQuantityError = false;
+        _inlineQuantityErrorMsg = null;
+        _inlinePriceError = false;
+        _inlinePriceErrorMsg = null;
       });
     }
   }
 
   void _addInlineProductToInvoice({bool closeAfterAdd = false}) {
+    // Step 1 - Product Validation: A real product must be selected from search results
     if (_inlineSelectedProduct == null) {
-      if (closeAfterAdd) {
-        _closeInlineAddProductCard();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a valid product from search results'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      setState(() {
+        _inlineProductError = true;
+        _inlineProductErrorMsg = 'Please select a product';
+        _showSearchResultsOverlay = false;
+      });
       return;
     }
 
-    final double unitPrice = double.tryParse(_inlinePriceCtrl.text.trim()) ??
-        _inlineSelectedProduct!.sellingPrice;
+    // Step 2 - Quantity Validation
+    if (_inlineQuantity <= 0) {
+      setState(() {
+        _inlineQuantityError = true;
+        _inlineQuantityErrorMsg = 'Quantity must be greater than 0';
+      });
+      return;
+    }
+
+    // Step 3 - Unit Price Validation
+    final priceText = _inlinePriceCtrl.text.trim();
+    final double? parsedPrice = double.tryParse(priceText);
+    if (priceText.isNotEmpty && (parsedPrice == null || parsedPrice < 0)) {
+      setState(() {
+        _inlinePriceError = true;
+        _inlinePriceErrorMsg = 'Please enter a valid price';
+      });
+      return;
+    }
+
+    final double unitPrice =
+        parsedPrice ?? _inlineSelectedProduct!.sellingPrice;
 
     final taxState = context.read<TaxSettingsBloc>().state;
     TaxSettingsEntity taxSettings = const TaxSettingsEntity();
@@ -1240,6 +1284,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         _inlineQuantity = 1;
         _showSearchResultsOverlay = false;
         _showInlineAddProduct = true;
+        _inlineProductError = false;
+        _inlineProductErrorMsg = null;
+        _inlineQuantityError = false;
+        _inlineQuantityErrorMsg = null;
+        _inlinePriceError = false;
+        _inlinePriceErrorMsg = null;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1355,7 +1405,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     );
   }
 
-  void _onCreateInvoice() {
+  Future<void> _onCreateInvoice() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1424,13 +1474,27 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         extraExpenseDescription: _extraExpenseDescription,
       );
 
-      context.push(
+      final result = await context.push<Map<String, dynamic>>(
         RouteNames.payment,
         extra: {
           'invoice': invoiceToProcess,
           'customer': _selectedCustomer,
         },
       );
+
+      if (result != null && context.mounted) {
+        if (result['isPurchaseDone'] == true) {
+          _safePop();
+        } else {
+          context.pushReplacement(
+            RouteNames.invoiceResult,
+            extra: {
+              ...result,
+              'isNewlyCreated': true,
+            },
+          );
+        }
+      }
     }
   }
 
@@ -1444,7 +1508,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       },
       child: BlocListener<InvoiceBloc, InvoiceState>(
         listener: (context, state) {
-          if (isEditMode && state is InvoiceOperationSuccessState) {
+          if (isEditMode &&
+              state is InvoiceOperationSuccessState &&
+              state.isUpdate &&
+              state.invoiceId == widget.invoiceToEdit?.id) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                   content: Text(state.message),
@@ -2730,8 +2797,14 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                       BorderRadius.circular(
                                                           AppSizes
                                                               .radiusMedium),
-                                                  borderSide: const BorderSide(
-                                                      color: AppColors.border),
+                                                  borderSide: BorderSide(
+                                                    color: _inlineProductError
+                                                        ? AppColors.error
+                                                        : AppColors.border,
+                                                    width: _inlineProductError
+                                                        ? 1.5
+                                                        : 1.0,
+                                                  ),
                                                 ),
                                                 enabledBorder:
                                                     OutlineInputBorder(
@@ -2739,8 +2812,14 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                       BorderRadius.circular(
                                                           AppSizes
                                                               .radiusMedium),
-                                                  borderSide: const BorderSide(
-                                                      color: AppColors.border),
+                                                  borderSide: BorderSide(
+                                                    color: _inlineProductError
+                                                        ? AppColors.error
+                                                        : AppColors.border,
+                                                    width: _inlineProductError
+                                                        ? 1.5
+                                                        : 1.0,
+                                                  ),
                                                 ),
                                                 focusedBorder:
                                                     OutlineInputBorder(
@@ -2748,9 +2827,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                       BorderRadius.circular(
                                                           AppSizes
                                                               .radiusMedium),
-                                                  borderSide: const BorderSide(
-                                                      color: AppColors.primary,
-                                                      width: 1.5),
+                                                  borderSide: BorderSide(
+                                                    color: _inlineProductError
+                                                        ? AppColors.error
+                                                        : AppColors.primary,
+                                                    width: 1.5,
+                                                  ),
                                                 ),
                                               ),
                                               onChanged: (val) {
@@ -2763,6 +2845,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                     _inlineSelectedProduct =
                                                         null;
                                                   }
+                                                  if (_inlineProductError) {
+                                                    _inlineProductError = false;
+                                                    _inlineProductErrorMsg =
+                                                        null;
+                                                  }
                                                   _showSearchResultsOverlay = val
                                                           .trim()
                                                           .isNotEmpty &&
@@ -2772,6 +2859,21 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                               },
                                             ),
                                           ),
+
+                                          if (_inlineProductError &&
+                                              _inlineProductErrorMsg != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 4, left: 4),
+                                              child: Text(
+                                                _inlineProductErrorMsg!,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.error,
+                                                ),
+                                              ),
+                                            ),
 
                                           // Floating Search Results Dropdown Overlay
                                           if (_showSearchResultsOverlay &&
@@ -2918,8 +3020,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                             AppSizes
                                                                 .radiusMedium),
                                                     border: Border.all(
-                                                        color:
-                                                            AppColors.border),
+                                                      color: _inlineQuantityError
+                                                          ? AppColors.error
+                                                          : AppColors.border,
+                                                      width: _inlineQuantityError
+                                                          ? 1.5
+                                                          : 1.0,
+                                                    ),
                                                   ),
                                                   child: Row(
                                                     mainAxisAlignment:
@@ -2932,6 +3039,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                               1) {
                                                             setState(() {
                                                               _inlineQuantity--;
+                                                              if (_inlineQuantityError) {
+                                                                _inlineQuantityError =
+                                                                    false;
+                                                                _inlineQuantityErrorMsg =
+                                                                    null;
+                                                              }
                                                             });
                                                           }
                                                         },
@@ -2962,6 +3075,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                         onTap: () {
                                                           setState(() {
                                                             _inlineQuantity++;
+                                                            if (_inlineQuantityError) {
+                                                              _inlineQuantityError =
+                                                                  false;
+                                                              _inlineQuantityErrorMsg =
+                                                                  null;
+                                                            }
                                                           });
                                                         },
                                                         child: Container(
@@ -2980,6 +3099,23 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                     ],
                                                   ),
                                                 ),
+                                                if (_inlineQuantityError &&
+                                                    _inlineQuantityErrorMsg !=
+                                                        null)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4, left: 4),
+                                                    child: Text(
+                                                      _inlineQuantityErrorMsg!,
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: AppColors.error,
+                                                      ),
+                                                    ),
+                                                  ),
                                               ],
                                             ),
                                           ),
@@ -3041,38 +3177,82 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                                         borderRadius: BorderRadius
                                                             .circular(AppSizes
                                                                 .radiusMedium),
-                                                        borderSide:
-                                                            const BorderSide(
-                                                                color: AppColors
-                                                                    .border),
+                                                        borderSide: BorderSide(
+                                                          color:
+                                                              _inlinePriceError
+                                                                  ? AppColors
+                                                                      .error
+                                                                  : AppColors
+                                                                      .border,
+                                                          width:
+                                                              _inlinePriceError
+                                                                  ? 1.5
+                                                                  : 1.0,
+                                                        ),
                                                       ),
                                                       enabledBorder:
                                                           OutlineInputBorder(
                                                         borderRadius: BorderRadius
                                                             .circular(AppSizes
                                                                 .radiusMedium),
-                                                        borderSide:
-                                                            const BorderSide(
-                                                                color: AppColors
-                                                                    .border),
+                                                        borderSide: BorderSide(
+                                                          color:
+                                                              _inlinePriceError
+                                                                  ? AppColors
+                                                                      .error
+                                                                  : AppColors
+                                                                      .border,
+                                                          width:
+                                                              _inlinePriceError
+                                                                  ? 1.5
+                                                                  : 1.0,
+                                                        ),
                                                       ),
                                                       focusedBorder:
                                                           OutlineInputBorder(
                                                         borderRadius: BorderRadius
                                                             .circular(AppSizes
                                                                 .radiusMedium),
-                                                        borderSide:
-                                                            const BorderSide(
-                                                                color: AppColors
-                                                                    .primary,
-                                                                width: 1.5),
+                                                        borderSide: BorderSide(
+                                                          color:
+                                                              _inlinePriceError
+                                                                  ? AppColors
+                                                                      .error
+                                                                  : AppColors
+                                                                      .primary,
+                                                          width: 1.5,
+                                                        ),
                                                       ),
                                                     ),
                                                     onChanged: (_) {
-                                                      setState(() {});
+                                                      setState(() {
+                                                        if (_inlinePriceError) {
+                                                          _inlinePriceError =
+                                                              false;
+                                                          _inlinePriceErrorMsg =
+                                                              null;
+                                                        }
+                                                      });
                                                     },
                                                   ),
                                                 ),
+                                                if (_inlinePriceError &&
+                                                    _inlinePriceErrorMsg !=
+                                                        null)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4, left: 4),
+                                                    child: Text(
+                                                      _inlinePriceErrorMsg!,
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: AppColors.error,
+                                                      ),
+                                                    ),
+                                                  ),
                                               ],
                                             ),
                                           ),
@@ -3139,20 +3319,13 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: ElevatedButton(
-                                              onPressed: _isInlineAddEnabled
-                                                  ? () =>
-                                                      _addInlineProductToInvoice(
-                                                          closeAfterAdd: false)
-                                                  : null,
+                                              onPressed: () =>
+                                                  _addInlineProductToInvoice(
+                                                      closeAfterAdd: false),
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     AppColors.primary,
                                                 foregroundColor: Colors.white,
-                                                disabledBackgroundColor:
-                                                    AppColors
-                                                        .surfaceContainerHigh,
-                                                disabledForegroundColor:
-                                                    AppColors.outline,
                                                 elevation: 0,
                                                 padding:
                                                     const EdgeInsets.symmetric(

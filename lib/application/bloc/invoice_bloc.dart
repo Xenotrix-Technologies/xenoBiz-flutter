@@ -68,10 +68,16 @@ class InvoicesLoadedState extends InvoiceState {
 
 class InvoiceOperationSuccessState extends InvoiceState {
   final String message;
-  const InvoiceOperationSuccessState(this.message);
+  final String? invoiceId;
+  final bool isUpdate;
+  const InvoiceOperationSuccessState(
+    this.message, {
+    this.invoiceId,
+    this.isUpdate = false,
+  });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, invoiceId, isUpdate];
 }
 
 class InvoiceErrorState extends InvoiceState {
@@ -121,7 +127,11 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     try {
       final created = await createInvoiceUseCase.execute(event.invoice);
       final label = created.isPurchase ? 'Purchase' : 'Invoice';
-      emit(InvoiceOperationSuccessState('$label #${created.invoiceNumber} created successfully!'));
+      emit(InvoiceOperationSuccessState(
+        '$label #${created.invoiceNumber} created successfully!',
+        invoiceId: created.id,
+        isUpdate: false,
+      ));
       add(const FetchInvoicesEvent());
     } catch (e) {
       emit(InvoiceErrorState(e.toString()));
@@ -134,7 +144,11 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     try {
       final updated = await updateInvoiceUseCase.execute(event.invoice);
       final label = updated.isPurchase ? 'Purchase' : 'Invoice';
-      emit(InvoiceOperationSuccessState('$label #${updated.invoiceNumber} updated successfully!'));
+      emit(InvoiceOperationSuccessState(
+        '$label #${updated.invoiceNumber} updated successfully!',
+        invoiceId: updated.id,
+        isUpdate: true,
+      ));
       add(const FetchInvoicesEvent());
     } catch (e) {
       emit(InvoiceErrorState(e.toString()));

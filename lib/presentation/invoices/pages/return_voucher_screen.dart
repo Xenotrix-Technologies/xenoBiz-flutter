@@ -130,19 +130,17 @@ class _ReturnVoucherScreenState extends State<ReturnVoucherScreen> {
       _loadVoucherId();
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      TransactionStackManager.instance.registerSession(
-        TransactionSession(
-          id: _sessionId,
-          type: isSalesReturn
-              ? TransactionTypeCategory.salesReturn
-              : TransactionTypeCategory.purchaseReturn,
-          isEdit: isEditMode,
-          entityId: (widget.existingReturn as InvoiceReturnEntity?)?.id,
-          hasMeaningfulData: () => _hasUnsavedData,
-        ),
-      );
-    });
+    TransactionStackManager.instance.registerSession(
+      TransactionSession(
+        id: _sessionId,
+        type: isSalesReturn
+            ? TransactionTypeCategory.salesReturn
+            : TransactionTypeCategory.purchaseReturn,
+        isEdit: isEditMode,
+        entityId: (widget.existingReturn as InvoiceReturnEntity?)?.id,
+        hasMeaningfulData: () => _hasUnsavedData,
+      ),
+    );
   }
 
   String _generatedVoucherId = '';
