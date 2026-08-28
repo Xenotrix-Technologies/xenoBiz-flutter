@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/create_invoice_provider.dart';
 import '../services/transaction_route_observer.dart';
 import '../bloc/accounts_bloc.dart';
+import '../../domain/entities/category_entity.dart';
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/invoice_entity.dart';
 
@@ -83,6 +84,7 @@ Widget _buildCreateMasterPage(GoRouterState state) {
   CustomerEntity? customer;
   SupplierEntity? supplier;
   ExpenseAccountSummary? expense;
+  CategoryEntity? category;
   bool isService = false;
 
   final extra = state.extra;
@@ -100,12 +102,16 @@ Widget _buildCreateMasterPage(GoRouterState state) {
   } else if (extra is ExpenseAccountSummary) {
     tab = 3;
     expense = extra;
+  } else if (extra is CategoryEntity) {
+    tab = 1;
+    category = extra;
   } else if (extra is Map<String, dynamic>) {
     tab = (extra['tab'] as int?) ?? 0;
     product = extra['product'] as ProductEntity?;
     customer = extra['customer'] as CustomerEntity?;
     supplier = extra['supplier'] as SupplierEntity?;
     expense = extra['expense'] as ExpenseAccountSummary?;
+    category = extra['category'] as CategoryEntity?;
     isService = (extra['isService'] as bool?) ?? false;
   }
 
@@ -115,6 +121,7 @@ Widget _buildCreateMasterPage(GoRouterState state) {
     customerToEdit: customer,
     supplierToEdit: supplier,
     expenseToEdit: expense,
+    categoryToEdit: category,
     initialIsService: isService,
   );
 }

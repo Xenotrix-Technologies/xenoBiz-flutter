@@ -5,20 +5,24 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../application/bloc/accounts_bloc.dart';
 import '../../../application/bloc/product_bloc.dart';
 import '../../../application/bloc/purchase_bloc.dart';
+import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
+import '../../../domain/entities/category_entity.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../../domain/entities/purchase_entity.dart';
-import '../../widgets/app_card.dart';
+import '../../../domain/repositories/category_repository.dart';
+
+enum UniversalAccountType { customer, supplier, income, expense }
 
 class CreateMasterPage extends StatefulWidget {
-  final int
-      initialTabIndex; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
+  final int initialTabIndex; // 0 = Product/Service, 1+ = Universal Account
   final ProductEntity? productToEdit;
   final CustomerEntity? customerToEdit;
   final SupplierEntity? supplierToEdit;
   final ExpenseAccountSummary? expenseToEdit;
+  final CategoryEntity? categoryToEdit;
   final bool initialIsService;
 
   const CreateMasterPage({
@@ -28,6 +32,7 @@ class CreateMasterPage extends StatefulWidget {
     this.customerToEdit,
     this.supplierToEdit,
     this.expenseToEdit,
+    this.categoryToEdit,
     this.initialIsService = false,
   });
 
@@ -36,14 +41,14 @@ class CreateMasterPage extends StatefulWidget {
 }
 
 class _CreateMasterPageState extends State<CreateMasterPage> {
-  late int
-      _activeTab; // 0 = Product, 1 = Sale, 2 = Purchase, 3 = Expense, 4 = AccountChooser
+  late int _activeTab; // 0 = Product/Service, 1 = Universal Account
 
   bool get isEditMode =>
       widget.productToEdit != null ||
       widget.customerToEdit != null ||
       widget.supplierToEdit != null ||
-      widget.expenseToEdit != null;
+      widget.expenseToEdit != null ||
+      widget.categoryToEdit != null;
 
   // Item vs Service state (0 = Item, 1 = Service)
   int _itemOrServiceIndex = 0;
@@ -69,47 +74,42 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   // SKU Barcode Scanner controls & state
   MobileScannerController? _skuScannerController;
   bool _isSkuCameraOn = false;
-  bool _isSkuFlashOn = false;
 
-  // Sale Account Form Controllers
-  final _saleNameCtrl = TextEditingController();
-  final _salePhoneCtrl = TextEditingController();
-  final _saleEmailCtrl = TextEditingController();
-  final _saleAddressCtrl = TextEditingController();
-  final _saleOpeningBalanceCtrl = TextEditingController(text: '0.00');
-  final _saleNotesCtrl = TextEditingController();
+  // =========================================================
+  // UNIVERSAL ACCOUNT FORM STATE & CONTROLLERS
+  // =========================================================
+  UniversalAccountType? _accountType;
 
-  // Purchase Account Form Controllers
-  final _purNameCtrl = TextEditingController();
-  final _purPhoneCtrl = TextEditingController();
-  final _purEmailCtrl = TextEditingController();
-  final _purAddressCtrl = TextEditingController();
-  final _purOpeningBalanceCtrl = TextEditingController(text: '0.00');
-  final _purNotesCtrl = TextEditingController();
+  final _accountNameCtrl = TextEditingController();
+  String? _accountNameError;
+  String? _accountTypeError;
 
-  // Expense/Income Account Form Controllers
-  final _expNameCtrl = TextEditingController();
-  String _expAccountType = 'Expense';
-  String _expCategory = 'General';
-  final _expDescCtrl = TextEditingController();
-  final _expOpeningBalanceCtrl = TextEditingController(text: '0.00');
-  final List<String> _expenseCategories = [
-    'General',
-    'Utilities',
-    'Rent',
-    'Salary',
-    'Transport',
-    'Fuel',
-  ];
-  final List<String> _incomeCategories = [
-    'General',
-    'Sales Income',
-    'Services',
-    'Consulting',
-    'Commission',
-    'Rental Income',
-    'Interest',
-  ];
+  // Contact Info
+  final _phoneCtrl = TextEditingController();
+  final _altPhoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+
+  // Business Info
+  final _tradeNameCtrl = TextEditingController();
+  String _gstRegType = 'Unregistered'; // Regular, Composition, Unregistered, Consumer
+  final _gstinCtrl = TextEditingController();
+  final _panCtrl = TextEditingController();
+
+  // Address
+  final _addressCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _stateCtrl = TextEditingController();
+  final _pinCodeCtrl = TextEditingController();
+
+  // Financial & Payment Info
+  final _openingBalanceCtrl = TextEditingController(text: '0.00');
+  String _balanceType = 'Receivable'; // Receivable, Payable
+  final _creditLimitCtrl = TextEditingController();
+  String _paymentTerms = 'Immediate'; // Immediate, 7 Days, 15 Days, 30 Days, 45 Days, 60 Days, Custom
+
+  // Category & Accounting Details
+  final _descriptionCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -145,37 +145,54 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       }
     } else if (widget.customerToEdit != null) {
       _activeTab = 1;
+      _accountType = UniversalAccountType.customer;
       final c = widget.customerToEdit!;
-      _saleNameCtrl.text = c.name;
-      _salePhoneCtrl.text = c.phone;
-      _saleEmailCtrl.text = c.email;
-      _saleAddressCtrl.text = c.address;
-      _saleOpeningBalanceCtrl.text = c.outstandingBalance % 1 == 0
-          ? c.outstandingBalance.toInt().toString()
-          : c.outstandingBalance.toStringAsFixed(2);
+      _accountNameCtrl.text = c.name;
+      _phoneCtrl.text = c.phone;
+      _emailCtrl.text = c.email;
+      _addressCtrl.text = c.address;
+      _openingBalanceCtrl.text = c.outstandingBalance % 1 == 0
+          ? c.outstandingBalance.abs().toInt().toString()
+          : c.outstandingBalance.abs().toStringAsFixed(2);
+      _balanceType = c.outstandingBalance >= 0 ? 'Receivable' : 'Payable';
     } else if (widget.supplierToEdit != null) {
-      _activeTab = 2;
+      _activeTab = 1;
+      _accountType = UniversalAccountType.supplier;
       final s = widget.supplierToEdit!;
-      _purNameCtrl.text = s.name;
-      _purPhoneCtrl.text = s.phone;
-      _purEmailCtrl.text = s.email;
-      _purAddressCtrl.text = s.address;
-      _purOpeningBalanceCtrl.text = s.payableBalance % 1 == 0
+      _accountNameCtrl.text = s.name;
+      _tradeNameCtrl.text = s.companyName;
+      _phoneCtrl.text = s.phone;
+      _emailCtrl.text = s.email;
+      _addressCtrl.text = s.address;
+      _openingBalanceCtrl.text = s.payableBalance % 1 == 0
           ? s.payableBalance.toInt().toString()
           : s.payableBalance.toStringAsFixed(2);
+      _balanceType = 'Payable';
     } else if (widget.expenseToEdit != null) {
-      _activeTab = 3;
+      _activeTab = 1;
+      _accountType = UniversalAccountType.expense;
       final e = widget.expenseToEdit!;
-      _expNameCtrl.text = e.title;
-      _expCategory = e.category;
-      if (!_expenseCategories.contains(_expCategory)) {
-        _expenseCategories.insert(_expenseCategories.length - 1, _expCategory);
-      }
-      _expOpeningBalanceCtrl.text = e.outstandingBalance % 1 == 0
+      _accountNameCtrl.text = e.title;
+      _openingBalanceCtrl.text = e.outstandingBalance % 1 == 0
           ? e.outstandingBalance.toInt().toString()
           : e.outstandingBalance.toStringAsFixed(2);
+    } else if (widget.categoryToEdit != null) {
+      _activeTab = 1;
+      final cat = widget.categoryToEdit!;
+      _accountNameCtrl.text = cat.name;
+      _accountType = cat.type == CategoryType.income
+          ? UniversalAccountType.income
+          : UniversalAccountType.expense;
     } else {
       _activeTab = widget.initialTabIndex;
+      if (_activeTab == 2) {
+        _accountType = UniversalAccountType.supplier;
+      } else if (_activeTab == 3) {
+        _accountType = UniversalAccountType.expense;
+      } else {
+        _accountType = null; // Blank by default for Create Account
+      }
+
       if (widget.initialIsService) {
         _itemOrServiceIndex = 1;
         _prodCategoryCtrl.text = 'Services';
@@ -196,23 +213,22 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     _serviceSacCtrl.dispose();
     _serviceTaxCtrl.dispose();
 
-    _saleNameCtrl.dispose();
-    _salePhoneCtrl.dispose();
-    _saleEmailCtrl.dispose();
-    _saleAddressCtrl.dispose();
-    _saleOpeningBalanceCtrl.dispose();
-    _saleNotesCtrl.dispose();
+    _accountNameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _altPhoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _tradeNameCtrl.dispose();
+    _gstinCtrl.dispose();
+    _panCtrl.dispose();
+    _addressCtrl.dispose();
+    _cityCtrl.dispose();
+    _stateCtrl.dispose();
+    _pinCodeCtrl.dispose();
+    _openingBalanceCtrl.dispose();
+    _creditLimitCtrl.dispose();
+    _descriptionCtrl.dispose();
+    _notesCtrl.dispose();
 
-    _purNameCtrl.dispose();
-    _purPhoneCtrl.dispose();
-    _purEmailCtrl.dispose();
-    _purAddressCtrl.dispose();
-    _purOpeningBalanceCtrl.dispose();
-    _purNotesCtrl.dispose();
-
-    _expNameCtrl.dispose();
-    _expDescCtrl.dispose();
-    _expOpeningBalanceCtrl.dispose();
     super.dispose();
   }
 
@@ -230,15 +246,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
         _skuScannerController?.stop();
       }
     });
-  }
-
-  void _toggleSkuFlash() async {
-    if (_skuScannerController != null) {
-      await _skuScannerController!.toggleTorch();
-      setState(() {
-        _isSkuFlashOn = !_isSkuFlashOn;
-      });
-    }
   }
 
   void _onSkuBarcodeDetected(BarcodeCapture capture) {
@@ -262,12 +269,8 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
       } else {
         _saveService();
       }
-    } else if (_activeTab == 1) {
-      _saveSaleAccount();
-    } else if (_activeTab == 2) {
-      _savePurchaseAccount();
-    } else if (_activeTab == 3) {
-      _saveExpenseAccount();
+    } else {
+      _saveUniversalAccount();
     }
   }
 
@@ -417,138 +420,218 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     }
   }
 
-  void _saveSaleAccount() {
-    final name = _saleNameCtrl.text.trim();
+  void _saveUniversalAccount() async {
+    setState(() {
+      _accountNameError = null;
+      _accountTypeError = null;
+    });
+
+    final name = _accountNameCtrl.text.trim();
     if (name.isEmpty) {
-      _showErrorSnackBar('Please enter customer name');
+      setState(() {
+        _accountNameError = 'Account name is required.';
+      });
+      _showErrorSnackBar('Account name is required.');
       return;
     }
-    final balance = double.tryParse(_saleOpeningBalanceCtrl.text.trim()) ?? 0.0;
 
-    if (widget.customerToEdit != null) {
-      final existing = widget.customerToEdit!;
-      final updatedCustomer = existing.copyWith(
-        name: name,
-        phone: _salePhoneCtrl.text.trim(),
-        email: _saleEmailCtrl.text.trim(),
-        address: _saleAddressCtrl.text.trim(),
-        outstandingBalance: balance,
-      );
-
-      context
-          .read<AccountsBloc>()
-          .add(UpdateCustomerAccountEvent(updatedCustomer));
-      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar(
-          'Sale Account for "${updatedCustomer.name}" updated successfully!');
-    } else {
-      final customer = CustomerEntity(
-        id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-        name: name,
-        phone: _salePhoneCtrl.text.trim(),
-        email: _saleEmailCtrl.text.trim(),
-        address: _saleAddressCtrl.text.trim(),
-        outstandingBalance: balance,
-        createdAt: DateTime.now(),
-      );
-
-      context.read<AccountsBloc>().add(CreateCustomerAccountEvent(customer));
-      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar(
-          'Sale Account for "${customer.name}" created successfully!');
-    }
-
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.accounts);
-    }
-  }
-
-  void _savePurchaseAccount() {
-    final name = _purNameCtrl.text.trim();
-    if (name.isEmpty) {
-      _showErrorSnackBar('Please enter supplier name');
+    if (_accountType == null) {
+      setState(() {
+        _accountTypeError = 'Please select an account type.';
+      });
+      _showErrorSnackBar('Please select an account type.');
       return;
     }
-    final balance = double.tryParse(_purOpeningBalanceCtrl.text.trim()) ?? 0.0;
 
-    if (widget.supplierToEdit != null) {
-      final existing = widget.supplierToEdit!;
-      final updatedSupplier = existing.copyWith(
-        name: name,
-        companyName: name,
-        phone: _purPhoneCtrl.text.trim(),
-        email: _purEmailCtrl.text.trim(),
-        address: _purAddressCtrl.text.trim(),
-        payableBalance: balance,
-      );
+    // Phone validation if entered (Customer & Supplier)
+    if (_accountType == UniversalAccountType.customer ||
+        _accountType == UniversalAccountType.supplier) {
+      final phone = _phoneCtrl.text.trim();
+      if (phone.isNotEmpty && phone.length < 7) {
+        _showErrorSnackBar('Enter a valid phone number.');
+        return;
+      }
 
-      context
-          .read<PurchaseBloc>()
-          .add(UpdateSupplierSubmittedEvent(updatedSupplier));
-      context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
-      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar(
-          'Purchase Account for "${updatedSupplier.name}" updated successfully!');
-    } else {
-      final supplier = SupplierEntity(
-        id: 'sup_${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        companyName: name,
-        phone: _purPhoneCtrl.text.trim(),
-        email: _purEmailCtrl.text.trim(),
-        address: _purAddressCtrl.text.trim(),
-        payableBalance: balance,
-        createdAt: DateTime.now(),
-      );
+      // Email validation if entered
+      final email = _emailCtrl.text.trim();
+      if (email.isNotEmpty && !email.contains('@')) {
+        _showErrorSnackBar('Enter a valid email address.');
+        return;
+      }
 
-      context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(supplier));
-      context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
-      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-      _showSuccessSnackBar(
-          'Purchase Account for "${supplier.name}" created successfully!');
+      // GSTIN validation if entered
+      final gstin = _gstinCtrl.text.trim();
+      if (gstin.isNotEmpty) {
+        final gstinRegex = RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$');
+        if (!gstinRegex.hasMatch(gstin.toUpperCase())) {
+          _showErrorSnackBar('Enter a valid GSTIN.');
+          return;
+        }
+      }
     }
 
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(RouteNames.accounts);
+    final balance = double.tryParse(_openingBalanceCtrl.text.trim()) ?? 0.0;
+    final signedBalance = _balanceType == 'Payable' ? -balance.abs() : balance.abs();
+
+    if (_accountType == UniversalAccountType.customer) {
+      final fullAddress = [
+        _addressCtrl.text.trim(),
+        _cityCtrl.text.trim(),
+        _stateCtrl.text.trim(),
+        _pinCodeCtrl.text.trim(),
+      ].where((s) => s.isNotEmpty).join(', ');
+
+      if (widget.customerToEdit != null) {
+        final existing = widget.customerToEdit!;
+        final updated = existing.copyWith(
+          name: name,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          address: fullAddress,
+          outstandingBalance: signedBalance,
+        );
+        context.read<AccountsBloc>().add(UpdateCustomerAccountEvent(updated));
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Customer "${updated.name}" updated successfully!');
+      } else {
+        final customer = CustomerEntity(
+          id: 'CUST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+          name: name,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          address: fullAddress,
+          outstandingBalance: signedBalance,
+          createdAt: DateTime.now(),
+        );
+        context.read<AccountsBloc>().add(CreateCustomerAccountEvent(customer));
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Customer "${customer.name}" created successfully!');
+      }
+    } else if (_accountType == UniversalAccountType.supplier) {
+      final fullAddress = [
+        _addressCtrl.text.trim(),
+        _cityCtrl.text.trim(),
+        _stateCtrl.text.trim(),
+        _pinCodeCtrl.text.trim(),
+      ].where((s) => s.isNotEmpty).join(', ');
+
+      final tradeName = _tradeNameCtrl.text.trim().isNotEmpty
+          ? _tradeNameCtrl.text.trim()
+          : name;
+
+      if (widget.supplierToEdit != null) {
+        final existing = widget.supplierToEdit!;
+        final updated = existing.copyWith(
+          name: name,
+          companyName: tradeName,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          address: fullAddress,
+          payableBalance: signedBalance.abs(),
+        );
+        context.read<PurchaseBloc>().add(UpdateSupplierSubmittedEvent(updated));
+        context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Supplier "${updated.name}" updated successfully!');
+      } else {
+        final supplier = SupplierEntity(
+          id: 'sup_${DateTime.now().millisecondsSinceEpoch}',
+          name: name,
+          companyName: tradeName,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          address: fullAddress,
+          payableBalance: signedBalance.abs(),
+          createdAt: DateTime.now(),
+        );
+        context.read<PurchaseBloc>().add(CreateSupplierSubmittedEvent(supplier));
+        context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Supplier "${supplier.name}" created successfully!');
+      }
+    } else if (_accountType == UniversalAccountType.income) {
+      if (widget.categoryToEdit != null) {
+        final existing = widget.categoryToEdit!;
+        final updated = existing.copyWith(
+          name: name,
+          type: CategoryType.income,
+          updatedAt: DateTime.now(),
+        );
+        await getIt<CategoryRepository>().updateCategory(updated);
+        if (!mounted) return;
+        context.read<AccountsBloc>().add(
+          UpdateExpenseAccountEvent(
+            oldCategory: existing.name,
+            newTitle: name,
+            newCategory: name,
+          ),
+        );
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Income Category "$name" updated successfully!');
+      } else {
+        final newCat = CategoryEntity(
+          id: 'cat_${DateTime.now().millisecondsSinceEpoch}',
+          name: name,
+          type: CategoryType.income,
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await getIt<CategoryRepository>().createCategory(newCat);
+        if (!mounted) return;
+        context.read<AccountsBloc>().add(
+          CreateExpenseAccountEvent(
+            title: name,
+            category: name,
+            openingBalance: 0.0,
+          ),
+        );
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Income Category "$name" created successfully!');
+      }
+    } else if (_accountType == UniversalAccountType.expense) {
+      if (widget.categoryToEdit != null) {
+        final existing = widget.categoryToEdit!;
+        final updated = existing.copyWith(
+          name: name,
+          type: CategoryType.expense,
+          updatedAt: DateTime.now(),
+        );
+        await getIt<CategoryRepository>().updateCategory(updated);
+        if (!mounted) return;
+        context.read<AccountsBloc>().add(
+          UpdateExpenseAccountEvent(
+            oldCategory: existing.name,
+            newTitle: name,
+            newCategory: name,
+          ),
+        );
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Expense Category "$name" updated successfully!');
+      } else {
+        final newCat = CategoryEntity(
+          id: 'cat_${DateTime.now().millisecondsSinceEpoch}',
+          name: name,
+          type: CategoryType.expense,
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await getIt<CategoryRepository>().createCategory(newCat);
+        if (!mounted) return;
+        context.read<AccountsBloc>().add(
+          CreateExpenseAccountEvent(
+            title: name,
+            category: name,
+            openingBalance: 0.0,
+          ),
+        );
+        context.read<AccountsBloc>().add(const FetchAccountsEvent());
+        _showSuccessSnackBar('Expense Category "$name" created successfully!');
+      }
     }
-  }
 
-  void _saveExpenseAccount() {
-    final name = _expNameCtrl.text.trim();
-    if (name.isEmpty) {
-      _showErrorSnackBar('Please enter account name');
-      return;
-    }
-    final balance = double.tryParse(_expOpeningBalanceCtrl.text.trim()) ?? 0.0;
-
-    if (widget.expenseToEdit != null) {
-      context.read<AccountsBloc>().add(
-            UpdateExpenseAccountEvent(
-              oldCategory: widget.expenseToEdit!.category,
-              newTitle: name,
-              newCategory: _expCategory,
-            ),
-          );
-      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-
-      _showSuccessSnackBar('$_expAccountType Account "$name" updated successfully!');
-    } else {
-      context.read<AccountsBloc>().add(
-            CreateExpenseAccountEvent(
-              title: name,
-              category: _expCategory,
-              openingBalance: balance,
-            ),
-          );
-      context.read<AccountsBloc>().add(const FetchAccountsEvent());
-
-      _showSuccessSnackBar('$_expAccountType Account "$name" created successfully!');
-    }
-
+    if (!mounted) return;
     if (context.canPop()) {
       context.pop();
     } else {
@@ -602,110 +685,92 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Text(
-                    isEditMode
-                        ? (_activeTab == 0
-                            ? (_itemOrServiceIndex == 0
-                                ? 'Edit Item'
-                                : 'Edit Service')
-                            : (_activeTab == 1
-                                ? 'Edit Customer'
-                                : (_activeTab == 2
-                                    ? 'Edit Supplier'
-                                    : 'Edit Account')))
-                        : (_activeTab == 0
-                            ? (_itemOrServiceIndex == 0
-                                ? 'Create Item'
-                                : 'Create Service')
-                            : (_activeTab == 1 || _activeTab == 2
-                                ? 'Create Party'
-                                : 'Create Account')),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF050B20),
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isEditMode
+                            ? (_activeTab == 0
+                                ? (_itemOrServiceIndex == 0 ? 'Edit Item' : 'Edit Service')
+                                : 'Edit Account')
+                            : (_activeTab == 0
+                                ? (_itemOrServiceIndex == 0 ? 'Create Item' : 'Create Service')
+                                : 'Create Account'),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF050B20),
+                        ),
+                      ),
+                      if (_activeTab != 0)
+                        const Text(
+                          'Add a customer, supplier, income or expense account',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.secondaryText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
             // FORM BODY + FIXED BOTTOM BUTTON
             Expanded(
-              child: _activeTab == 4
-                  ? _buildAccountChooserBody()
-                  : Stack(
-                      children: [
-                        Positioned.fill(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-
-                                if (_activeTab == 0) _buildAddProductForm(),
-                                if (_activeTab == 1) _buildAddSaleAccountForm(),
-                                if (_activeTab == 2)
-                                  _buildAddPurchaseAccountForm(),
-                                if (_activeTab == 3)
-                                  _buildAddExpenseAccountForm(),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        // FIXED BOTTOM SAVE BUTTON
-                        Positioned(
-                          left: 16,
-                          right: 16,
-                          bottom: 16,
-                          child: SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryBlue,
-                                foregroundColor: Colors.white,
-                                elevation: 4,
-                                shadowColor: AppColors.primaryBlue
-                                    .withValues(alpha: 0.3),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              onPressed: _saveCurrentForm,
-                              child: Text(
-                                _activeTab == 0
-                                    ? (_itemOrServiceIndex == 0
-                                        ? (widget.productToEdit != null
-                                            ? 'Update Item'
-                                            : 'Save Item')
-                                        : (widget.productToEdit != null
-                                            ? 'Update Service'
-                                            : 'Save Service'))
-                                    : (_activeTab == 1
-                                        ? (widget.customerToEdit != null
-                                            ? 'Update Customer'
-                                            : 'Save Customer')
-                                        : (_activeTab == 2
-                                            ? (widget.supplierToEdit != null
-                                                ? 'Update Supplier'
-                                                : 'Save Supplier')
-                                            : (isEditMode
-                                                ? 'Update Account'
-                                                : 'Save Account'))),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_activeTab == 0) _buildAddProductForm(),
+                          if (_activeTab != 0) _buildUniversalAccountForm(),
+                        ],
+                      ),
                     ),
+                  ),
+
+                  // FIXED BOTTOM SAVE BUTTON
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: AppColors.primaryBlue.withValues(alpha: 0.3),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: _saveCurrentForm,
+                        child: Text(
+                          _activeTab == 0
+                              ? (_itemOrServiceIndex == 0
+                                  ? (widget.productToEdit != null ? 'Update Item' : 'Save Item')
+                                  : (widget.productToEdit != null ? 'Update Service' : 'Save Service'))
+                              : (isEditMode ? 'Save Changes' : 'Create Account'),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -714,8 +779,722 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
   }
 
   // ==========================================
-  // 1. ADD PRODUCT FORM
+  // UNIVERSAL ACCOUNT FORM WIDGETS
   // ==========================================
+  Widget _buildUniversalAccountForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Account Name * (First Field)
+        _buildFormFieldLabel('Account Name', required: true),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _accountNameCtrl,
+          hint: 'Enter account name (e.g. ABC Traders, Office Rent)',
+          errorText: _accountNameError,
+        ),
+        const SizedBox(height: 16),
+
+        // Account Type * (Required Dropdown directly after Account Name)
+        _buildFormFieldLabel('Account Type', required: true),
+        const SizedBox(height: 6),
+        _buildAccountTypeDropdown(),
+        const SizedBox(height: 20),
+
+        // Dynamic Form Sections
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: KeyedSubtree(
+            key: ValueKey(_accountType),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_accountType == UniversalAccountType.customer ||
+                    _accountType == UniversalAccountType.supplier) ...[
+                  _buildCustomerSupplierDynamicFields(),
+                ] else if (_accountType == UniversalAccountType.income ||
+                    _accountType == UniversalAccountType.expense) ...[
+                  _buildCategoryDynamicFields(),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ACCOUNT TYPE DROPDOWN (Customer default, Customer/Supplier/Income/Expense)
+  Widget _buildAccountTypeDropdown() {
+    final Map<UniversalAccountType, String> options = {
+      UniversalAccountType.customer: 'Customer',
+      UniversalAccountType.supplier: 'Supplier',
+      UniversalAccountType.income: 'Income',
+      UniversalAccountType.expense: 'Expense',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _accountTypeError != null ? AppColors.danger : const Color(0xFFE5E7EB),
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<UniversalAccountType>(
+              value: _accountType,
+              hint: const Text(
+                'Select account type',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF9CA3AF),
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              isExpanded: true,
+              icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.darkBlueText, size: 26),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF050B20),
+              ),
+              items: options.entries.map((entry) {
+                return DropdownMenuItem<UniversalAccountType>(
+                  value: entry.key,
+                  child: Text(entry.value),
+                );
+              }).toList(),
+              onChanged: isEditMode
+                  ? null
+                  : (val) {
+                      if (val != null) {
+                        setState(() {
+                          _accountType = val;
+                          _accountTypeError = null;
+                        });
+                      }
+                    },
+            ),
+          ),
+        ),
+        if (_accountTypeError != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            _accountTypeError!,
+            style: const TextStyle(fontSize: 12, color: AppColors.danger, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCustomerSupplierDynamicFields() {
+    final isCustomer = _accountType == UniversalAccountType.customer;
+    final sectionTitle = isCustomer ? 'CUSTOMER INFORMATION' : 'SUPPLIER INFORMATION';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // CONTACT INFORMATION
+        _buildSectionHeader(sectionTitle),
+        const SizedBox(height: 10),
+
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Phone'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _phoneCtrl,
+                    hint: 'Enter phone',
+                    keyboardType: TextInputType.phone,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Alternate Phone'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _altPhoneCtrl,
+                    hint: 'Alt phone',
+                    keyboardType: TextInputType.phone,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        _buildFormFieldLabel('Email'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _emailCtrl,
+          hint: 'Enter email address',
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 18),
+
+        // BUSINESS INFORMATION
+        _buildSectionHeader('BUSINESS INFORMATION'),
+        const SizedBox(height: 10),
+
+        _buildFormFieldLabel('Business / Trade Name'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _tradeNameCtrl,
+          hint: 'Enter registered business name',
+        ),
+        const SizedBox(height: 12),
+
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('GST Registration Type'),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _gstRegType,
+                        isExpanded: true,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF050B20),
+                        ),
+                        items: ['Regular', 'Composition', 'Unregistered', 'Consumer']
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _gstRegType = val);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('GSTIN'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _gstinCtrl,
+                    hint: '15-digit GSTIN',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        _buildFormFieldLabel('PAN'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _panCtrl,
+          hint: 'e.g. ABCDE1234F',
+        ),
+        const SizedBox(height: 18),
+
+        // ADDRESS
+        _buildSectionHeader('ADDRESS'),
+        const SizedBox(height: 10),
+
+        _buildFormFieldLabel('Billing Address'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _addressCtrl,
+          hint: 'Street, Building, Suite',
+        ),
+        const SizedBox(height: 12),
+
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('City'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _cityCtrl,
+                    hint: 'City',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('State'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _stateCtrl,
+                    hint: 'State',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('PIN Code'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _pinCodeCtrl,
+                    hint: '6-digit PIN',
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // FINANCIAL & PAYMENT INFORMATION
+        _buildSectionHeader('FINANCIAL INFORMATION'),
+        const SizedBox(height: 10),
+
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Opening Balance'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _openingBalanceCtrl,
+                    hint: '0.00',
+                    prefixText: '₹ ',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Balance Type'),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _balanceType,
+                        isExpanded: true,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF050B20),
+                        ),
+                        items: ['Receivable', 'Payable']
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _balanceType = val);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Credit Limit'),
+                  const SizedBox(height: 6),
+                  _buildCustomTextField(
+                    controller: _creditLimitCtrl,
+                    hint: 'Optional limit',
+                    prefixText: '₹ ',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFormFieldLabel('Payment Terms'),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _paymentTerms,
+                        isExpanded: true,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF050B20),
+                        ),
+                        items: [
+                          'Immediate',
+                          '7 Days',
+                          '15 Days',
+                          '30 Days',
+                          '45 Days',
+                          '60 Days',
+                          'Custom'
+                        ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _paymentTerms = val);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        _buildFormFieldLabel('Notes'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _notesCtrl,
+          hint: 'Add notes about this ${isCustomer ? "customer" : "supplier"}...',
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  // CATEGORY FORM FOR INCOME & EXPENSE
+  Widget _buildCategoryDynamicFields() {
+    final isIncome = _accountType == UniversalAccountType.income;
+    final typeText = isIncome ? 'Income' : 'Expense';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('CATEGORY INFORMATION'),
+        const SizedBox(height: 10),
+
+        _buildFormFieldLabel('Description'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _descriptionCtrl,
+          hint: 'Optional description for this $typeText category',
+          maxLines: 3,
+        ),
+        const SizedBox(height: 12),
+
+        _buildFormFieldLabel('Notes'),
+        const SizedBox(height: 6),
+        _buildCustomTextField(
+          controller: _notesCtrl,
+          hint: 'Add optional notes...',
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'PlusJakartaSans',
+            color: AppColors.secondaryText,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Divider(height: 1, color: AppColors.border),
+      ],
+    );
+  }
+
+  // ==========================================
+  // ADD PRODUCT FORM & HELPERS
+  // ==========================================
+  Widget _buildAddProductForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildItemServiceSegmentedControl(),
+        const SizedBox(height: 16),
+
+        Text(
+          widget.productToEdit != null
+              ? (_itemOrServiceIndex == 0 ? 'Edit Item' : 'Edit Service')
+              : (_itemOrServiceIndex == 0 ? 'Add Item' : 'Add Service'),
+          style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF050B20)),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          widget.productToEdit != null
+              ? (_itemOrServiceIndex == 0
+                  ? 'Update physical inventory product details'
+                  : 'Update billable service details')
+              : (_itemOrServiceIndex == 0
+                  ? 'Add a physical product to track inventory & stock'
+                  : 'Add a billable service (consulting, labor, repairs, etc.)'),
+          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        ),
+        const SizedBox(height: 18),
+
+        if (_itemOrServiceIndex == 0) ...[
+          _buildFormFieldLabel('Product Name', required: true),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodNameCtrl,
+            hint: 'e.g. Parle-G Biscuit 100g',
+          ),
+          const SizedBox(height: 14),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('SKU / Product Code'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodSkuCtrl,
+                      hint: 'e.g. PRD-001',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _isSkuCameraOn
+                              ? Icons.camera_alt
+                              : Icons.qr_code_scanner_rounded,
+                          color: _isSkuCameraOn
+                              ? AppColors.primaryBlue
+                              : AppColors.secondaryText,
+                          size: 20,
+                        ),
+                        onPressed: _toggleSkuScanner,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Category'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodCategoryCtrl,
+                      hint: 'General',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          if (_isSkuCameraOn) _buildEmbeddedSkuScanner(),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Selling Price', required: true),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodSellingPriceCtrl,
+                      hint: '₹ 0.00',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Purchase Price'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodPurchasePriceCtrl,
+                      hint: '₹ 0.00',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Opening Stock'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodStockCtrl,
+                      hint: '0',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Low Stock Alert Level'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodLowStockCtrl,
+                      hint: '10',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          _buildFormFieldLabel('Description'),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodDescCtrl,
+            hint: 'Optional description',
+            maxLines: 3,
+          ),
+        ] else ...[
+          _buildFormFieldLabel('Service Name', required: true),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodNameCtrl,
+            hint: 'e.g. AC Repair & Maintenance',
+          ),
+          const SizedBox(height: 14),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('Service Charge', required: true),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _prodSellingPriceCtrl,
+                      hint: '₹ 0.00',
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormFieldLabel('SAC Code'),
+                    const SizedBox(height: 6),
+                    _buildCustomTextField(
+                      controller: _serviceSacCtrl,
+                      hint: 'e.g. 998714',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          _buildFormFieldLabel('Description'),
+          const SizedBox(height: 6),
+          _buildCustomTextField(
+            controller: _prodDescCtrl,
+            hint: 'Optional service details',
+            maxLines: 3,
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildItemServiceSegmentedControl() {
     return Container(
       height: 44,
@@ -741,15 +1520,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                       ? AppColors.primaryBlue
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(9),
-                  boxShadow: _itemOrServiceIndex == 0
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
                 ),
                 child: Center(
                   child: Row(
@@ -784,9 +1554,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
               onTap: () {
                 setState(() {
                   _itemOrServiceIndex = 1;
-                  if (_prodCategoryCtrl.text == 'Grocery') {
-                    _prodCategoryCtrl.text = 'Services';
-                  }
                 });
               },
               child: AnimatedContainer(
@@ -797,15 +1564,6 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
                       ? AppColors.primaryBlue
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(9),
-                  boxShadow: _itemOrServiceIndex == 1
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
                 ),
                 child: Center(
                   child: Row(
@@ -840,1288 +1598,19 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     );
   }
 
-  Widget _buildCustomerSupplierSegmentedControl() {
-    final isCustomer = _activeTab == 1;
+  Widget _buildEmbeddedSkuScanner() {
     return Container(
-      height: 44,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFEFF4),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _activeTab = 1;
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                decoration: BoxDecoration(
-                  color: isCustomer
-                      ? AppColors.primaryBlue
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: isCustomer
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.person_outline_rounded,
-                        size: 16,
-                        color: isCustomer
-                            ? Colors.white
-                            : AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Customer',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isCustomer
-                              ? Colors.white
-                              : AppColors.secondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _activeTab = 2;
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                decoration: BoxDecoration(
-                  color: !isCustomer
-                      ? AppColors.primaryBlue
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: !isCustomer
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.business_outlined,
-                        size: 16,
-                        color: !isCustomer
-                            ? Colors.white
-                            : AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Supplier',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: !isCustomer
-                              ? Colors.white
-                              : AppColors.secondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddProductForm() {
-    final isItem = _itemOrServiceIndex == 0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Segmented Switch [ Item | Service ] - ONLY shown when creating new record
-        if (!isEditMode) ...[
-          _buildItemServiceSegmentedControl(),
-          const SizedBox(height: 16),
-        ],
-
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.productToEdit != null
-                  ? (isItem ? 'Edit Item' : 'Edit Service')
-                  : (isItem ? 'Add Item' : 'Add Service'),
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF050B20),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              widget.productToEdit != null
-                  ? (isItem
-                      ? 'Update item information'
-                      : 'Update service details')
-                  : (isItem
-                      ? 'Add a new item to your inventory'
-                      : 'Add a new service to your business'),
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        if (isItem && _isSkuCameraOn) _buildSkuScannerHeader(),
-
-        if (isItem) ...[
-          // ITEM FORM
-          _buildFormFieldLabel('Item Name', required: true),
-          const SizedBox(height: 6),
-          _buildCustomTextField(
-            controller: _prodNameCtrl,
-            hint: 'e.g. Basmati Rice 5kg',
-          ),
-          const SizedBox(height: 14),
-
-          // SKU / Barcode + Category Side-by-Side
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('SKU / Barcode'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodSkuCtrl,
-                      hint: 'Scan or enter SKU',
-                      suffixIcon: InkWell(
-                        onTap: _toggleSkuScanner,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Icon(
-                          _isSkuCameraOn
-                              ? Icons.close
-                              : Icons.qr_code_scanner,
-                          size: 18,
-                          color: _isSkuCameraOn
-                              ? AppColors.danger
-                              : const Color(0xFF6B7280),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Category'),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: [
-                            'General',
-                            'Grocery',
-                            'Beverages',
-                            'Electronics',
-                            'Clothing',
-                            'Services',
-                            'Other'
-                          ].contains(_prodCategoryCtrl.text)
-                              ? _prodCategoryCtrl.text
-                              : 'General',
-                          isExpanded: true,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20),
-                          ),
-                          items: [
-                            'General',
-                            'Grocery',
-                            'Beverages',
-                            'Electronics',
-                            'Clothing',
-                            'Services',
-                            'Other'
-                          ].map((cat) {
-                            return DropdownMenuItem(
-                                value: cat, child: Text(cat));
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _prodCategoryCtrl.text = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // HSN Code + Unit Side-by-Side
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('HSN Code'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodHsnCtrl,
-                      hint: 'e.g. 1001',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Unit'),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: [
-                            'PCS',
-                            'KG',
-                            'G',
-                            'L',
-                            'M',
-                            'BOX',
-                            'SET'
-                          ].contains(_prodUnitCtrl.text.toUpperCase())
-                              ? _prodUnitCtrl.text.toUpperCase()
-                              : 'PCS',
-                          isExpanded: true,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20),
-                          ),
-                          items: [
-                            'PCS',
-                            'KG',
-                            'G',
-                            'L',
-                            'M',
-                            'BOX',
-                            'SET'
-                          ].map((u) {
-                            return DropdownMenuItem(value: u, child: Text(u));
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _prodUnitCtrl.text = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Purchase Price + Selling Price * Side-by-Side
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Purchase Price'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodPurchasePriceCtrl,
-                      hint: '₹ 0.00',
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Selling Price', required: true),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodSellingPriceCtrl,
-                      hint: '₹ 0.00',
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Tax / GST Rate + Opening Stock Side-by-Side
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Tax / GST Rate'),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: [
-                            '0.00',
-                            '5.00',
-                            '12.00',
-                            '18.00',
-                            '28.00'
-                          ].contains(_prodTaxCtrl.text)
-                              ? _prodTaxCtrl.text
-                              : '0.00',
-                          isExpanded: true,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: '0.00', child: Text('Exempt / 0%')),
-                            DropdownMenuItem(value: '5.00', child: Text('5% GST')),
-                            DropdownMenuItem(value: '12.00', child: Text('12% GST')),
-                            DropdownMenuItem(value: '18.00', child: Text('18% GST')),
-                            DropdownMenuItem(value: '28.00', child: Text('28% GST')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _prodTaxCtrl.text = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Opening Stock'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodStockCtrl,
-                      hint: '0',
-                      keyboardType: TextInputType.number,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Low-stock Alert
-          _buildFormFieldLabel('Low-stock Alert'),
-          const SizedBox(height: 6),
-          _buildCustomTextField(
-            controller: _prodLowStockCtrl,
-            hint: 'e.g. 10',
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 14),
-
-          _buildFormFieldLabel('Description'),
-          const SizedBox(height: 6),
-          _buildCustomTextField(
-            controller: _prodDescCtrl,
-            hint: 'Optional description',
-            maxLines: 3,
-          ),
-        ] else ...[
-          // SERVICE FORM (Strictly No Category, Stock, Low Stock, or Inventory controls)
-          _buildFormFieldLabel('Service Name', required: true),
-          const SizedBox(height: 6),
-          _buildCustomTextField(
-            controller: _prodNameCtrl,
-            hint: 'e.g. AC Repair & Maintenance',
-          ),
-          const SizedBox(height: 14),
-
-          // Service Code + SAC Code Side-by-Side
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Service Code / SKU'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodSkuCtrl,
-                      hint: 'Optional code',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('SAC Code'),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _serviceSacCtrl,
-                      hint: 'e.g. 998714',
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Service Price * + Tax Rate Side-by-Side
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('Service Charge', required: true),
-                    const SizedBox(height: 6),
-                    _buildCustomTextField(
-                      controller: _prodSellingPriceCtrl,
-                      hint: '₹ 0.00',
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormFieldLabel('GST / Tax Rate'),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: [
-                            '0.00',
-                            '5.00',
-                            '12.00',
-                            '18.00',
-                            '28.00'
-                          ].contains(_serviceTaxCtrl.text)
-                              ? _serviceTaxCtrl.text
-                              : '0.00',
-                          isExpanded: true,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: '0.00', child: Text('Exempt / 0%')),
-                            DropdownMenuItem(value: '5.00', child: Text('5% GST')),
-                            DropdownMenuItem(value: '12.00', child: Text('12% GST')),
-                            DropdownMenuItem(value: '18.00', child: Text('18% GST')),
-                            DropdownMenuItem(value: '28.00', child: Text('28% GST')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _serviceTaxCtrl.text = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          _buildFormFieldLabel('Description'),
-          const SizedBox(height: 6),
-          _buildCustomTextField(
-            controller: _prodDescCtrl,
-            hint: 'Optional service details',
-            maxLines: 3,
-          ),
-        ],
-      ],
-    );
-  }
-
-  // ==========================================
-  // 2. ADD SALE ACCOUNT FORM
-  // ==========================================
-  Widget _buildAddSaleAccountForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Segmented Switch [ Customer | Supplier ]
-        _buildCustomerSupplierSegmentedControl(),
-        const SizedBox(height: 16),
-
-        Text(
-          widget.customerToEdit != null
-              ? 'Edit Customer'
-              : 'Add Customer',
-          style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF050B20)),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          widget.customerToEdit != null
-              ? 'Update customer information'
-              : 'Add a new customer account for sales',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-        ),
-        const SizedBox(height: 18),
-
-        // Customer Name *
-        _buildFormFieldLabel('Customer Name', required: true),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _saleNameCtrl,
-          hint: 'Enter customer name',
-        ),
-        const SizedBox(height: 14),
-
-        // Phone + Email Side-by-Side
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Phone'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _salePhoneCtrl,
-                    hint: 'Enter phone',
-                    keyboardType: TextInputType.phone,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Email'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _saleEmailCtrl,
-                    hint: 'Enter email',
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // Address
-        _buildFormFieldLabel('Address'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _saleAddressCtrl,
-          hint: 'Enter address',
-        ),
-        const SizedBox(height: 14),
-
-        // Opening Balance
-        _buildFormFieldLabel('Opening Balance'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _saleOpeningBalanceCtrl,
-          hint: '0.00',
-          prefixText: '₹ ',
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 10),
-
-        // LIGHT CYAN INFO CARD
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE6F7FF),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.info_outline_rounded,
-                  size: 18, color: Color(0xFF0284C7)),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Amount the customer currently owes you',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF050B20),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // Notes
-        _buildFormFieldLabel('Notes'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _saleNotesCtrl,
-          hint: 'Optional notes',
-          maxLines: 3,
-        ),
-      ],
-    );
-  }
-
-  // ==========================================
-  // 3. ADD PURCHASE ACCOUNT FORM
-  // ==========================================
-  Widget _buildAddPurchaseAccountForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Segmented Switch [ Customer | Supplier ]
-        _buildCustomerSupplierSegmentedControl(),
-        const SizedBox(height: 16),
-
-        Text(
-          widget.supplierToEdit != null
-              ? 'Edit Supplier'
-              : 'Add Supplier',
-          style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF050B20)),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          widget.supplierToEdit != null
-              ? 'Update supplier information'
-              : 'Add a new supplier account for purchases',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-        ),
-        const SizedBox(height: 18),
-
-        // Supplier Name *
-        _buildFormFieldLabel('Supplier Name', required: true),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _purNameCtrl,
-          hint: 'Enter supplier name',
-        ),
-        const SizedBox(height: 14),
-
-        // Phone + Email Side-by-Side
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Phone'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _purPhoneCtrl,
-                    hint: 'Enter phone',
-                    keyboardType: TextInputType.phone,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildFormFieldLabel('Email'),
-                  const SizedBox(height: 6),
-                  _buildCustomTextField(
-                    controller: _purEmailCtrl,
-                    hint: 'Enter email',
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // Address
-        _buildFormFieldLabel('Address'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _purAddressCtrl,
-          hint: 'Enter address',
-        ),
-        const SizedBox(height: 14),
-
-        // Opening Balance
-        _buildFormFieldLabel('Opening Balance'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _purOpeningBalanceCtrl,
-          hint: '0.00',
-          prefixText: '₹ ',
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 10),
-
-        // LIGHT CYAN INFO CARD
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE6F7FF),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.info_outline_rounded,
-                  size: 18, color: Color(0xFF0284C7)),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Amount currently owed to this supplier',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF050B20),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // Notes
-        _buildFormFieldLabel('Notes'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _purNotesCtrl,
-          hint: 'Optional notes',
-          maxLines: 3,
-        ),
-      ],
-    );
-  }
-
-  // ==========================================
-  // 4. ADD INCOME/EXPENSE ACCOUNT FORM
-  // ==========================================
-  Widget _buildAddExpenseAccountForm() {
-    final activeCategories = _expAccountType == 'Income' ? _incomeCategories : _expenseCategories;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.expenseToEdit != null
-              ? 'Edit Income/Expense Account'
-              : 'Add Income/Expense Account',
-          style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF050B20)),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          widget.expenseToEdit != null
-              ? 'Update income/expense account'
-              : 'Track recurring or one-off business income or costs',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-        ),
-        const SizedBox(height: 18),
-
-        // Account Type Dropdown
-        _buildFormFieldLabel('Account Type'),
-        const SizedBox(height: 6),
-        Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _expAccountType,
-              isExpanded: true,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF050B20)),
-              items: ['Expense', 'Income'].map((type) {
-                return DropdownMenuItem(value: type, child: Text(type));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null && val != _expAccountType) {
-                  setState(() {
-                    _expAccountType = val;
-                    final targetCategories = val == 'Income' ? _incomeCategories : _expenseCategories;
-                    if (!targetCategories.contains(_expCategory)) {
-                      _expCategory = targetCategories.first;
-                    }
-                  });
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // Account Name *
-        _buildFormFieldLabel('Account Name', required: true),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _expNameCtrl,
-          hint: _expAccountType == 'Income' ? 'e.g. Consulting Revenue' : 'e.g. Shop Electricity',
-        ),
-        const SizedBox(height: 14),
-
-        // Category Dropdown
-        _buildFormFieldLabel('Category'),
-        const SizedBox(height: 6),
-        Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: activeCategories.contains(_expCategory) ? _expCategory : activeCategories.first,
-              isExpanded: true,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF050B20)),
-              items: activeCategories.map((cat) {
-                return DropdownMenuItem(
-                  value: cat,
-                  child: Text(cat),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _expCategory = val);
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // Description
-        _buildFormFieldLabel('Description'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _expDescCtrl,
-          hint: 'Optional description',
-          maxLines: 3,
-        ),
-        const SizedBox(height: 14),
-
-        // Opening Balance
-        _buildFormFieldLabel('Opening Balance'),
-        const SizedBox(height: 6),
-        _buildCustomTextField(
-          controller: _expOpeningBalanceCtrl,
-          hint: '0.00',
-          prefixText: '₹ ',
-          keyboardType: TextInputType.number,
-        ),
-      ],
-    );
-  }
-
-  // ==========================================
-  // 5. ACCOUNT CHOOSER BODY
-  // ==========================================
-  Widget _buildAccountChooserBody() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Add Account',
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF050B20)),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Choose the type of account you want to create',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 20),
-
-          // Sale Account Card
-          AppCard(
-            onTap: () {
-              setState(() {
-                _activeTab = 1; // Switch to Sale Account
-              });
-            },
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.person_outline,
-                      size: 28, color: AppColors.primaryBlue),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Sale Account',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF050B20)),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Create a customer account for sales',
-                        style:
-                            TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    size: 16, color: Color(0xFF6B7280)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Purchase Account Card
-          AppCard(
-            onTap: () {
-              setState(() {
-                _activeTab = 2; // Switch to Purchase Account
-              });
-            },
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.business_outlined,
-                      size: 28, color: AppColors.warning),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Purchase Account',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF050B20)),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Create a supplier account for purchases',
-                        style:
-                            TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    size: 16, color: Color(0xFF6B7280)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
-  // HELPER WIDGETS
-  // ==========================================
-  Widget _buildSkuScannerHeader() {
-    if (!_isSkuCameraOn || _skuScannerController == null) {
-      return const SizedBox.shrink();
-    }
-    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
       height: 180,
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 12, bottom: 16),
       decoration: BoxDecoration(
         color: Colors.black,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primaryBlue, width: 2),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            MobileScanner(
-              controller: _skuScannerController!,
-              onDetect: _onSkuBarcodeDetected,
-              errorBuilder: (context, error) {
-                return Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.camera_alt_outlined,
-                          color: AppColors.danger, size: 36),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Camera unavailable or permission denied',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF050B20)),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton(
-                        onPressed: () => _skuScannerController?.start(),
-                        child: const Text('Retry Camera',
-                            style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            // Barcode Box Overlay Area
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: AppColors.primaryBlue,
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              width: 220,
-              height: 90,
-              child: Center(
-                child: Container(
-                  height: 2,
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                  color: AppColors.primaryBlue,
-                ),
-              ),
-            ),
-            // Indicator Text
-            Positioned(
-              bottom: 8,
-              left: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'Align Barcode / SKU in box',
-                  style: TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-            ),
-            // Top Controls (Flash & Cam OFF)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Row(
-                children: [
-                  InkWell(
-                    onTap: _toggleSkuFlash,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _isSkuFlashOn
-                            ? Colors.amber
-                            : Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color:
-                                _isSkuFlashOn ? Colors.amber : Colors.white30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isSkuFlashOn ? Icons.flash_on : Icons.flash_off,
-                            color: _isSkuFlashOn ? Colors.black : Colors.white,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isSkuFlashOn ? 'Flash ON' : 'Flash OFF',
-                            style: TextStyle(
-                              color:
-                                  _isSkuFlashOn ? Colors.black : Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: _toggleSkuScanner,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white30),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.videocam_off,
-                              color: Colors.white, size: 16),
-                          SizedBox(width: 4),
-                          Text(
-                            'Cam OFF',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        child: MobileScanner(
+          controller: _skuScannerController,
+          onDetect: _onSkuBarcodeDetected,
         ),
       ),
     );
@@ -2155,41 +1644,60 @@ class _CreateMasterPageState extends State<CreateMasterPage> {
     Widget? suffixIcon,
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
+    String? errorText,
   }) {
-    return Container(
-      height: maxLines == 1 ? 48 : null,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF050B20)),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(
-              fontSize: 13.5,
-              color: Color(0xFF9CA3AF),
-              fontWeight: FontWeight.w400),
-          prefixText: prefixText,
-          prefixStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF050B20)),
-          suffixIcon: suffixIcon,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: maxLines == 1 ? 48 : null,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: errorText != null ? AppColors.danger : const Color(0xFFE5E7EB),
+            ),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            maxLines: maxLines,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF050B20)),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF9CA3AF),
+                  fontWeight: FontWeight.w400),
+              prefixText: prefixText,
+              prefixStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF050B20)),
+              suffixIcon: suffixIcon,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+          ),
         ),
-      ),
+        if (errorText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            errorText,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.danger,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

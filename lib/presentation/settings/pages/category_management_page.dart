@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../application/di/injection.dart';
+import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/category_entity.dart';
 import '../../../domain/repositories/category_repository.dart';
-import '../../widgets/app_text_field.dart';
 import '../../widgets/ui_state_widgets.dart';
 
 enum CategoryTypeFilter { all, income, expense }
@@ -51,51 +52,6 @@ class _CategoryManagementPageState extends State<CategoryManagementPage> {
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _showEditCategoryDialog(CategoryEntity category) {
-    final nameCtrl = TextEditingController(text: category.name);
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Edit Category', style: TextStyle(fontWeight: FontWeight.w800)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppTextField(
-                label: 'Category Name',
-                controller: nameCtrl,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
-                final updated = category.copyWith(name: name);
-                await getIt<CategoryRepository>().updateCategory(updated);
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                }
-                _loadCategories();
-              },
-              child: const Text('Update Category'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _confirmDeactivateCategory(CategoryEntity category) {
@@ -434,7 +390,10 @@ class _CategoryManagementPageState extends State<CategoryManagementPage> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primaryBlue),
-                  onPressed: () => _showEditCategoryDialog(cat),
+                  onPressed: () async {
+                    await context.push(RouteNames.createMaster, extra: cat);
+                    _loadCategories();
+                  },
                   tooltip: 'Edit Category',
                 ),
                 IconButton(
