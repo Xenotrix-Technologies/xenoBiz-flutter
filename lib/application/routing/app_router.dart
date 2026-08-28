@@ -59,7 +59,6 @@ import '../../presentation/settings/pages/tax_gst_settings_page.dart';
 
 import '../../presentation/subscription/pages/subscription_paywall_page.dart';
 import '../../presentation/suppliers/pages/supplier_details_page.dart';
-import '../../presentation/suppliers/pages/supplier_directory_page.dart';
 import '../../presentation/sync/pages/offline_sync_center_page.dart';
 import '../../presentation/whatsapp/pages/automated_reminders_page.dart';
 import '../../presentation/whatsapp/pages/edit_rule_page.dart';
@@ -217,6 +216,261 @@ class AppRouter {
               GoRoute(
                 path: RouteNames.more,
                 builder: (context, state) => const MoreMenuPage(),
+              ),
+              GoRoute(
+                path: RouteNames.moreCustomers,
+                builder: (context, state) {
+                  int tab = 0;
+                  if (state.extra is int) {
+                    tab = state.extra as int;
+                  } else if (state.extra is Map && (state.extra as Map).containsKey('tab')) {
+                    tab = (state.extra as Map)['tab'] as int;
+                  }
+                  return AccountsPage(initialTab: tab);
+                },
+              ),
+              GoRoute(
+                path: RouteNames.supplierDirectory,
+                builder: (context, state) => const AccountsPage(initialTab: 1),
+              ),
+              GoRoute(
+                path: RouteNames.supplierDetails,
+                builder: (context, state) {
+                  final sup = state.extra as SupplierEntity?;
+                  return SupplierDetailsPage(supplier: sup);
+                },
+              ),
+              GoRoute(
+                path: RouteNames.salesAnalytics,
+                builder: (context, state) => const SalesAnalyticsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.financialAnalytics,
+                builder: (context, state) => const FinancialAnalyticsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.inventoryAnalytics,
+                builder: (context, state) => const InventoryAnalyticsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.quotations,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Quotations',
+                  icon: Icons.request_quote,
+                  description: 'Create & send price estimations and sales quotes.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.proformaInvoices,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Proforma Invoices',
+                  icon: Icons.description,
+                  description: 'Issue proforma invoices prior to final billing.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.deliveryChallans,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Delivery Challans',
+                  icon: Icons.local_shipping_outlined,
+                  description: 'Dispatch challans & delivery tracking documents.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.services,
+                builder: (context, state) => const ServicesListPage(),
+              ),
+              GoRoute(
+                path: RouteNames.creditNotes,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Credit Notes',
+                  icon: Icons.note_alt,
+                  description: 'Sales return credit vouchers & customer balance adjustments.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.debitNotes,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Debit Notes',
+                  icon: Icons.note_add,
+                  description: 'Purchase return debit vouchers & vendor price adjustments.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.journal,
+                builder: (context, state) => const JournalPage(),
+              ),
+              GoRoute(
+                path: RouteNames.newJournalEntry,
+                builder: (context, state) => const NewJournalEntryPage(),
+              ),
+              GoRoute(
+                path: RouteNames.contra,
+                builder: (context, state) => const ContraPage(),
+              ),
+              GoRoute(
+                path: RouteNames.newContraEntry,
+                builder: (context, state) => const NewContraEntryPage(),
+              ),
+              GoRoute(
+                path: RouteNames.dailyBook,
+                builder: (context, state) => const DailyBookPage(),
+              ),
+              GoRoute(
+                path: RouteNames.ledger,
+                builder: (context, state) {
+                  final accName = state.extra as String?;
+                  return LedgerPage(initialAccount: accName);
+                },
+              ),
+              GoRoute(
+                path: RouteNames.cashBank,
+                builder: (context, state) => const CashBankPage(),
+              ),
+              GoRoute(
+                path: RouteNames.receivables,
+                builder: (context, state) => const ReceivablesPage(),
+              ),
+              GoRoute(
+                path: RouteNames.payables,
+                builder: (context, state) => const PayablesPage(),
+              ),
+              GoRoute(
+                path: RouteNames.trialBalance,
+                builder: (context, state) => const TrialBalancePage(),
+              ),
+              GoRoute(
+                path: RouteNames.reports,
+                builder: (context, state) {
+                  final catIdx = (state.extra as int?) ?? 0;
+                  return ReportsPage(initialCategoryIndex: catIdx);
+                },
+              ),
+              GoRoute(
+                path: RouteNames.gstTaxation,
+                builder: (context, state) => const GstTaxationPage(),
+              ),
+              GoRoute(
+                path: RouteNames.taxGstSettings,
+                builder: (context, state) => const TaxGstSettingsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.eWayBill,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'E-Way Bill',
+                  icon: Icons.local_shipping,
+                  description: 'Generate & track e-way bills for transport of goods.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.eInvoice,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'E-Invoice Portal',
+                  icon: Icons.qr_code_2,
+                  description: 'Generate IRN e-invoices with B2B QR code & JSON payload.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.inputTaxCredit,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Input Tax Credit',
+                  icon: Icons.credit_score,
+                  description: 'Track GSTR-2B ITC eligibility & claimed tax credit.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.automatedReminders,
+                builder: (context, state) => const AutomatedRemindersPage(),
+              ),
+              GoRoute(
+                path: RouteNames.editRule,
+                builder: (context, state) => const EditRulePage(),
+              ),
+              GoRoute(
+                path: RouteNames.whatsappTemplates,
+                builder: (context, state) => const WhatsAppTemplatesPage(),
+              ),
+              GoRoute(
+                path: RouteNames.newTemplate,
+                builder: (context, state) => const NewTemplatePage(),
+              ),
+              GoRoute(
+                path: RouteNames.importData,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Import Data',
+                  icon: Icons.file_upload,
+                  description: 'Bulk import products, customers & invoices from Excel/CSV.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.exportData,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Export Data',
+                  icon: Icons.file_download,
+                  description: 'Export sales, inventory & accounting data to Excel/PDF.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.staffUsers,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Staff & Users',
+                  icon: Icons.people_outline,
+                  description: 'Manage staff access, cashier permissions & user roles.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.voucherPrefixSettings,
+                builder: (context, state) => const VoucherPrefixSettingsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.settings,
+                builder: (context, state) => const SettingsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.businessProfile,
+                builder: (context, state) => const BusinessProfilePage(),
+              ),
+              GoRoute(
+                path: RouteNames.invoiceSettings,
+                builder: (context, state) => const InvoiceSettingsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.notificationSettings,
+                builder: (context, state) => const SecondaryModulePage(
+                  title: 'Notification Settings',
+                  icon: Icons.notifications_none,
+                  description: 'Configure automated SMS, WhatsApp & app alert settings.',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.categories,
+                builder: (context, state) => const CategoryManagementPage(),
+              ),
+              GoRoute(
+                path: RouteNames.backupRestore,
+                builder: (context, state) => const BackupRestorePage(),
+              ),
+              GoRoute(
+                path: RouteNames.offlineSync,
+                builder: (context, state) => const OfflineSyncCenterPage(),
+              ),
+              GoRoute(
+                path: RouteNames.customerDetails,
+                builder: (context, state) {
+                  final cust = state.extra as CustomerEntity?;
+                  return CustomerDetailsPage(customer: cust);
+                },
+              ),
+              GoRoute(
+                path: RouteNames.customerTimeline,
+                builder: (context, state) => const CustomerTimelinePage(),
+              ),
+              GoRoute(
+                path: RouteNames.expenseAccountDetails,
+                builder: (context, state) {
+                  final acc = state.extra as ExpenseAccountSummary?;
+                  return ExpenseAccountDetailsPage(account: acc);
+                },
               ),
             ],
           ),
@@ -691,7 +945,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.supplierDirectory,
-        builder: (context, state) => const SupplierDirectoryPage(),
+        builder: (context, state) => const AccountsPage(initialTab: 1),
       ),
       GoRoute(
         path: RouteNames.supplierDetails,

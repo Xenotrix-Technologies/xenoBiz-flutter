@@ -1,180 +1,143 @@
 import 'package:flutter/material.dart';
-
 import 'package:go_router/go_router.dart';
 
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _isDarkMode = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
         title: const Text(
-          'Settings & Configuration',
-          style: TextStyle(color: AppColors.darkBlueText),
+          'Settings',
+          style: TextStyle(
+            color: AppColors.darkBlueText,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
         ),
         foregroundColor: AppColors.darkBlueText,
         forceMaterialTransparency: true,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Business & Account Settings Group
-            _SettingsGroupCard(
-              tiles: [
-                _SettingsTile(
-                  title: 'Business profile & security',
-                  onTap: () => context.push(RouteNames.businessProfile),
-                ),
-                _SettingsTile(
-                  title: 'Tax / GST settings',
-                  onTap: () => context.push(RouteNames.taxGstSettings),
-                ),
-                _SettingsTile(
-                  title: 'Invoice settings',
-                  onTap: () => context.push(RouteNames.invoiceSettings),
-                ),
-                _SettingsTile(
-                  title: 'Income & Expense Categories',
-                  onTap: () => context.push(RouteNames.categories),
-                ),
-                _SettingsTile(
-                  title: 'User roles & permissions',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('User roles & permissions')),
-                    );
-                  },
-                ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // BUSINESS GROUP
+                _buildGroupHeader('BUSINESS'),
+                _buildGroupCard([
+                  _SettingsTile(
+                    icon: Icons.business_outlined,
+                    title: 'Business Settings',
+                    subtitle: 'Manage business profile, name, address & logo',
+                    onTap: () => context.push(RouteNames.businessProfile),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+
+                // INVOICING GROUP
+                _buildGroupHeader('INVOICING'),
+                _buildGroupCard([
+                  _SettingsTile(
+                    icon: Icons.receipt_outlined,
+                    title: 'Invoice Settings',
+                    subtitle: 'Configure invoice terms, prefixes & print templates',
+                    onTap: () => context.push(RouteNames.invoiceSettings),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+
+                // TAXATION GROUP
+                _buildGroupHeader('TAXATION'),
+                _buildGroupCard([
+                  _SettingsTile(
+                    icon: Icons.percent_outlined,
+                    title: 'Tax Settings',
+                    subtitle: 'Configure GSTIN, tax rates & tax rules',
+                    onTap: () => context.push(RouteNames.taxGstSettings),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+
+                // APP GROUP
+                _buildGroupHeader('APP'),
+                _buildGroupCard([
+                  _SettingsTile(
+                    icon: Icons.notifications_none_outlined,
+                    title: 'Notification Settings',
+                    subtitle: 'Manage app notifications and reminder alerts',
+                    onTap: () => context.push(RouteNames.notificationSettings),
+                  ),
+                  _SettingsTile(
+                    icon: Icons.dark_mode_outlined,
+                    title: 'Dark Mode',
+                    subtitle: 'Toggle dark appearance theme',
+                    trailing: Switch(
+                      value: _isDarkMode,
+                      activeColor: const Color(0xFF0066CC),
+                      onChanged: (val) {
+                        setState(() => _isDarkMode = val);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(val ? 'Dark mode enabled' : 'Dark mode disabled'),
+                            duration: const Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 40),
               ],
             ),
-
-
-            const SizedBox(height: 16),
-
-            // App Configuration & Sync Group
-            _SettingsGroupCard(
-              tiles: [
-                _SettingsTile(
-                  title: 'Notifications',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notification settings')),
-                    );
-                  },
-                ),
-                _SettingsTile(
-                  title: 'Offline & sync',
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.cloud_off,
-                                color: AppColors.outline, size: 14),
-                            SizedBox(width: 6),
-                            Text(
-                              'Disabled',
-                              style: TextStyle(
-                                color: AppColors.outline,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.secondaryText,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                  onTap: () => context.push(RouteNames.offlineSync),
-                ),
-                _SettingsTile(
-                  title: 'Language',
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Text(
-                        'English',
-                        style: TextStyle(
-                          color: AppColors.secondaryText,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(
-                        Icons.chevron_right,
-                        color: AppColors.secondaryText,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Language settings')),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-          ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _SettingsTile {
-  final String title;
-  final Widget? trailing;
-  final VoidCallback? onTap;
+  Widget _buildGroupHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          color: AppColors.secondaryText,
+          letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
 
-  const _SettingsTile({
-    required this.title,
-    this.trailing,
-    this.onTap,
-  });
-}
-
-class _SettingsGroupCard extends StatelessWidget {
-  final List<_SettingsTile> tiles;
-
-  const _SettingsGroupCard({required this.tiles});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildGroupCard(List<_SettingsTile> tiles) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 1.0),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
@@ -182,58 +145,64 @@ class _SettingsGroupCard extends StatelessWidget {
       child: Column(
         children: List.generate(tiles.length, (index) {
           final isLast = index == tiles.length - 1;
-          final isFirst = index == 0;
           final tile = tiles[index];
 
           return Column(
             children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: tile.onTap,
-                  borderRadius: BorderRadius.vertical(
-                    top: isFirst ? const Radius.circular(16) : Radius.zero,
-                    bottom: isLast ? const Radius.circular(16) : Radius.zero,
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0066CC).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            tile.title,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.darkBlueText,
-                            ),
-                          ),
-                        ),
-                        if (tile.trailing != null) ...[
-                          tile.trailing!,
-                        ] else ...[
-                          const Icon(
-                            Icons.chevron_right,
-                            color: AppColors.secondaryText,
-                            size: 20,
-                          ),
-                        ],
-                      ],
+                  child: Icon(tile.icon, color: const Color(0xFF0066CC), size: 20),
+                ),
+                title: Text(
+                  tile.title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.darkBlueText,
+                  ),
+                ),
+                subtitle: Text(
+                  tile.subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+                trailing: tile.trailing ??
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.secondaryText,
+                      size: 20,
                     ),
-                  ),
-                ),
+                onTap: tile.trailing != null ? null : tile.onTap,
               ),
-              if (!isLast)
-                const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: AppColors.border,
-                ),
+              if (!isLast) const Divider(height: 1, color: AppColors.border),
             ],
           );
         }),
       ),
     );
   }
+}
+
+class _SettingsTile {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
 }

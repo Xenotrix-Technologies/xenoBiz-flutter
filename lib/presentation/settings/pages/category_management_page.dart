@@ -210,6 +210,20 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: Colors.white,
+        onPressed: () {
+          final currentType = _tabController.index == 0 ? CategoryType.income : CategoryType.expense;
+          _showAddCategoryDialog(currentType);
+        },
+        icon: const Icon(Icons.add),
+        label: Text(
+          _tabController.index == 0 ? 'Add Income Category' : 'Add Expense Category',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
       body: _isLoading
           ? const CustomerListSkeleton()
           : TabBarView(
@@ -234,7 +248,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$typeText Categories (${categories.where((c) => c.isActive).length})',
+                '$typeText Accounts & Categories (${categories.where((c) => c.isActive).length})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
               ),
               ElevatedButton.icon(
@@ -245,7 +259,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                 ),
                 onPressed: () => _showAddCategoryDialog(type),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Category', style: TextStyle(fontWeight: FontWeight.w700)),
+                label: Text('Add $typeText Category', style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ],
           ),

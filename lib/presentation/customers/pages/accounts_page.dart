@@ -15,7 +15,8 @@ import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
 
 class AccountsPage extends StatefulWidget {
-  const AccountsPage({super.key});
+  final int initialTab;
+  const AccountsPage({super.key, this.initialTab = 0});
 
   @override
   State<AccountsPage> createState() => _AccountsPageState();
@@ -23,12 +24,12 @@ class AccountsPage extends StatefulWidget {
 
 class _AccountsPageState extends State<AccountsPage> {
   final TextEditingController _searchController = TextEditingController();
-  int _activeTab =
-      0; // 0 = Sale Accounts (Customers), 1 = Purchase Accounts (Suppliers)
+  late int _activeTab; // 0 = Sale Accounts (Customers), 1 = Purchase Accounts (Suppliers)
 
   @override
   void initState() {
     super.initState();
+    _activeTab = widget.initialTab;
     context.read<AccountsBloc>().add(const FetchAccountsEvent());
     context.read<PurchaseBloc>().add(const FetchPurchasesEvent());
   }
@@ -768,7 +769,7 @@ class _AccountsPageState extends State<AccountsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Accounts'),
+        title: const Text('Customers & Suppliers'),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,

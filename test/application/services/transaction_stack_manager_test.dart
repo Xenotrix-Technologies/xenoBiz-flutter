@@ -61,7 +61,9 @@ void main() {
       expect(manager.currentSession?.id, 'session_A');
     });
 
-    test('TC-02: Dirty A -> Empty B -> Dirty C -> Complete C -> Unwind stack correctly', () {
+    test(
+        'TC-02: Dirty A -> Empty B -> Dirty C -> Complete C -> Unwind stack correctly',
+        () {
       bool dirtyAData = true;
       bool emptyBData = false;
       bool dirtyCData = true;
@@ -190,7 +192,8 @@ void main() {
       expect(manager.currentSession?.id, 'C');
     });
 
-    test('TC-08: Completed session does not trigger discard dialog evaluation', () {
+    test('TC-08: Completed session does not trigger discard dialog evaluation',
+        () {
       final session = TransactionSession(
         id: 'money_in_1',
         type: TransactionTypeCategory.moneyIn,
@@ -210,10 +213,25 @@ void main() {
       expect(!session.isCompleted && session.hasMeaningfulData(), isFalse);
     });
 
-    test('TC-09: nearestUnfinishedSession finds nearest unfinished dirty parent skipping empty parents', () {
-      manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-      manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.purchase, isEdit: false, hasMeaningfulData: () => false));
-      manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+    test(
+        'TC-09: nearestUnfinishedSession finds nearest unfinished dirty parent skipping empty parents',
+        () {
+      manager.registerSession(TransactionSession(
+          id: 'A',
+          type: TransactionTypeCategory.sale,
+          isEdit: false,
+          hasMeaningfulData: () => true));
+      manager.registerSession(TransactionSession(
+          id: 'B',
+          type: TransactionTypeCategory.purchase,
+          isEdit: false,
+          hasMeaningfulData: () => false));
+      manager.registerSession(TransactionSession(
+          id: 'C',
+          type: TransactionTypeCategory.sale,
+          isEdit: false,
+          hasMeaningfulData: () => true,
+          isCompleted: true));
 
       final parent = manager.nearestUnfinishedSession;
       expect(parent, isNotNull);
@@ -223,12 +241,23 @@ void main() {
 
     group('Conditional Restoration - Cases 1 through 8', () {
       test('Case 1: Empty A -> B -> Complete B skips empty A', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
         // Unwind stack from B completion
+        // ignore: unused_local_variable
         int popCount = 0;
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
         popCount++;
 
         while (manager.stack.isNotEmpty) {
@@ -245,10 +274,20 @@ void main() {
       });
 
       test('Case 2: Dirty A -> B -> Complete B restores dirty A', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
@@ -263,12 +302,28 @@ void main() {
         expect(manager.currentSession?.id, 'A');
       });
 
-      test('Case 3: Dirty A -> Empty B -> C -> Complete C skips B and restores A', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+      test(
+          'Case 3: Dirty A -> Empty B -> C -> Complete C skips B and restores A',
+          () {
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'C',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
@@ -284,11 +339,25 @@ void main() {
       });
 
       test('Case 4: Dirty A -> Dirty B -> C -> Complete C restores B', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'C',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
@@ -303,12 +372,27 @@ void main() {
         expect(manager.currentSession?.id, 'B');
       });
 
-      test('Case 5: Empty A -> Empty B -> C -> Complete C skips both A and B', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+      test('Case 5: Empty A -> Empty B -> C -> Complete C skips both A and B',
+          () {
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'C',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
@@ -323,11 +407,25 @@ void main() {
       });
 
       test('Case 6: Empty A -> Dirty B -> C -> Complete C restores B', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'C',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
@@ -342,14 +440,38 @@ void main() {
         expect(manager.currentSession?.id, 'B');
       });
 
-      test('Case 7: Dirty A -> Empty B -> Empty C -> Empty D -> E -> Complete E skips B, C, D to restore A', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'D', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'E', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+      test(
+          'Case 7: Dirty A -> Empty B -> Empty C -> Empty D -> E -> Complete E skips B, C, D to restore A',
+          () {
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'C',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'D',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'E',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
@@ -364,13 +486,33 @@ void main() {
         expect(manager.currentSession?.id, 'A');
       });
 
-      test('Case 8: Dirty A -> Dirty B -> Empty C -> D -> Complete D skips C and restores B', () {
-        manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
-        manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));
-        manager.registerSession(TransactionSession(id: 'D', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+      test(
+          'Case 8: Dirty A -> Dirty B -> Empty C -> D -> Complete D skips C and restores B',
+          () {
+        manager.registerSession(TransactionSession(
+            id: 'A',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'B',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true));
+        manager.registerSession(TransactionSession(
+            id: 'C',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => false));
+        manager.registerSession(TransactionSession(
+            id: 'D',
+            type: TransactionTypeCategory.sale,
+            isEdit: false,
+            hasMeaningfulData: () => true,
+            isCompleted: true));
 
-        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted) manager.unregisterSession(manager.stack.last.id);
+        if (manager.stack.isNotEmpty && manager.stack.last.isCompleted)
+          manager.unregisterSession(manager.stack.last.id);
 
         while (manager.stack.isNotEmpty) {
           final top = manager.stack.last;
