@@ -406,18 +406,36 @@ class AppRouter {
       GoRoute(
         path: RouteNames.invoiceResult,
         builder: (context, state) {
-          final args = state.extra as Map<String, dynamic>?;
-          final invoice = args?['invoice'] as InvoiceEntity;
-          final customer = args?['customer'] as CustomerEntity?;
-          final paymentMethod = (args?['paymentMethod'] as String?) ?? 'Cash';
-          final amountPaid = (args?['amountPaid'] as double?) ?? 0.0;
-          final previousBalance = (args?['previousBalance'] as double?) ?? 0.0;
+          InvoiceEntity invoice;
+          CustomerEntity? customer;
+          String paymentMethod = 'Cash';
+          double amountPaid = 0.0;
+          double previousBalance = 0.0;
+          bool isNewlyCreated = false;
+
+          if (state.extra is Map<String, dynamic>) {
+            final args = state.extra as Map<String, dynamic>;
+            invoice = args['invoice'] as InvoiceEntity;
+            customer = args['customer'] as CustomerEntity?;
+            paymentMethod = (args['paymentMethod'] as String?) ?? 'Cash';
+            amountPaid = (args['amountPaid'] as double?) ?? 0.0;
+            previousBalance = (args['previousBalance'] as double?) ?? 0.0;
+            isNewlyCreated = (args['isNewlyCreated'] as bool?) ?? false;
+          } else if (state.extra is InvoiceEntity) {
+            invoice = state.extra as InvoiceEntity;
+            amountPaid = invoice.paidAmount;
+            isNewlyCreated = false;
+          } else {
+            throw Exception('Invoice argument required for invoiceResult');
+          }
+
           return InvoiceResultPage(
             invoice: invoice,
             customer: customer,
             paymentMethod: paymentMethod,
             amountPaid: amountPaid,
             previousBalance: previousBalance,
+            isNewlyCreated: isNewlyCreated,
           );
         },
       ),

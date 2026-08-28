@@ -210,6 +210,17 @@ void main() {
       expect(!session.isCompleted && session.hasMeaningfulData(), isFalse);
     });
 
+    test('TC-09: nearestUnfinishedSession finds nearest unfinished dirty parent skipping empty parents', () {
+      manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true));
+      manager.registerSession(TransactionSession(id: 'B', type: TransactionTypeCategory.purchase, isEdit: false, hasMeaningfulData: () => false));
+      manager.registerSession(TransactionSession(id: 'C', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => true, isCompleted: true));
+
+      final parent = manager.nearestUnfinishedSession;
+      expect(parent, isNotNull);
+      expect(parent?.id, 'A');
+      expect(parent?.type, TransactionTypeCategory.sale);
+    });
+
     group('Conditional Restoration - Cases 1 through 8', () {
       test('Case 1: Empty A -> B -> Complete B skips empty A', () {
         manager.registerSession(TransactionSession(id: 'A', type: TransactionTypeCategory.sale, isEdit: false, hasMeaningfulData: () => false));

@@ -1488,7 +1488,10 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         } else {
           context.pushReplacement(
             RouteNames.invoiceResult,
-            extra: result,
+            extra: {
+              ...result,
+              'isNewlyCreated': true,
+            },
           );
         }
       }

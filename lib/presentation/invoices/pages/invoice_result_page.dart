@@ -24,6 +24,7 @@ class InvoiceResultPage extends ConsumerWidget {
   final String paymentMethod;
   final double amountPaid;
   final double previousBalance;
+  final bool isNewlyCreated;
 
   const InvoiceResultPage({
     super.key,
@@ -32,6 +33,7 @@ class InvoiceResultPage extends ConsumerWidget {
     this.paymentMethod = 'Cash',
     this.amountPaid = 0.0,
     this.previousBalance = 0.0,
+    this.isNewlyCreated = false,
   });
 
   Future<void> _launchWhatsApp(BuildContext context, String message, String? phone) async {
@@ -91,6 +93,9 @@ class InvoiceResultPage extends ConsumerWidget {
 
     final isGstActive = taxSettings.isGstEnabled && displaySettings.showTax;
     final isCashSale = customer == null;
+    final parentSession = isNewlyCreated
+        ? TransactionStackManager.instance.nearestUnfinishedSession
+        : null;
 
     final subtotal = invoice.subtotal;
     final taxTotal = isGstActive ? invoice.taxTotal : 0.0;
@@ -590,33 +595,101 @@ class InvoiceResultPage extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-
-            // 3. CREATE ANOTHER INVOICE (LIGHT BLUE CONTAINER BUTTON)
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE6F2FF),
-                  foregroundColor: const Color(0xFF0066CC),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: () {
-                  context.push(
-                    RouteNames.createInvoice,
-                    extra: {'invoiceType': invoice.type},
-                  );
-                },
-                icon: const Icon(Icons.add_circle_outline, size: 20),
-                label: Text(
-                  invoice.type == InvoiceType.purchase
-                      ? 'CREATE ANOTHER PURCHASE'
-                      : 'CREATE ANOTHER SALE',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+            // 3. CONTEXTUAL BOTTOM NAVIGATION ACTIONS
+            if (!isNewlyCreated) ...[
+              // CONTEXT 1: Viewing Existing Invoice -> GO HOME
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE6F2FF),
+                    foregroundColor: const Color(0xFF0066CC),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => context.go(RouteNames.dashboard),
+                  icon: const Icon(Icons.home_outlined, size: 20),
+                  label: const Text(
+                    'GO HOME',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                  ),
                 ),
               ),
-            ),
+            ] else if (parentSession != null) ...[
+              // CONTEXT 3: Newly Completed WITH Unfinished Parent -> CONTINUE UNFINISHED & CREATE ANOTHER
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: safePop,
+                  icon: const Icon(Icons.undo_rounded, size: 20),
+                  label: Text(
+                    'CONTINUE UNFINISHED ${parentSession.type.displayName.toUpperCase()}',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE6F2FF),
+                    foregroundColor: const Color(0xFF0066CC),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    context.push(
+                      RouteNames.createInvoice,
+                      extra: {'invoiceType': invoice.type},
+                    );
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 20),
+                  label: Text(
+                    invoice.type == InvoiceType.purchase
+                        ? 'CREATE ANOTHER PURCHASE'
+                        : 'CREATE ANOTHER SALE',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+            ] else ...[
+              // CONTEXT 2: Newly Completed Standalone -> CREATE ANOTHER SALE
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE6F2FF),
+                    foregroundColor: const Color(0xFF0066CC),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    context.push(
+                      RouteNames.createInvoice,
+                      extra: {'invoiceType': invoice.type},
+                    );
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 20),
+                  label: Text(
+                    invoice.type == InvoiceType.purchase
+                        ? 'CREATE ANOTHER PURCHASE'
+                        : 'CREATE ANOTHER SALE',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
           ],
         ),

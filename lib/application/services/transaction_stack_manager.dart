@@ -82,6 +82,17 @@ class TransactionStackManager {
   TransactionSession? get currentSession =>
       _stack.isNotEmpty ? _stack.last : null;
 
+  /// Returns the nearest unfinished parent session with meaningful data on the stack.
+  TransactionSession? get nearestUnfinishedSession {
+    for (int i = _stack.length - 1; i >= 0; i--) {
+      final s = _stack[i];
+      if (!s.isCompleted && s.hasMeaningfulData()) {
+        return s;
+      }
+    }
+    return null;
+  }
+
   /// Clears all registered sessions (useful for tests or hard resets).
   void clear() {
     _stack.clear();
