@@ -3,9 +3,10 @@ import '../../../application/di/injection.dart';
 import '../../../const/colors.dart';
 import '../../../domain/entities/category_entity.dart';
 import '../../../domain/repositories/category_repository.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/ui_state_widgets.dart';
+
+enum CategoryTypeFilter { all, income, expense }
 
 class CategoryManagementPage extends StatefulWidget {
   const CategoryManagementPage({super.key});
@@ -14,9 +15,10 @@ class CategoryManagementPage extends StatefulWidget {
   State<CategoryManagementPage> createState() => _CategoryManagementPageState();
 }
 
-class _CategoryManagementPageState extends State<CategoryManagementPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _CategoryManagementPageState extends State<CategoryManagementPage> {
+  final TextEditingController _searchController = TextEditingController();
+  CategoryTypeFilter _selectedFilter = CategoryTypeFilter.all;
+
   List<CategoryEntity> _incomeCategories = [];
   List<CategoryEntity> _expenseCategories = [];
   bool _isLoading = true;
@@ -24,8 +26,13 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCategories() async {
@@ -44,68 +51,6 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  void _showAddCategoryDialog(CategoryType type) {
-    final nameCtrl = TextEditingController();
-    final typeText = type == CategoryType.income ? 'Income' : 'Expense';
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text('Add $typeText Category', style: const TextStyle(fontWeight: FontWeight.w800)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Create a new category for $typeText transactions:'),
-              const SizedBox(height: 14),
-              AppTextField(
-                label: 'Category Name',
-                hint: 'e.g. ${type == CategoryType.income ? "Consulting" : "Software License"}',
-                controller: nameCtrl,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
-                final newCat = CategoryEntity(
-                  id: 'cat_${DateTime.now().millisecondsSinceEpoch}',
-                  name: name,
-                  type: type,
-                  isActive: true,
-                  createdAt: DateTime.now(),
-                  updatedAt: DateTime.now(),
-                );
-                await getIt<CategoryRepository>().createCategory(newCat);
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                }
-                _loadCategories();
-              },
-              child: const Text('Save Category'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _showEditCategoryDialog(CategoryEntity category) {
@@ -158,10 +103,10 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Deactivate Category?', style: TextStyle(fontWeight: FontWeight.w800)),
+          title: const Text('Delete Category?', style: TextStyle(fontWeight: FontWeight.w800)),
           content: Text(
-            'Are you sure you want to deactivate "${category.name}"?\n\n'
-            'It will no longer appear when creating new transactions, but all historical records will be preserved.',
+            'Are you sure you want to delete "${category.name}"?\n\n'
+            'Historical records will be preserved.',
           ),
           actions: [
             TextButton(
@@ -180,7 +125,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                 }
                 _loadCategories();
               },
-              child: const Text('Deactivate'),
+              child: const Text('Delete'),
             ),
           ],
         );
@@ -188,160 +133,319 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
     );
   }
 
+  List<CategoryEntity> _getFilteredCategories() {
+    final List<CategoryEntity> list = [];
+    if (_selectedFilter == CategoryTypeFilter.all ||
+        _selectedFilter == CategoryTypeFilter.income) {
+      list.addAll(_incomeCategories);
+    }
+    if (_selectedFilter == CategoryTypeFilter.all ||
+        _selectedFilter == CategoryTypeFilter.expense) {
+      list.addAll(_expenseCategories);
+    }
+
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      return list.where((cat) => cat.name.toLowerCase().contains(query)).toList();
+    }
+
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filteredCategories = _getFilteredCategories();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Income & Expense Categories'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              'Income & Expense Categories',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                letterSpacing: -0.2,
+              ),
+            ),
+            SizedBox(height: 1),
+            Text(
+              'Manage your income and expense categories',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: Colors.white70,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
         backgroundColor: AppColors.deepNavy,
         foregroundColor: Colors.white,
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-          tabs: const [
-            Tab(text: 'Income Categories'),
-            Tab(text: 'Expense Categories'),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: null,
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: Colors.white,
-        onPressed: () {
-          final currentType = _tabController.index == 0 ? CategoryType.income : CategoryType.expense;
-          _showAddCategoryDialog(currentType);
-        },
-        icon: const Icon(Icons.add),
-        label: Text(
-          _tabController.index == 0 ? 'Add Income Category' : 'Add Expense Category',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
       ),
       body: _isLoading
           ? const CustomerListSkeleton()
-          : TabBarView(
-              controller: _tabController,
+          : Column(
               children: [
-                _buildCategoryListTab(CategoryType.income, _incomeCategories),
-                _buildCategoryListTab(CategoryType.expense, _expenseCategories),
+                // Search Bar Container
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search categories by name...',
+                      hintStyle: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.secondaryText,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AppColors.secondaryText,
+                        size: 20,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Horizontally Scrollable Filter Chips Bar (Tabs)
+                _buildFilterChipsBar(),
+
+                const Divider(height: 1, color: AppColors.border),
+
+                // Main Category List
+                Expanded(
+                  child: _buildCategoryListView(filteredCategories),
+                ),
               ],
             ),
     );
   }
 
-  Widget _buildCategoryListTab(CategoryType type, List<CategoryEntity> categories) {
-    final typeText = type == CategoryType.income ? 'Income' : 'Expense';
+  // HORIZONTALLY SCROLLABLE FILTER CHIPS BAR (TABS)
+  Widget _buildFilterChipsBar() {
+    final totalCount = _incomeCategories.length + _expenseCategories.length;
+    final incomeCount = _incomeCategories.length;
+    final expenseCount = _expenseCategories.length;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '$typeText Accounts & Categories (${categories.where((c) => c.isActive).length})',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: () => _showAddCategoryDialog(type),
-                icon: const Icon(Icons.add, size: 18),
-                label: Text('Add $typeText Category', style: const TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ],
+    final options = [
+      {'type': CategoryTypeFilter.all, 'label': 'All ($totalCount)'},
+      {'type': CategoryTypeFilter.income, 'label': 'Income ($incomeCount)'},
+      {'type': CategoryTypeFilter.expense, 'label': 'Expense ($expenseCount)'},
+    ];
+
+    return Container(
+      color: Colors.white,
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: options.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (ctx, idx) {
+          final opt = options[idx];
+          final fType = opt['type'] as CategoryTypeFilter;
+          final isSelected = _selectedFilter == fType;
+
+          return ChoiceChip(
+            label: Text(opt['label'] as String),
+            selected: isSelected,
+            selectedColor: AppColors.primaryBlue,
+            backgroundColor: AppColors.surfaceContainerLow,
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? Colors.white : AppColors.darkBlueText,
+            ),
+            onSelected: (val) {
+              if (val) {
+                setState(() => _selectedFilter = fType);
+              }
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  // MAIN CATEGORY LIST VIEW
+  Widget _buildCategoryListView(List<CategoryEntity> categories) {
+    if (categories.isEmpty) {
+      String title = 'No categories found';
+      if (_selectedFilter == CategoryTypeFilter.income) {
+        title = 'No income categories found';
+      } else if (_selectedFilter == CategoryTypeFilter.expense) {
+        title = 'No expense categories found';
+      }
+
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.55,
+          alignment: Alignment.center,
+          child: EmptyState(
+            title: title,
+            message: 'No categories match your current search criteria.',
+            icon: Icons.category_outlined,
           ),
-          const SizedBox(height: 16),
+        ),
+      );
+    }
 
-          if (categories.isEmpty)
-            EmptyState(
-              title: 'No $typeText categories found',
-              message: 'Tap "+ Add Category" to create one.',
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: categories.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (ctx, idx) {
-                final cat = categories[idx];
-                return AppCard(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return RefreshIndicator(
+      onRefresh: _loadCategories,
+      color: AppColors.primaryBlue,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (ctx, idx) {
+          final cat = categories[idx];
+          return _buildCategoryCard(cat);
+        },
+      ),
+    );
+  }
+
+  // CATEGORY CARD ITEM
+  Widget _buildCategoryCard(CategoryEntity cat) {
+    final isIncome = cat.type == CategoryType.income;
+    final typeLabel = isIncome ? 'Income' : 'Expense';
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Left Icon Container
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isIncome
+                    ? AppColors.success.withValues(alpha: 0.1)
+                    : AppColors.danger.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                isIncome ? Icons.arrow_downward : Icons.arrow_upward,
+                color: isIncome ? AppColors.success : AppColors.danger,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Middle Column Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: cat.isActive
-                                  ? (type == CategoryType.income
-                                      ? AppColors.success.withValues(alpha: 0.1)
-                                      : AppColors.danger.withValues(alpha: 0.1))
-                                  : Colors.grey.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              type == CategoryType.income ? Icons.arrow_downward : Icons.arrow_upward,
-                              color: cat.isActive
-                                  ? (type == CategoryType.income ? AppColors.success : AppColors.danger)
-                                  : Colors.grey,
-                              size: 18,
-                            ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isIncome
+                              ? AppColors.success.withValues(alpha: 0.1)
+                              : AppColors.danger.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          typeLabel.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'PlusJakartaSans',
+                            color: isIncome ? AppColors.success : AppColors.danger,
+                            letterSpacing: 0.4,
                           ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                cat.name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                  color: cat.isActive ? AppColors.darkBlueText : AppColors.outline,
-                                ),
-                              ),
-                              if (!cat.isActive)
-                                const Text(
-                                  'Inactive (Hidden from new forms)',
-                                  style: TextStyle(fontSize: 11, color: AppColors.outline),
-                                ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
-                            onPressed: () => _showEditCategoryDialog(cat),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          cat.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'PlusJakartaSans',
+                            color: AppColors.darkBlueText,
                           ),
-                          if (cat.isActive)
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                              onPressed: () => _confirmDeactivateCategory(cat),
-                            ),
-                        ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
+                  const SizedBox(height: 3),
+                  Text(
+                    cat.isActive ? 'Active Category' : 'Inactive Category',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: cat.isActive ? AppColors.secondaryText : AppColors.outline,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
             ),
-        ],
+
+            // Edit & Delete Action Buttons
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primaryBlue),
+                  onPressed: () => _showEditCategoryDialog(cat),
+                  tooltip: 'Edit Category',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.danger),
+                  onPressed: () => _confirmDeactivateCategory(cat),
+                  tooltip: 'Delete Category',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
