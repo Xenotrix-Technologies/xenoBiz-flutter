@@ -105,20 +105,30 @@ class TransactionStackManager {
       _stack.removeLast();
     }
 
+    int popCount = 1;
+
     while (_stack.isNotEmpty) {
       final top = _stack.last;
-      if (top.isCompleted) {
+      if (top.isCompleted || !top.hasMeaningfulData()) {
         _stack.removeLast();
+        popCount++;
       } else {
         break;
       }
     }
 
     if (context.mounted) {
-      if (context.canPop()) {
-        context.pop();
-      } else {
+      if (_stack.isEmpty) {
         context.go(RouteNames.dashboard);
+      } else {
+        for (int i = 0; i < popCount; i++) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(RouteNames.dashboard);
+            break;
+          }
+        }
       }
     }
   }
@@ -155,21 +165,31 @@ class TransactionStackManager {
       _stack.removeAt(idx);
     }
 
+    int popCount = 1;
+
     // Skip any empty or completed sessions underneath
     while (_stack.isNotEmpty) {
       final top = _stack.last;
       if (top.isCompleted || !top.hasMeaningfulData()) {
         _stack.removeLast();
+        popCount++;
       } else {
         break;
       }
     }
 
     if (context.mounted) {
-      if (context.canPop()) {
-        context.pop();
-      } else {
+      if (_stack.isEmpty) {
         context.go(RouteNames.dashboard);
+      } else {
+        for (int i = 0; i < popCount; i++) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(RouteNames.dashboard);
+            break;
+          }
+        }
       }
     }
   }

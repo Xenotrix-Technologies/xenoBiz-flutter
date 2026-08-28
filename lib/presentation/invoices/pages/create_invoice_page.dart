@@ -662,9 +662,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   bool get _hasUnsavedData {
+    final customNotes = _notesCtrl.text.trim();
+    final hasCustomNotes = customNotes.isNotEmpty &&
+        customNotes != 'Thank you for your business!';
     return _items.isNotEmpty ||
-        (!_isCashSale && _selectedCustomer != null) ||
-        _notesCtrl.text.trim().isNotEmpty ||
+        (_selectedCustomer != null) ||
+        hasCustomNotes ||
         _discountAmount > 0 ||
         _extraExpenseAmount > 0;
   }
