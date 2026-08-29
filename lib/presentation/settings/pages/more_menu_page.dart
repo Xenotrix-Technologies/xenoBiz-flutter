@@ -337,19 +337,8 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           title: 'GST Summary',
           description: 'Overview of GST collected and paid',
           route: RouteNames.gstTaxation,
+          extra: 0,
           color: Colors.indigo,
-          subReports: const [
-            _SubReportItem(
-                title: 'GST Summary Overview',
-                icon: Icons.insights,
-                route: RouteNames.gstTaxation,
-                extra: 0),
-            _SubReportItem(
-                title: 'Input Tax Credit (ITC)',
-                icon: Icons.credit_score,
-                route: RouteNames.gstTaxation,
-                extra: 1),
-          ],
         ),
         _MenuItem(
           icon: Icons.percent_outlined,
@@ -357,12 +346,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           description: 'Tax collection and liability summary',
           route: RouteNames.taxSummary,
           color: Colors.purple,
-          subReports: const [
-            _SubReportItem(
-                title: 'Tax Summary Statement',
-                icon: Icons.pie_chart_outline,
-                route: RouteNames.taxSummary),
-          ],
         ),
         _MenuItem(
           icon: Icons.grid_view_outlined,
@@ -370,12 +353,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           description: 'HSN and SAC-wise tax summary',
           route: RouteNames.hsnSacSummary,
           color: Colors.teal,
-          subReports: const [
-            _SubReportItem(
-                title: 'HSN / SAC Summary',
-                icon: Icons.inventory_2_outlined,
-                route: RouteNames.hsnSacSummary),
-          ],
         ),
       ],
     ),

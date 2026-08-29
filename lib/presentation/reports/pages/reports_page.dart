@@ -191,13 +191,17 @@ class _ReportsPageState extends State<ReportsPage> {
           // Main Tile Header
           InkWell(
             onTap: () {
-              setState(() {
-                if (_expandedCategoryTitle == category.title) {
-                  _expandedCategoryTitle = null;
-                } else {
-                  _expandedCategoryTitle = category.title;
-                }
-              });
+              if (category.directRoute != null) {
+                context.push(category.directRoute!, extra: category.directExtra);
+              } else {
+                setState(() {
+                  if (_expandedCategoryTitle == category.title) {
+                    _expandedCategoryTitle = null;
+                  } else {
+                    _expandedCategoryTitle = category.title;
+                  }
+                });
+              }
             },
             borderRadius: BorderRadius.circular(14),
             child: Padding(
@@ -260,15 +264,22 @@ class _ReportsPageState extends State<ReportsPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  AnimatedRotation(
-                    turns: isExpanded ? 0.25 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
+                  if (category.directRoute != null)
+                    Icon(
                       Icons.chevron_right_rounded,
                       size: 22,
                       color: AppColors.secondaryText.withValues(alpha: 0.6),
+                    )
+                  else
+                    AnimatedRotation(
+                      turns: isExpanded ? 0.25 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 22,
+                        color: AppColors.secondaryText.withValues(alpha: 0.6),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -373,42 +384,22 @@ class _ReportsPageState extends State<ReportsPage> {
       description: 'Overview of GST collected and paid',
       icon: Icons.summarize_outlined,
       color: Colors.indigo,
-      subReports: const [
-        _ReportSubItem(
-            title: 'GST Summary Overview',
-            icon: Icons.insights,
-            route: RouteNames.gstTaxation,
-            extra: 0),
-        _ReportSubItem(
-            title: 'Input Tax Credit (ITC)',
-            icon: Icons.credit_score,
-            route: RouteNames.gstTaxation,
-            extra: 1),
-      ],
+      directRoute: RouteNames.gstTaxation,
+      directExtra: 0,
     ),
     _MainReportCategory(
       title: 'Tax Summary',
       description: 'Tax collection and liability summary',
       icon: Icons.percent_outlined,
       color: Colors.purple,
-      subReports: const [
-        _ReportSubItem(
-            title: 'Tax Summary Statement',
-            icon: Icons.pie_chart_outline,
-            route: RouteNames.taxSummary),
-      ],
+      directRoute: RouteNames.taxSummary,
     ),
     _MainReportCategory(
       title: 'HSN/SAC Summary',
       description: 'HSN and SAC-wise tax summary',
       icon: Icons.grid_view_outlined,
       color: Colors.teal,
-      subReports: const [
-        _ReportSubItem(
-            title: 'HSN / SAC Summary',
-            icon: Icons.inventory_2_outlined,
-            route: RouteNames.hsnSacSummary),
-      ],
+      directRoute: RouteNames.hsnSacSummary,
     ),
     _MainReportCategory(
       title: 'E-Way Bill',
@@ -416,16 +407,7 @@ class _ReportsPageState extends State<ReportsPage> {
       icon: Icons.local_shipping_outlined,
       color: const Color(0xFF0066CC),
       isCompliance: true,
-      subReports: const [
-        _ReportSubItem(
-            title: 'Generated E-Way Bills',
-            icon: Icons.check_circle_outline,
-            route: RouteNames.eWayBill),
-        _ReportSubItem(
-            title: 'Cancelled E-Way Bills',
-            icon: Icons.cancel_outlined,
-            route: RouteNames.eWayBill),
-      ],
+      directRoute: RouteNames.eWayBill,
     ),
   ];
 
@@ -551,6 +533,8 @@ class _MainReportCategory {
   final IconData icon;
   final Color color;
   final bool isCompliance;
+  final String? directRoute;
+  final Object? directExtra;
   final List<_ReportSubItem> subReports;
 
   _MainReportCategory({
@@ -559,7 +543,9 @@ class _MainReportCategory {
     required this.icon,
     required this.color,
     this.isCompliance = false,
-    required this.subReports,
+    this.directRoute,
+    this.directExtra,
+    this.subReports = const [],
   });
 }
 
