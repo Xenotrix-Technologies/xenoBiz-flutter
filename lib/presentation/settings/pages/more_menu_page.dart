@@ -188,84 +188,89 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           icon: Icons.bar_chart_outlined,
           title: 'Sales Report',
           description: 'View detailed sales performance',
-          route: RouteNames.salesAnalytics,
-          color: Color(0xFF0066CC),
+          route: RouteNames.salesReport,
+          color: const Color(0xFF0066CC),
           isReportTool: true,
-          subReports: [
+          subReports: const [
             _SubReportItem(
                 title: 'Sales Summary',
                 icon: Icons.insights,
-                route: RouteNames.salesAnalytics,
+                route: RouteNames.salesReport,
                 extra: 0),
             _SubReportItem(
                 title: 'Sales by Customer',
                 icon: Icons.people_outline,
-                route: RouteNames.salesAnalytics,
+                route: RouteNames.salesReport,
                 extra: 1),
             _SubReportItem(
-                title: 'Sales by Product',
+                title: 'Sales by Product / Service',
                 icon: Icons.category_outlined,
-                route: RouteNames.salesAnalytics,
+                route: RouteNames.salesReport,
                 extra: 2),
             _SubReportItem(
                 title: 'Sales by Date',
                 icon: Icons.date_range_outlined,
-                route: RouteNames.salesAnalytics,
+                route: RouteNames.salesReport,
                 extra: 3),
             _SubReportItem(
                 title: 'Sales Returns',
                 icon: Icons.assignment_return_outlined,
-                route: RouteNames.salesReturns),
+                route: RouteNames.salesReport,
+                extra: 4),
           ],
         ),
         _MenuItem(
           icon: Icons.shopping_bag_outlined,
           title: 'Purchase Report',
           description: 'Analyze purchase transactions',
-          route: RouteNames.supplierDirectory,
-          color: Color(0xFF0066CC),
+          route: RouteNames.purchaseReport,
+          color: const Color(0xFF0066CC),
           isReportTool: true,
-          subReports: [
+          subReports: const [
             _SubReportItem(
                 title: 'Purchase Summary',
                 icon: Icons.store_outlined,
-                route: RouteNames.supplierDirectory),
+                route: RouteNames.purchaseReport,
+                extra: 0),
             _SubReportItem(
                 title: 'Purchase by Supplier',
                 icon: Icons.people_outline,
-                route: RouteNames.supplierDirectory),
+                route: RouteNames.purchaseReport,
+                extra: 1),
             _SubReportItem(
                 title: 'Purchase Returns',
                 icon: Icons.settings_backup_restore_outlined,
-                route: RouteNames.purchaseReturns),
+                route: RouteNames.purchaseReport,
+                extra: 2),
             _SubReportItem(
                 title: 'Outstanding Payables',
                 icon: Icons.call_made,
-                route: RouteNames.payables),
+                route: RouteNames.purchaseReport,
+                extra: 3),
           ],
         ),
         _MenuItem(
           icon: Icons.inventory_outlined,
           title: 'Inventory Report',
           description: 'Stock and inventory insights',
-          route: RouteNames.inventoryAnalytics,
+          route: RouteNames.inventoryReport,
           color: Colors.orange,
           isReportTool: true,
-          subReports: [
+          subReports: const [
             _SubReportItem(
                 title: 'Stock Summary',
                 icon: Icons.inventory,
-                route: RouteNames.inventoryAnalytics,
+                route: RouteNames.inventoryReport,
                 extra: 0),
             _SubReportItem(
                 title: 'Low Stock Report',
                 icon: Icons.warning_amber_outlined,
-                route: RouteNames.inventoryAnalytics,
+                route: RouteNames.inventoryReport,
                 extra: 1),
             _SubReportItem(
                 title: 'Product Stock Ledger',
                 icon: Icons.format_list_bulleted,
-                route: RouteNames.inventoryAnalytics,
+                route: RouteNames.inventoryReport,
                 extra: 2),
           ],
         ),
@@ -273,36 +278,30 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           icon: Icons.analytics_outlined,
           title: 'Account Report',
           description: 'Financial account reports',
-          route: RouteNames.ledger,
+          route: RouteNames.accountReport,
           color: Colors.teal,
           isReportTool: true,
-          subReports: [
+          subReports: const [
             _SubReportItem(
-                title: 'Account Ledger',
+                title: 'Account Summary',
                 icon: Icons.account_balance_wallet_outlined,
-                route: RouteNames.ledger),
-            _SubReportItem(
-                title: 'Day Book',
-                icon: Icons.auto_stories_outlined,
-                route: RouteNames.dailyBook),
+                route: RouteNames.accountReport,
+                extra: 0),
             _SubReportItem(
                 title: 'Trial Balance',
                 icon: Icons.balance_outlined,
-                route: RouteNames.trialBalance),
+                route: RouteNames.accountReport,
+                extra: 1),
             _SubReportItem(
                 title: 'Profit & Loss',
                 icon: Icons.analytics_outlined,
-                route: RouteNames.financialAnalytics,
-                extra: 0),
+                route: RouteNames.accountReport,
+                extra: 2),
             _SubReportItem(
                 title: 'Balance Sheet',
                 icon: Icons.account_balance_outlined,
-                route: RouteNames.financialAnalytics,
-                extra: 1),
-            _SubReportItem(
-                title: 'Outstanding Receivables',
-                icon: Icons.call_received,
-                route: RouteNames.receivables),
+                route: RouteNames.accountReport,
+                extra: 3),
           ],
         ),
         _MenuItem(
@@ -312,7 +311,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           route: RouteNames.gstTaxation,
           color: Colors.indigo,
           isComplianceTool: true,
-          subReports: [
+          subReports: const [
             _SubReportItem(
                 title: 'GST Summary',
                 icon: Icons.summarize_outlined,
@@ -326,13 +325,11 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
             _SubReportItem(
                 title: 'GSTR-1 Report',
                 icon: Icons.file_present_outlined,
-                route: RouteNames.gstTaxation,
-                extra: 2),
+                route: RouteNames.gstr1Report),
             _SubReportItem(
                 title: 'GSTR-3B Return',
                 icon: Icons.assignment_outlined,
-                route: RouteNames.gstTaxation,
-                extra: 3),
+                route: RouteNames.gstr3bReturn),
           ],
         ),
         _MenuItem(
@@ -341,10 +338,10 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           description: 'Overview of GST collected and paid',
           route: RouteNames.gstTaxation,
           color: Colors.indigo,
-          subReports: [
+          subReports: const [
             _SubReportItem(
-                title: 'GST Collected (Output)',
-                icon: Icons.arrow_downward,
+                title: 'GST Summary Overview',
+                icon: Icons.insights,
                 route: RouteNames.gstTaxation,
                 extra: 0),
             _SubReportItem(
@@ -352,49 +349,32 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
                 icon: Icons.credit_score,
                 route: RouteNames.gstTaxation,
                 extra: 1),
-            _SubReportItem(
-                title: 'Net Tax Liability',
-                icon: Icons.account_balance_outlined,
-                route: RouteNames.gstTaxation,
-                extra: 2),
           ],
         ),
         _MenuItem(
           icon: Icons.percent_outlined,
           title: 'Tax Summary',
           description: 'Tax collection and liability summary',
-          route: RouteNames.taxGstSettings,
+          route: RouteNames.taxSummary,
           color: Colors.purple,
-          subReports: [
+          subReports: const [
             _SubReportItem(
-                title: 'Sales Tax Summary',
-                icon: Icons.monetization_on_outlined,
-                route: RouteNames.taxGstSettings),
-            _SubReportItem(
-                title: 'Purchase Tax Summary',
-                icon: Icons.shopping_cart_outlined,
-                route: RouteNames.taxGstSettings),
-            _SubReportItem(
-                title: 'Tax Rate Breakdown',
+                title: 'Tax Summary Statement',
                 icon: Icons.pie_chart_outline,
-                route: RouteNames.taxGstSettings),
+                route: RouteNames.taxSummary),
           ],
         ),
         _MenuItem(
           icon: Icons.grid_view_outlined,
           title: 'HSN/SAC Summary',
           description: 'HSN and SAC-wise tax summary',
-          route: RouteNames.gstTaxation,
+          route: RouteNames.hsnSacSummary,
           color: Colors.teal,
-          subReports: [
+          subReports: const [
             _SubReportItem(
-                title: 'Goods HSN Summary',
+                title: 'HSN / SAC Summary',
                 icon: Icons.inventory_2_outlined,
-                route: RouteNames.gstTaxation),
-            _SubReportItem(
-                title: 'Services SAC Summary',
-                icon: Icons.design_services_outlined,
-                route: RouteNames.gstTaxation),
+                route: RouteNames.hsnSacSummary),
           ],
         ),
       ],

@@ -361,13 +361,11 @@ class _ReportsPageState extends State<ReportsPage> {
         _ReportSubItem(
             title: 'GSTR-1 Report',
             icon: Icons.file_present_outlined,
-            route: RouteNames.gstTaxation,
-            extra: 2),
+            route: RouteNames.gstr1Report),
         _ReportSubItem(
             title: 'GSTR-3B Return',
             icon: Icons.assignment_outlined,
-            route: RouteNames.gstTaxation,
-            extra: 3),
+            route: RouteNames.gstr3bReturn),
       ],
     ),
     _MainReportCategory(
@@ -377,8 +375,8 @@ class _ReportsPageState extends State<ReportsPage> {
       color: Colors.indigo,
       subReports: const [
         _ReportSubItem(
-            title: 'GST Collected (Output)',
-            icon: Icons.arrow_downward,
+            title: 'GST Summary Overview',
+            icon: Icons.insights,
             route: RouteNames.gstTaxation,
             extra: 0),
         _ReportSubItem(
@@ -386,11 +384,6 @@ class _ReportsPageState extends State<ReportsPage> {
             icon: Icons.credit_score,
             route: RouteNames.gstTaxation,
             extra: 1),
-        _ReportSubItem(
-            title: 'Net Tax Liability',
-            icon: Icons.account_balance_outlined,
-            route: RouteNames.gstTaxation,
-            extra: 2),
       ],
     ),
     _MainReportCategory(
@@ -400,17 +393,9 @@ class _ReportsPageState extends State<ReportsPage> {
       color: Colors.purple,
       subReports: const [
         _ReportSubItem(
-            title: 'Sales Tax Summary',
-            icon: Icons.monetization_on_outlined,
-            route: RouteNames.taxGstSettings),
-        _ReportSubItem(
-            title: 'Purchase Tax Summary',
-            icon: Icons.shopping_cart_outlined,
-            route: RouteNames.taxGstSettings),
-        _ReportSubItem(
-            title: 'Tax Rate Breakdown',
+            title: 'Tax Summary Statement',
             icon: Icons.pie_chart_outline,
-            route: RouteNames.taxGstSettings),
+            route: RouteNames.taxSummary),
       ],
     ),
     _MainReportCategory(
@@ -420,13 +405,9 @@ class _ReportsPageState extends State<ReportsPage> {
       color: Colors.teal,
       subReports: const [
         _ReportSubItem(
-            title: 'Goods HSN Summary',
+            title: 'HSN / SAC Summary',
             icon: Icons.inventory_2_outlined,
-            route: RouteNames.gstTaxation),
-        _ReportSubItem(
-            title: 'Services SAC Summary',
-            icon: Icons.design_services_outlined,
-            route: RouteNames.gstTaxation),
+            route: RouteNames.hsnSacSummary),
       ],
     ),
     _MainReportCategory(
@@ -458,27 +439,28 @@ class _ReportsPageState extends State<ReportsPage> {
         _ReportSubItem(
             title: 'Sales Summary',
             icon: Icons.insights,
-            route: RouteNames.salesAnalytics,
+            route: RouteNames.salesReport,
             extra: 0),
         _ReportSubItem(
             title: 'Sales by Customer',
             icon: Icons.people_outline,
-            route: RouteNames.salesAnalytics,
+            route: RouteNames.salesReport,
             extra: 1),
         _ReportSubItem(
-            title: 'Sales by Product',
+            title: 'Sales by Product / Service',
             icon: Icons.category_outlined,
-            route: RouteNames.salesAnalytics,
+            route: RouteNames.salesReport,
             extra: 2),
         _ReportSubItem(
             title: 'Sales by Date',
             icon: Icons.date_range_outlined,
-            route: RouteNames.salesAnalytics,
+            route: RouteNames.salesReport,
             extra: 3),
         _ReportSubItem(
             title: 'Sales Returns',
             icon: Icons.assignment_return_outlined,
-            route: RouteNames.salesReturns),
+            route: RouteNames.salesReport,
+            extra: 4),
       ],
     ),
     _MainReportCategory(
@@ -490,19 +472,23 @@ class _ReportsPageState extends State<ReportsPage> {
         _ReportSubItem(
             title: 'Purchase Summary',
             icon: Icons.store_outlined,
-            route: RouteNames.supplierDirectory),
+            route: RouteNames.purchaseReport,
+            extra: 0),
         _ReportSubItem(
             title: 'Purchase by Supplier',
             icon: Icons.people_outline,
-            route: RouteNames.supplierDirectory),
+            route: RouteNames.purchaseReport,
+            extra: 1),
         _ReportSubItem(
             title: 'Purchase Returns',
             icon: Icons.settings_backup_restore_outlined,
-            route: RouteNames.purchaseReturns),
+            route: RouteNames.purchaseReport,
+            extra: 2),
         _ReportSubItem(
             title: 'Outstanding Payables',
             icon: Icons.call_made,
-            route: RouteNames.payables),
+            route: RouteNames.purchaseReport,
+            extra: 3),
       ],
     ),
     _MainReportCategory(
@@ -514,17 +500,17 @@ class _ReportsPageState extends State<ReportsPage> {
         _ReportSubItem(
             title: 'Stock Summary',
             icon: Icons.inventory,
-            route: RouteNames.inventoryAnalytics,
+            route: RouteNames.inventoryReport,
             extra: 0),
         _ReportSubItem(
             title: 'Low Stock Report',
             icon: Icons.warning_amber_outlined,
-            route: RouteNames.inventoryAnalytics,
+            route: RouteNames.inventoryReport,
             extra: 1),
         _ReportSubItem(
             title: 'Product Stock Ledger',
             icon: Icons.format_list_bulleted,
-            route: RouteNames.inventoryAnalytics,
+            route: RouteNames.inventoryReport,
             extra: 2),
       ],
     ),
@@ -535,31 +521,25 @@ class _ReportsPageState extends State<ReportsPage> {
       color: Colors.teal,
       subReports: const [
         _ReportSubItem(
-            title: 'Account Ledger',
+            title: 'Account Summary',
             icon: Icons.account_balance_wallet_outlined,
-            route: RouteNames.ledger),
-        _ReportSubItem(
-            title: 'Day Book',
-            icon: Icons.auto_stories_outlined,
-            route: RouteNames.dailyBook),
+            route: RouteNames.accountReport,
+            extra: 0),
         _ReportSubItem(
             title: 'Trial Balance',
             icon: Icons.balance_outlined,
-            route: RouteNames.trialBalance),
+            route: RouteNames.accountReport,
+            extra: 1),
         _ReportSubItem(
             title: 'Profit & Loss',
             icon: Icons.analytics_outlined,
-            route: RouteNames.financialAnalytics,
-            extra: 0),
+            route: RouteNames.accountReport,
+            extra: 2),
         _ReportSubItem(
             title: 'Balance Sheet',
             icon: Icons.account_balance_outlined,
-            route: RouteNames.financialAnalytics,
-            extra: 1),
-        _ReportSubItem(
-            title: 'Outstanding Receivables',
-            icon: Icons.call_received,
-            route: RouteNames.receivables),
+            route: RouteNames.accountReport,
+            extra: 3),
       ],
     ),
   ];

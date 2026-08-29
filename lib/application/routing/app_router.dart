@@ -82,6 +82,13 @@ import '../../presentation/accounting/pages/cash_bank_page.dart';
 import '../../presentation/accounting/pages/receivables_payables_pages.dart';
 import '../../presentation/accounting/pages/trial_balance_page.dart';
 import '../../presentation/gst/pages/gst_taxation_page.dart';
+import '../../presentation/gst/pages/gstr1_report_page.dart';
+import '../../presentation/gst/pages/gstr3b_return_page.dart';
+import '../../presentation/gst/pages/tax_summary_page.dart';
+import '../../presentation/reports/pages/sales_report_page.dart';
+import '../../presentation/reports/pages/purchase_report_page.dart';
+import '../../presentation/reports/pages/inventory_report_page.dart';
+import '../../presentation/reports/pages/account_report_page.dart';
 import '../../presentation/tools/pages/business_tools_subpages.dart';
 import 'route_names.dart';
 
@@ -257,6 +264,34 @@ class AppRouter {
               GoRoute(
                 path: RouteNames.salesAnalytics,
                 builder: (context, state) => const SalesAnalyticsPage(),
+              ),
+              GoRoute(
+                path: RouteNames.salesReport,
+                builder: (context, state) => SalesReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.purchaseReport,
+                builder: (context, state) => PurchaseReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.inventoryReport,
+                builder: (context, state) => InventoryReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.accountReport,
+                builder: (context, state) => AccountReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.gstr1Report,
+                builder: (context, state) => const Gstr1ReportPage(),
+              ),
+              GoRoute(
+                path: RouteNames.gstr3bReturn,
+                builder: (context, state) => const Gstr3bReturnPage(),
+              ),
+              GoRoute(
+                path: RouteNames.taxSummary,
+                builder: (context, state) => const TaxSummaryPage(),
               ),
               GoRoute(
                 path: RouteNames.financialAnalytics,
@@ -948,6 +983,34 @@ class AppRouter {
       GoRoute(
         path: RouteNames.salesAnalytics,
         builder: (context, state) => const SalesAnalyticsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.salesReport,
+        builder: (context, state) => SalesReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.purchaseReport,
+        builder: (context, state) => PurchaseReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.inventoryReport,
+        builder: (context, state) => InventoryReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.accountReport,
+        builder: (context, state) => AccountReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.gstr1Report,
+        builder: (context, state) => const Gstr1ReportPage(),
+      ),
+      GoRoute(
+        path: RouteNames.gstr3bReturn,
+        builder: (context, state) => const Gstr3bReturnPage(),
+      ),
+      GoRoute(
+        path: RouteNames.taxSummary,
+        builder: (context, state) => const TaxSummaryPage(),
       ),
       GoRoute(
         path: RouteNames.financialAnalytics,
