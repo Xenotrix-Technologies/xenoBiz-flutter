@@ -16,6 +16,20 @@ class MoreMenuPage extends StatefulWidget {
   State<MoreMenuPage> createState() => _MoreMenuPageState();
 }
 
+class _SubReportItem {
+  final String title;
+  final IconData icon;
+  final String route;
+  final Object? extra;
+
+  const _SubReportItem({
+    required this.title,
+    required this.icon,
+    required this.route,
+    this.extra,
+  });
+}
+
 class _MenuItem {
   final IconData icon;
   final String title;
@@ -25,6 +39,7 @@ class _MenuItem {
   final Object? extra;
   final bool isComplianceTool;
   final bool isReportTool;
+  final List<_SubReportItem>? subReports;
 
   const _MenuItem({
     required this.icon,
@@ -35,6 +50,7 @@ class _MenuItem {
     this.extra,
     this.isComplianceTool = false,
     this.isReportTool = false,
+    this.subReports,
   });
 }
 
@@ -105,6 +121,15 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           route: RouteNames.creditNotes,
           color: AppColors.primary,
         ),
+        _MenuItem(
+          icon: Icons.local_shipping_outlined,
+          title: 'E-Way Bill',
+          description: 'E-Way Bill generation',
+          route: RouteNames.eWayBill,
+          color: Color(0xFF0066CC),
+          isComplianceTool: true,
+          subReports: [],
+        ),
       ],
     ),
     _MenuCategory(
@@ -163,57 +188,176 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           icon: Icons.bar_chart_outlined,
           title: 'Sales Report',
           description: 'View detailed sales performance',
-          route: RouteNames.reports,
-          extra: 0,
+          route: RouteNames.salesAnalytics,
           color: Color(0xFF0066CC),
           isReportTool: true,
+          subReports: [
+            _SubReportItem(
+                title: 'Sales Summary',
+                icon: Icons.insights,
+                route: RouteNames.salesAnalytics,
+                extra: 0),
+            _SubReportItem(
+                title: 'Sales by Customer',
+                icon: Icons.people_outline,
+                route: RouteNames.salesAnalytics,
+                extra: 1),
+            _SubReportItem(
+                title: 'Sales by Product',
+                icon: Icons.category_outlined,
+                route: RouteNames.salesAnalytics,
+                extra: 2),
+            _SubReportItem(
+                title: 'Sales by Date',
+                icon: Icons.date_range_outlined,
+                route: RouteNames.salesAnalytics,
+                extra: 3),
+            _SubReportItem(
+                title: 'Sales Returns',
+                icon: Icons.assignment_return_outlined,
+                route: RouteNames.salesReturns),
+          ],
         ),
         _MenuItem(
           icon: Icons.shopping_bag_outlined,
           title: 'Purchase Report',
           description: 'Analyze purchase transactions',
-          route: RouteNames.reports,
-          extra: 1,
+          route: RouteNames.supplierDirectory,
           color: Color(0xFF0066CC),
           isReportTool: true,
+          subReports: [
+            _SubReportItem(
+                title: 'Purchase Summary',
+                icon: Icons.store_outlined,
+                route: RouteNames.supplierDirectory),
+            _SubReportItem(
+                title: 'Purchase by Supplier',
+                icon: Icons.people_outline,
+                route: RouteNames.supplierDirectory),
+            _SubReportItem(
+                title: 'Purchase Returns',
+                icon: Icons.settings_backup_restore_outlined,
+                route: RouteNames.purchaseReturns),
+            _SubReportItem(
+                title: 'Outstanding Payables',
+                icon: Icons.call_made,
+                route: RouteNames.payables),
+          ],
         ),
         _MenuItem(
           icon: Icons.inventory_outlined,
           title: 'Inventory Report',
           description: 'Stock and inventory insights',
-          route: RouteNames.reports,
-          extra: 2,
+          route: RouteNames.inventoryAnalytics,
           color: Colors.orange,
           isReportTool: true,
+          subReports: [
+            _SubReportItem(
+                title: 'Stock Summary',
+                icon: Icons.inventory,
+                route: RouteNames.inventoryAnalytics,
+                extra: 0),
+            _SubReportItem(
+                title: 'Low Stock Report',
+                icon: Icons.warning_amber_outlined,
+                route: RouteNames.inventoryAnalytics,
+                extra: 1),
+            _SubReportItem(
+                title: 'Product Stock Ledger',
+                icon: Icons.format_list_bulleted,
+                route: RouteNames.inventoryAnalytics,
+                extra: 2),
+          ],
         ),
         _MenuItem(
           icon: Icons.analytics_outlined,
           title: 'Account Report',
           description: 'Financial account reports',
-          route: RouteNames.reports,
-          extra: 3,
+          route: RouteNames.ledger,
           color: Colors.teal,
           isReportTool: true,
+          subReports: [
+            _SubReportItem(
+                title: 'Account Ledger',
+                icon: Icons.account_balance_wallet_outlined,
+                route: RouteNames.ledger),
+            _SubReportItem(
+                title: 'Day Book',
+                icon: Icons.auto_stories_outlined,
+                route: RouteNames.dailyBook),
+            _SubReportItem(
+                title: 'Trial Balance',
+                icon: Icons.balance_outlined,
+                route: RouteNames.trialBalance),
+            _SubReportItem(
+                title: 'Profit & Loss',
+                icon: Icons.analytics_outlined,
+                route: RouteNames.financialAnalytics,
+                extra: 0),
+            _SubReportItem(
+                title: 'Balance Sheet',
+                icon: Icons.account_balance_outlined,
+                route: RouteNames.financialAnalytics,
+                extra: 1),
+            _SubReportItem(
+                title: 'Outstanding Receivables',
+                icon: Icons.call_received,
+                route: RouteNames.receivables),
+          ],
         ),
-      ],
-    ),
-    _MenuCategory(
-      categoryTitle: 'GST & Taxation',
-      categorySubtitle: 'Tax summaries, HSN codes & compliance tools',
-      items: [
         _MenuItem(
           icon: Icons.receipt_long_outlined,
           title: 'GST Report',
           description: 'GST transaction and filing reports',
           route: RouteNames.gstTaxation,
           color: Colors.indigo,
+          isComplianceTool: true,
+          subReports: [
+            _SubReportItem(
+                title: 'GST Summary',
+                icon: Icons.summarize_outlined,
+                route: RouteNames.gstTaxation,
+                extra: 0),
+            _SubReportItem(
+                title: 'Outward Supplies',
+                icon: Icons.outbox_outlined,
+                route: RouteNames.gstTaxation,
+                extra: 1),
+            _SubReportItem(
+                title: 'GSTR-1 Report',
+                icon: Icons.file_present_outlined,
+                route: RouteNames.gstTaxation,
+                extra: 2),
+            _SubReportItem(
+                title: 'GSTR-3B Return',
+                icon: Icons.assignment_outlined,
+                route: RouteNames.gstTaxation,
+                extra: 3),
+          ],
         ),
         _MenuItem(
           icon: Icons.summarize_outlined,
           title: 'GST Summary',
-          description: 'Overview of GST values',
+          description: 'Overview of GST collected and paid',
           route: RouteNames.gstTaxation,
           color: Colors.indigo,
+          subReports: [
+            _SubReportItem(
+                title: 'GST Collected (Output)',
+                icon: Icons.arrow_downward,
+                route: RouteNames.gstTaxation,
+                extra: 0),
+            _SubReportItem(
+                title: 'Input Tax Credit (ITC)',
+                icon: Icons.credit_score,
+                route: RouteNames.gstTaxation,
+                extra: 1),
+            _SubReportItem(
+                title: 'Net Tax Liability',
+                icon: Icons.account_balance_outlined,
+                route: RouteNames.gstTaxation,
+                extra: 2),
+          ],
         ),
         _MenuItem(
           icon: Icons.percent_outlined,
@@ -221,21 +365,37 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           description: 'Tax collection and liability summary',
           route: RouteNames.taxGstSettings,
           color: Colors.purple,
+          subReports: [
+            _SubReportItem(
+                title: 'Sales Tax Summary',
+                icon: Icons.monetization_on_outlined,
+                route: RouteNames.taxGstSettings),
+            _SubReportItem(
+                title: 'Purchase Tax Summary',
+                icon: Icons.shopping_cart_outlined,
+                route: RouteNames.taxGstSettings),
+            _SubReportItem(
+                title: 'Tax Rate Breakdown',
+                icon: Icons.pie_chart_outline,
+                route: RouteNames.taxGstSettings),
+          ],
         ),
         _MenuItem(
           icon: Icons.grid_view_outlined,
           title: 'HSN/SAC Summary',
-          description: 'HSN and SAC-wise summary',
+          description: 'HSN and SAC-wise tax summary',
           route: RouteNames.gstTaxation,
           color: Colors.teal,
-        ),
-        _MenuItem(
-          icon: Icons.local_shipping_outlined,
-          title: 'E-Way Bill',
-          description: 'Create and manage e-way bills',
-          route: RouteNames.eWayBill,
-          color: Color(0xFF0066CC),
-          isComplianceTool: true,
+          subReports: [
+            _SubReportItem(
+                title: 'Goods HSN Summary',
+                icon: Icons.inventory_2_outlined,
+                route: RouteNames.gstTaxation),
+            _SubReportItem(
+                title: 'Services SAC Summary',
+                icon: Icons.design_services_outlined,
+                route: RouteNames.gstTaxation),
+          ],
         ),
       ],
     ),
@@ -764,7 +924,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
   }
 }
 
-class _ToolListItem extends StatelessWidget {
+class _ToolListItem extends StatefulWidget {
   final _MenuItem item;
   final VoidCallback onTap;
 
@@ -774,111 +934,180 @@ class _ToolListItem extends StatelessWidget {
   });
 
   @override
+  State<_ToolListItem> createState() => _ToolListItemState();
+}
+
+class _ToolListItemState extends State<_ToolListItem> {
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final isCompliance = item.isComplianceTool;
     final isReport = item.isReportTool;
+    final hasSubReports =
+        item.subReports != null && item.subReports!.isNotEmpty;
 
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isCompliance
-                  ? const Color(0xFF0066CC).withValues(alpha: 0.3)
-                  : isReport
-                      ? Colors.teal.withValues(alpha: 0.2)
-                      : AppColors.border,
-              width: isCompliance ? 1.5 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.015),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isCompliance
+                ? const Color(0xFF0066CC).withValues(alpha: 0.3)
+                : isReport
+                    ? Colors.teal.withValues(alpha: 0.2)
+                    : AppColors.border,
+            width: isCompliance ? 1.5 : 1,
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                alignment: Alignment.center,
-                child: Icon(item.icon, color: item.color, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.015),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: hasSubReports
+                  ? () => setState(() => _isExpanded = !_isExpanded)
+                  : widget.onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: item.color.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(item.icon, color: item.color, size: 20),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.darkBlueText,
+                                    letterSpacing: -0.2,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isCompliance)
+                                Container(
+                                  margin: const EdgeInsets.only(left: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE6F2FF),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'GOV',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0066CC),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.description,
                             style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.darkBlueText,
-                              letterSpacing: -0.2,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w400,
+                              color: AppColors.secondaryText,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (isCompliance)
-                          Container(
-                            margin: const EdgeInsets.only(left: 6),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE6F2FF),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              'GOV',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0066CC),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.description,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.secondaryText,
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      hasSubReports
+                          ? (_isExpanded
+                              ? Icons.keyboard_arrow_down_rounded
+                              : Icons.chevron_right_rounded)
+                          : Icons.chevron_right_rounded,
+                      size: 20,
+                      color: AppColors.secondaryText.withValues(alpha: 0.5),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: AppColors.secondaryText.withValues(alpha: 0.5),
+            ),
+            if (hasSubReports && _isExpanded) ...[
+              const Divider(height: 1, thickness: 1, color: AppColors.border),
+              Container(
+                color: const Color(0xFFF9FAFC),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  children: item.subReports!.map((sub) {
+                    return InkWell(
+                      onTap: () {
+                        context.push(sub.route, extra: sub.extra);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: item.color.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child:
+                                  Icon(sub.icon, size: 14, color: item.color),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                sub.title,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.darkBlueText,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded,
+                                size: 16, color: AppColors.secondaryText),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
