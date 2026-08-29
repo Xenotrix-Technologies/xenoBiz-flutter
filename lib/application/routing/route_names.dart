@@ -100,6 +100,8 @@ abstract class RouteNames {
   static const String quotations = '/quotations';
   static const String proformaInvoices = '/proforma-invoices';
   static const String deliveryChallans = '/delivery-challans';
+  static const String deliveryChallanDetails = '/delivery-challan-details';
+  static const String createDeliveryChallan = '/create-delivery-challan';
   static const String creditNotes = '/credit-notes';
   static const String debitNotes = '/debit-notes';
   static const String stockTransfer = '/stock-transfer';

@@ -33,6 +33,10 @@ import '../../presentation/invoices/pages/returns_list_page.dart';
 import '../../presentation/invoices/pages/transaction_screen.dart';
 
 import '../../presentation/invoices/pages/quotations_page.dart';
+import '../../presentation/invoices/pages/delivery_challans_page.dart';
+import '../../presentation/invoices/pages/delivery_challan_details_page.dart';
+import '../../presentation/invoices/pages/create_delivery_challan_page.dart';
+import '../../domain/entities/delivery_challan_entity.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
@@ -274,11 +278,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.deliveryChallans,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Delivery Challans',
-                  icon: Icons.local_shipping_outlined,
-                  description: 'Dispatch challans & delivery tracking documents.',
-                ),
+                builder: (context, state) => const DeliveryChallansPage(),
               ),
               GoRoute(
                 path: RouteNames.services,
@@ -827,11 +827,21 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.deliveryChallans,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Delivery Challans',
-          icon: Icons.local_shipping_outlined,
-          description: 'Dispatch challans & delivery tracking documents.',
-        ),
+        builder: (context, state) => const DeliveryChallansPage(),
+      ),
+      GoRoute(
+        path: RouteNames.deliveryChallanDetails,
+        builder: (context, state) {
+          final challan = state.extra as DeliveryChallanEntity;
+          return DeliveryChallanDetailsPage(challan: challan);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.createDeliveryChallan,
+        builder: (context, state) {
+          final edit = state.extra as DeliveryChallanEntity?;
+          return CreateDeliveryChallanPage(challanToEdit: edit);
+        },
       ),
       GoRoute(
         path: RouteNames.creditNotes,

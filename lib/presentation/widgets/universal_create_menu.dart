@@ -312,6 +312,18 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               );
                             }),
                           ),
+                          // 10. Delivery Challan
+                          _ActionCard(
+                            title: 'Delivery Challan',
+                            subtitle: 'Dispatch Document',
+                            icon: Icons.local_shipping_outlined,
+                            iconColor: const Color(0xFF2563EB),
+                            bgColor:
+                                const Color(0xFF2563EB).withValues(alpha: 0.1),
+                            onTap: () => _onActionTap(() {
+                              context.push(RouteNames.createDeliveryChallan);
+                            }),
+                          ),
                         ],
                       ),
                     ],

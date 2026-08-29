@@ -9,6 +9,7 @@ enum VoucherType {
   payment,
   receipt,
   quotation,
+  deliveryChallan,
 }
 
 class VoucherSequenceService {
@@ -42,6 +43,8 @@ class VoucherSequenceService {
         return 'prefix_receipt';
       case VoucherType.quotation:
         return 'prefix_quotation';
+      case VoucherType.deliveryChallan:
+        return 'prefix_delivery_challan';
     }
   }
 
@@ -61,6 +64,8 @@ class VoucherSequenceService {
         return 'seq_receipt';
       case VoucherType.quotation:
         return 'seq_quotation';
+      case VoucherType.deliveryChallan:
+        return 'seq_delivery_challan';
     }
   }
 
@@ -80,6 +85,8 @@ class VoucherSequenceService {
         return 'RCT';
       case VoucherType.quotation:
         return 'QT';
+      case VoucherType.deliveryChallan:
+        return 'DC';
     }
   }
 
@@ -140,6 +147,10 @@ class VoucherSequenceService {
         case VoucherType.receipt:
           final list = await db.select(db.income).get();
           count = list.length;
+          break;
+        case VoucherType.deliveryChallan:
+          final rows = await db.select(db.appKeyValueStore).get();
+          count = rows.where((r) => r.key.startsWith('tbl_dc_')).length;
           break;
       }
     } catch (_) {}

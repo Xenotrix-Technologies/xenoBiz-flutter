@@ -47,6 +47,11 @@ class XenoBizApp extends StatelessWidget {
               invoiceRepository: getIt(),
             )..add(const FetchQuotationsEvent()),
           ),
+          BlocProvider<DeliveryChallanBloc>(
+            create: (_) => DeliveryChallanBloc(
+              repository: getIt(),
+            )..add(const FetchDeliveryChallansEvent()),
+          ),
           BlocProvider<SyncBloc>(
             create: (_) => SyncBloc(
               syncRepository: getIt(),

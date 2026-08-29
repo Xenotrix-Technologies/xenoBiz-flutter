@@ -78,6 +78,7 @@ class _ServicesListPageState extends State<ServicesListPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -150,35 +151,65 @@ class _ServicesListPageState extends State<ServicesListPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                _buildDetailRow('Service Code / SAC', service.sku.isNotEmpty ? service.sku : 'N/A'),
-                _buildDetailRow('Price', _formatCurrency(service.sellingPrice)),
-                if (service.taxPercentage != null && service.taxPercentage! > 0)
-                  _buildDetailRow('Tax / GST', '${service.taxPercentage!.toStringAsFixed(0)}%'),
+                const SizedBox(height: 14),
+                _buildDetailRow('Service Rate', _formatCurrency(service.sellingPrice)),
+                if (service.hsnCode.isNotEmpty)
+                  _buildDetailRow('SAC Code', service.hsnCode),
+                if (service.sku.isNotEmpty)
+                  _buildDetailRow('Item Code / SKU', service.sku),
                 if (service.description.isNotEmpty)
                   _buildDetailRow('Description', service.description),
                 const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await context.push(
+                            RouteNames.createMaster,
+                            extra: service,
+                          );
+                          if (context.mounted) {
+                            context
+                                .read<ProductBloc>()
+                                .add(const FetchProductsEvent());
+                          }
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Edit Service',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      context.push(RouteNames.createMaster, extra: service);
-                    },
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text(
-                      'Edit Service',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.danger,
+                          side: const BorderSide(color: AppColors.danger),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _confirmDeleteService(context, service);
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -202,12 +233,15 @@ class _ServicesListPageState extends State<ServicesListPage> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.darkBlueText,
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.darkBlueText,
+              ),
+              textAlign: TextAlign.end,
             ),
           ),
         ],
@@ -221,42 +255,9 @@ class _ServicesListPageState extends State<ServicesListPage> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Services'),
-        backgroundColor: AppColors.deepNavy,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Add Service',
-            onPressed: () async {
-              await context.push(
-                RouteNames.createMaster,
-                extra: {'tab': 0, 'isService': true},
-              );
-              if (context.mounted) {
-                context.read<ProductBloc>().add(const FetchProductsEvent());
-              }
-            },
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add_service_fab',
-        backgroundColor: AppColors.primaryBlue,
-        onPressed: () async {
-          await context.push(
-            RouteNames.createMaster,
-            extra: {'tab': 0, 'isService': true},
-          );
-          if (context.mounted) {
-            context.read<ProductBloc>().add(const FetchProductsEvent());
-          }
-        },
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Add Service',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
       ),
       body: BlocBuilder<ProductBloc, ProductState>(
         builder: (context, state) {
@@ -279,31 +280,47 @@ class _ServicesListPageState extends State<ServicesListPage> {
               if (query.isEmpty) return true;
               return p.name.toLowerCase().contains(query) ||
                   p.sku.toLowerCase().contains(query) ||
+                  p.hsnCode.toLowerCase().contains(query) ||
                   p.category.toLowerCase().contains(query);
             }).toList();
 
             return Column(
               children: [
-                // Search Bar
+                // Search Bar Section
                 Container(
-                  color: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search services by name, SAC, or category...',
-                      hintStyle: const TextStyle(
-                          fontSize: 13, color: AppColors.secondaryText),
-                      prefixIcon: const Icon(Icons.search,
-                          color: AppColors.secondaryText, size: 20),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
+                  padding: const EdgeInsets.all(16),
+                  color: AppColors.surfaceCard,
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.pageBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Search services by name, SAC, or category...',
+                        hintStyle: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        prefixIcon: const Icon(Icons.search,
+                            size: 20, color: AppColors.secondaryText),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {});
+                                },
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 11),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
                     ),
                   ),
                 ),
@@ -319,31 +336,18 @@ class _ServicesListPageState extends State<ServicesListPage> {
                           icon: Icons.design_services_outlined,
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 80),
+                          padding: const EdgeInsets.all(16),
                           itemCount: services.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (ctx, idx) {
                             final s = services[idx];
 
-                            return Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: AppColors.border),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.02),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
+                            return AppCard(
+                              onTap: () => _showServiceDetails(context, s),
                               child: Row(
                                 children: [
                                   Container(
-                                    width: 42,
-                                    height: 42,
+                                    padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       color: AppColors.primaryBlue
                                           .withValues(alpha: 0.1),
@@ -355,7 +359,7 @@ class _ServicesListPageState extends State<ServicesListPage> {
                                       size: 22,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -371,15 +375,17 @@ class _ServicesListPageState extends State<ServicesListPage> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 3),
+                                        const SizedBox(height: 4),
                                         Text(
                                           s.hsnCode.isNotEmpty
                                               ? 'SAC: ${s.hsnCode}'
-                                              : (s.sku.isNotEmpty ? 'Code: ${s.sku}' : 'Service Item'),
+                                              : (s.sku.isNotEmpty
+                                                  ? 'Code: ${s.sku}'
+                                                  : 'Service Item'),
                                           style: const TextStyle(
                                             fontSize: 12,
                                             color: AppColors.secondaryText,
-                                            fontWeight: FontWeight.w500,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ],
@@ -403,9 +409,8 @@ class _ServicesListPageState extends State<ServicesListPage> {
                                   PopupMenuButton<String>(
                                     icon: const Icon(Icons.more_vert,
                                         size: 20, color: AppColors.secondaryText),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
                                     onSelected: (val) async {
                                       if (val == 'view') {
                                         _showServiceDetails(context, s);
@@ -423,52 +428,41 @@ class _ServicesListPageState extends State<ServicesListPage> {
                                         _confirmDeleteService(context, s);
                                       }
                                     },
-                                    itemBuilder: (ctx) => const [
-                                      PopupMenuItem(
+                                    itemBuilder: (ctx) => [
+                                      const PopupMenuItem(
                                         value: 'view',
-                                        height: 38,
                                         child: Row(
                                           children: [
                                             Icon(Icons.visibility_outlined,
                                                 size: 18,
                                                 color: AppColors.primaryBlue),
-                                            SizedBox(width: 10),
-                                            Text('View',
-                                                style: TextStyle(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600)),
+                                            SizedBox(width: 8),
+                                            Text('View'),
                                           ],
                                         ),
                                       ),
-                                      PopupMenuItem(
+                                      const PopupMenuItem(
                                         value: 'edit',
-                                        height: 38,
                                         child: Row(
                                           children: [
                                             Icon(Icons.edit_outlined,
                                                 size: 18,
                                                 color: AppColors.primaryBlue),
-                                            SizedBox(width: 10),
-                                            Text('Edit Service',
-                                                style: TextStyle(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600)),
+                                            SizedBox(width: 8),
+                                            Text('Edit Service'),
                                           ],
                                         ),
                                       ),
-                                      PopupMenuItem(
+                                      const PopupMenuItem(
                                         value: 'delete',
-                                        height: 38,
                                         child: Row(
                                           children: [
                                             Icon(Icons.delete_outline,
                                                 size: 18,
                                                 color: AppColors.danger),
-                                            SizedBox(width: 10),
+                                            SizedBox(width: 8),
                                             Text('Delete',
                                                 style: TextStyle(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
                                                     color: AppColors.danger)),
                                           ],
                                         ),
