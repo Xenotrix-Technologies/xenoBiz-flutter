@@ -379,7 +379,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
         ));
       }
 
-      // 2. Sales Returns
+      // 2. Sales Returns (Credit Notes)
       for (var ret in salesReturns) {
         transactionsList.add(SalesTransactionWrapper(
           id: ret.id,
@@ -389,13 +389,13 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
           totalAmount: ret.totalAmount,
           paidAmount: 0.0,
           dueAmount: 0.0,
-          statusText: 'Returned',
+          statusText: 'Credit Note',
           date: ret.returnDate,
           originalEntity: ret,
         ));
       }
 
-      // 3. Purchase Returns
+      // 3. Purchase Returns (Debit Notes)
       for (var ret in purchaseReturns) {
         transactionsList.add(SalesTransactionWrapper(
           id: ret.id,
@@ -405,7 +405,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
           totalAmount: ret.totalAmount,
           paidAmount: 0.0,
           dueAmount: 0.0,
-          statusText: 'Returned',
+          statusText: 'Debit Note',
           date: ret.returnDate,
           originalEntity: ret,
         ));

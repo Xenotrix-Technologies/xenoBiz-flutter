@@ -9,6 +9,9 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../../domain/entities/payment_entity.dart';
 import '../../../domain/entities/sales_transaction_wrapper.dart';
+import '../../../application/di/injection.dart';
+import '../../../domain/repositories/returns_repository.dart';
+import 'return_voucher_screen.dart';
 import '../../widgets/ui_state_widgets.dart';
 
 class SalesOverviewPage extends StatefulWidget {
@@ -1136,7 +1139,10 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
         context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
       }
     } else if (tx.isReturn) {
-      await context.push(RouteNames.salesReturns);
+      await context.push(
+        RouteNames.creditNotes,
+        extra: tx.isSalesReturn ? InvoiceType.sale : InvoiceType.purchase,
+      );
       if (context.mounted) {
         context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
       }
@@ -1158,6 +1164,19 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
       if (context.mounted) {
         context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
       }
+    } else if (tx.isReturn && tx.asReturn != null) {
+      await context.push(
+        RouteNames.createReturn,
+        extra: {
+          'returnType': tx.isSalesReturn
+              ? ReturnType.salesReturn
+              : ReturnType.purchaseReturn,
+          'existingReturn': tx.asReturn,
+        },
+      );
+      if (context.mounted) {
+        context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1171,6 +1190,32 @@ class _SalesOverviewPageState extends State<SalesOverviewPage> {
       BuildContext context, SalesTransactionWrapper tx) {
     if (tx.isInvoice && tx.asInvoice != null) {
       _showCancelInvoiceDialog(context, tx.asInvoice!);
+    } else if (tx.isReturn && tx.asReturn != null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Delete ${tx.typeLabel}?', style: const TextStyle(fontWeight: FontWeight.w800)),
+          content: Text('Are you sure you want to delete ${tx.typeLabel} #${tx.transactionNumber}? Action cannot be undone.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await getIt<ReturnsRepository>().deleteReturn(tx.id);
+                if (context.mounted) {
+                  context.read<SalesOverviewBloc>().add(FetchSalesOverviewDataEvent());
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${tx.typeLabel} #${tx.transactionNumber} deleted.'), backgroundColor: AppColors.warning),
+                  );
+                }
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

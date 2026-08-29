@@ -36,6 +36,7 @@ import '../../presentation/invoices/pages/quotations_page.dart';
 import '../../presentation/invoices/pages/delivery_challans_page.dart';
 import '../../presentation/invoices/pages/delivery_challan_details_page.dart';
 import '../../presentation/invoices/pages/create_delivery_challan_page.dart';
+import '../../presentation/invoices/pages/credit_debit_notes_page.dart';
 import '../../domain/entities/delivery_challan_entity.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
@@ -286,19 +287,11 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.creditNotes,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Credit Notes',
-                  icon: Icons.note_alt,
-                  description: 'Sales return credit vouchers & customer balance adjustments.',
-                ),
+                builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.sale),
               ),
               GoRoute(
                 path: RouteNames.debitNotes,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Debit Notes',
-                  icon: Icons.note_add,
-                  description: 'Purchase return debit vouchers & vendor price adjustments.',
-                ),
+                builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.purchase),
               ),
               GoRoute(
                 path: RouteNames.journal,
@@ -845,19 +838,11 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.creditNotes,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Credit Notes',
-          icon: Icons.note_alt,
-          description: 'Sales return credit vouchers & customer balance adjustments.',
-        ),
+        builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.sale),
       ),
       GoRoute(
         path: RouteNames.debitNotes,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Debit Notes',
-          icon: Icons.note_add,
-          description: 'Purchase return debit vouchers & vendor price adjustments.',
-        ),
+        builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.purchase),
       ),
       GoRoute(
         path: RouteNames.stockTransfer,

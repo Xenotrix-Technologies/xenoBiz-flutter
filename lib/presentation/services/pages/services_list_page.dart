@@ -20,6 +20,9 @@ class ServicesListPage extends StatefulWidget {
 class _ServicesListPageState extends State<ServicesListPage> {
   final TextEditingController _searchController = TextEditingController();
 
+  String _selectedCategory = 'All';
+  String _sortBy = 'Name';
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +74,175 @@ class _ServicesListPageState extends State<ServicesListPage> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showFilterBottomSheet(BuildContext context, ProductsLoadedState state) {
+    String tempCategory = _selectedCategory;
+    String tempSort = _sortBy;
+
+    final categories = state.serviceCategories;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filter & Sort Services',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.darkBlueText,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(sheetCtx),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 20),
+
+                    // Filter by Category
+                    const Text(
+                      'Category',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: categories.map((cat) {
+                        final isSel = tempCategory == cat;
+                        return ChoiceChip(
+                          label: Text(cat),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryBlue,
+                          backgroundColor: AppColors.surfaceContainerLow,
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isSel ? Colors.white : AppColors.darkBlueText,
+                          ),
+                          onSelected: (val) {
+                            if (val) setSheetState(() => tempCategory = cat);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Sort Options
+                    const Text(
+                      'Sort By',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        'Name',
+                        'Price: High to Low',
+                        'Price: Low to High',
+                        'Recently Updated',
+                      ].map((s) {
+                        final isSel = tempSort == s;
+                        return ChoiceChip(
+                          label: Text(s),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryBlue,
+                          backgroundColor: AppColors.surfaceContainerLow,
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isSel ? Colors.white : AppColors.darkBlueText,
+                          ),
+                          onSelected: (val) {
+                            if (val) setSheetState(() => tempSort = s);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _selectedCategory = 'All';
+                                _sortBy = 'Name';
+                              });
+                              Navigator.pop(sheetCtx);
+                            },
+                            child: const Text('Reset All',
+                                style: TextStyle(fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _selectedCategory = tempCategory;
+                                _sortBy = tempSort;
+                              });
+                              Navigator.pop(sheetCtx);
+                            },
+                            child: const Text('Apply Filters',
+                                style: TextStyle(fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -275,70 +447,163 @@ class _ServicesListPageState extends State<ServicesListPage> {
 
           if (state is ProductsLoadedState) {
             final query = _searchController.text.trim().toLowerCase();
-            final services = state.allProducts.where((p) {
-              if (!p.isService || !p.isActive) return false;
-              if (query.isEmpty) return true;
-              return p.name.toLowerCase().contains(query) ||
-                  p.sku.toLowerCase().contains(query) ||
-                  p.hsnCode.toLowerCase().contains(query) ||
-                  p.category.toLowerCase().contains(query);
-            }).toList();
+
+            // Filter services (all items with isService == true & isActive == true)
+            var services = state.allProducts.where((p) => p.isService && p.isActive).toList();
+
+            // Category filter
+            if (_selectedCategory != 'All') {
+              services = services.where((s) => s.category == _selectedCategory).toList();
+            }
+
+            // Search query filter
+            if (query.isNotEmpty) {
+              services = services.where((s) {
+                return s.name.toLowerCase().contains(query) ||
+                    s.sku.toLowerCase().contains(query) ||
+                    s.hsnCode.toLowerCase().contains(query) ||
+                    s.category.toLowerCase().contains(query);
+              }).toList();
+            }
+
+            // Sorting
+            switch (_sortBy) {
+              case 'Price: High to Low':
+                services.sort((a, b) => b.sellingPrice.compareTo(a.sellingPrice));
+                break;
+              case 'Price: Low to High':
+                services.sort((a, b) => a.sellingPrice.compareTo(b.sellingPrice));
+                break;
+              case 'Recently Updated':
+                services.sort((a, b) {
+                  final tA = a.updatedAt ?? a.createdAt;
+                  final tB = b.updatedAt ?? b.createdAt;
+                  return tB.compareTo(tA);
+                });
+                break;
+              case 'Name':
+              default:
+                services.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                break;
+            }
+
+            final serviceCategories = state.serviceCategories;
 
             return Column(
               children: [
-                // Search Bar Section
+                // 1. Search Bar + Filter Button Row (Identical to Inventory Screen)
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  color: AppColors.surfaceCard,
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.pageBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        hintText: 'Search services by name, SAC, or category...',
-                        hintStyle: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.secondaryText,
-                          overflow: TextOverflow.ellipsis,
+                  color: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Search services by name, SAC, or category...',
+                            hintStyle: const TextStyle(
+                                fontSize: 13, color: AppColors.secondaryText),
+                            prefixIcon: const Icon(Icons.search,
+                                color: AppColors.secondaryText, size: 20),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {});
+                                    },
+                                  )
+                                : null,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: AppColors.border),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                          ),
                         ),
-                        prefixIcon: const Icon(Icons.search,
-                            size: 20, color: AppColors.secondaryText),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {});
-                                },
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 11),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: (_selectedCategory != 'All' ||
+                                  _sortBy != 'Name')
+                              ? AppColors.primaryBlue.withValues(alpha: 0.15)
+                              : AppColors.surfaceContainerLow,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: Icon(
+                          Icons.filter_list,
+                          color: (_selectedCategory != 'All' ||
+                                  _sortBy != 'Name')
+                              ? AppColors.primaryBlue
+                              : AppColors.darkBlueText,
+                        ),
+                        onPressed: () => _showFilterBottomSheet(context, state),
+                        tooltip: 'Filter Services',
+                      ),
+                    ],
                   ),
                 ),
 
-                // Services List Content
+                // 2. Horizontally Scrollable Filter Chips Bar (Identical to Inventory Screen)
+                if (serviceCategories.length > 1)
+                  Container(
+                    color: Colors.white,
+                    height: 44,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      itemCount: serviceCategories.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (ctx, idx) {
+                        final cat = serviceCategories[idx];
+                        final isSelected = _selectedCategory == cat;
+                        return ChoiceChip(
+                          label: Text(cat == 'All' ? 'All' : 'Cat: $cat'),
+                          selected: isSelected,
+                          selectedColor: AppColors.primaryBlue,
+                          backgroundColor: AppColors.surfaceContainerLow,
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color:
+                                isSelected ? Colors.white : AppColors.darkBlueText,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() {
+                                _selectedCategory = cat;
+                              });
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                // 3. Services List Content
                 Expanded(
                   child: services.isEmpty
                       ? EmptyState(
                           title: 'No Services Found',
-                          message: query.isNotEmpty
-                              ? 'No services matching "$query".'
+                          message: query.isNotEmpty || _selectedCategory != 'All'
+                              ? 'No services matching your search or filter.'
                               : 'Add your first service to offer non-physical goods & labor.',
                           icon: Icons.design_services_outlined,
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: services.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (ctx, idx) {
                             final s = services[idx];
 
@@ -376,17 +641,62 @@ class _ServicesListPageState extends State<ServicesListPage> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         const SizedBox(height: 4),
-                                        Text(
-                                          s.hsnCode.isNotEmpty
-                                              ? 'SAC: ${s.hsnCode}'
-                                              : (s.sku.isNotEmpty
-                                                  ? 'Code: ${s.sku}'
-                                                  : 'Service Item'),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.secondaryText,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                        Row(
+                                          children: [
+                                            if (s.hsnCode.isNotEmpty)
+                                              Text(
+                                                'SAC: ${s.hsnCode}',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.secondaryText,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              )
+                                            else if (s.sku.isNotEmpty)
+                                              Text(
+                                                'Code: ${s.sku}',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.secondaryText,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              )
+                                            else
+                                              const Text(
+                                                'Service Item',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.secondaryText,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            if (s.category.isNotEmpty &&
+                                                s.category != 'General') ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.pageBackground,
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                  border: Border.all(
+                                                      color: AppColors.border),
+                                                ),
+                                                child: Text(
+                                                  s.category,
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors
+                                                        .secondaryText,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ],
                                     ),

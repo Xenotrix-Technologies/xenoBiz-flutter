@@ -65,11 +65,11 @@ class SalesTransactionWrapper extends Equatable {
       case SalesTransactionType.sale:
         return 'SALE';
       case SalesTransactionType.salesReturn:
-        return 'SALES RETURN';
+        return 'CREDIT NOTE';
       case SalesTransactionType.purchase:
         return 'PURCHASE';
       case SalesTransactionType.purchaseReturn:
-        return 'PURCHASE RETURN';
+        return 'DEBIT NOTE';
       case SalesTransactionType.payment:
         return 'MONEY OUT';
       case SalesTransactionType.receipt:
