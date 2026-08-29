@@ -16,11 +16,21 @@ class DailyBookPage extends StatefulWidget {
 
 class _DailyBookPageState extends State<DailyBookPage> {
   DateTime _selectedDate = DateTime.now();
-  String _selectedFinancialYear = 'FY 2026-27';
+  String _selectedAccount = 'All Accounts';
   AccountingTxType? _selectedTypeFilter;
   String _searchQuery = '';
 
-  final List<String> _financialYears = ['FY 2026-27', 'FY 2025-26', 'FY 2024-25'];
+  final List<String> _accountOptions = [
+    'All Accounts',
+    'Cash Account',
+    'HDFC Bank Main A/c',
+    'SBI Current A/c',
+    'Petty Cash Account',
+    'Rahul Sharma (Customer)',
+    'Ankit Traders',
+    'Metro Wholesalers (Supplier)',
+    'Shop Rent Expense',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -28,11 +38,19 @@ class _DailyBookPageState extends State<DailyBookPage> {
     final timeFormatter = DateFormat('hh:mm a');
 
     final repo = getIt<AccountingRepository>();
-    final transactions = repo.getDailyBookTransactions(
+    var transactions = repo.getDailyBookTransactions(
       date: _selectedDate,
       typeFilter: _selectedTypeFilter,
       searchQuery: _searchQuery,
     );
+
+    if (_selectedAccount != 'All Accounts') {
+      transactions = transactions.where((tx) {
+        final acc = _selectedAccount.toLowerCase();
+        final party = tx.partyOrAccount.toLowerCase();
+        return party.contains(acc) || acc.contains(party);
+      }).toList();
+    }
 
     final totalReceipts = transactions.fold(0.0, (sum, tx) => sum + tx.debit);
     final totalPayments = transactions.fold(0.0, (sum, tx) => sum + tx.credit);
@@ -67,7 +85,7 @@ class _DailyBookPageState extends State<DailyBookPage> {
                   children: [
                     // Date Filter
                     Expanded(
-                      flex: 3,
+                      flex: 1,
                       child: InkWell(
                         onTap: () async {
                           final picked = await showDatePicker(
@@ -81,7 +99,7 @@ class _DailyBookPageState extends State<DailyBookPage> {
                           }
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.grey.shade300),
                             borderRadius: BorderRadius.circular(10),
@@ -89,11 +107,12 @@ class _DailyBookPageState extends State<DailyBookPage> {
                           child: Row(
                             children: [
                               const Icon(Icons.calendar_today, size: 16, color: AppColors.primaryBlue),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   DateFormat('dd MMM yyyy').format(_selectedDate),
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -101,25 +120,32 @@ class _DailyBookPageState extends State<DailyBookPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
 
-                    // FY Filter
+                    // Account Selection Dropdown
                     Expanded(
-                      flex: 2,
+                      flex: 1,
                       child: DropdownButtonFormField<String>(
-                        initialValue: _selectedFinancialYear,
+                        initialValue: _selectedAccount,
+                        isExpanded: true,
                         decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          prefixIcon: const Icon(Icons.account_balance_wallet_outlined,
+                              size: 16, color: AppColors.primaryBlue),
                         ),
-                        items: _financialYears.map((fy) {
+                        items: _accountOptions.map((acc) {
                           return DropdownMenuItem(
-                            value: fy,
-                            child: Text(fy, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            value: acc,
+                            child: Text(
+                              acc,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }).toList(),
                         onChanged: (val) {
-                          if (val != null) setState(() => _selectedFinancialYear = val);
+                          if (val != null) setState(() => _selectedAccount = val);
                         },
                       ),
                     ),

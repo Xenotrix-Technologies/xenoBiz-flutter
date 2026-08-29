@@ -23,7 +23,6 @@ class _MenuItem {
   final String? route;
   final Color color;
   final Object? extra;
-  final bool isSecondarySelection;
   final bool isComplianceTool;
   final bool isReportTool;
 
@@ -34,7 +33,6 @@ class _MenuItem {
     this.route,
     required this.color,
     this.extra,
-    this.isSecondarySelection = false,
     this.isComplianceTool = false,
     this.isReportTool = false,
   });
@@ -133,7 +131,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           description: 'View daily account transactions',
           route: RouteNames.dailyBook,
           color: Color(0xFF0066CC),
-          isSecondarySelection: true,
         ),
         _MenuItem(
           icon: Icons.account_balance_wallet_outlined,
@@ -141,7 +138,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           description: 'View account-wise transactions',
           route: RouteNames.ledger,
           color: Color(0xFF0066CC),
-          isSecondarySelection: true,
         ),
         _MenuItem(
           icon: Icons.call_received_outlined,
@@ -375,83 +371,9 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
 
     if (!mounted) return;
 
-    if (item.isSecondarySelection) {
-      _showSecondarySelectionModal(context, item);
-    } else if (item.route != null) {
+    if (item.route != null) {
       context.push(item.route!, extra: item.extra);
     }
-  }
-
-  void _showSecondarySelectionModal(BuildContext context, _MenuItem item) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(item.icon, color: item.color, size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.darkBlueText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Select view mode for ${item.title}:',
-              style:
-                  const TextStyle(fontSize: 13, color: AppColors.secondaryText),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading:
-                  const Icon(Icons.person_outline, color: Color(0xFF0066CC)),
-              title: const Text('Account Wise',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(
-                  'View ${item.title.toLowerCase()} filtered by specific account'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.pop(ctx);
-                if (item.route != null) {
-                  context.push(item.route!, extra: {'type': 'account_wise'});
-                }
-              },
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.format_list_bulleted,
-                  color: Color(0xFF0066CC)),
-              title: const Text('All Accounts',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(
-                  'View consolidated ${item.title.toLowerCase()} for all accounts'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.pop(ctx);
-                if (item.route != null) {
-                  context.push(item.route!, extra: {'type': 'all'});
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
