@@ -28,14 +28,21 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       return InvoiceStatus.partiallyPaid;
     }
     if (statusStr == 'cancelled' || statusStr == 'InvoiceStatus.cancelled') return InvoiceStatus.cancelled;
+    if (statusStr == 'sent' || statusStr == 'InvoiceStatus.sent') return InvoiceStatus.sent;
+    if (statusStr == 'accepted' || statusStr == 'InvoiceStatus.accepted') return InvoiceStatus.accepted;
+    if (statusStr == 'rejected' || statusStr == 'InvoiceStatus.rejected') return InvoiceStatus.rejected;
+    if (statusStr == 'expired' || statusStr == 'InvoiceStatus.expired') return InvoiceStatus.expired;
+    if (statusStr == 'converted' || statusStr == 'InvoiceStatus.converted') return InvoiceStatus.converted;
     if (statusStr == 'draft' || statusStr == 'InvoiceStatus.draft') return InvoiceStatus.draft;
     return InvoiceStatus.unpaid;
   }
 
   InvoiceEntity _rowToInvoice(Invoice row, List<InvoiceItem> itemRows) {
-    final type = row.type == 'purchase' || row.type == 'InvoiceType.purchase'
-        ? InvoiceType.purchase
-        : InvoiceType.sale;
+    final type = row.type == 'quotation' || row.type == 'InvoiceType.quotation'
+        ? InvoiceType.quotation
+        : (row.type == 'purchase' || row.type == 'InvoiceType.purchase'
+            ? InvoiceType.purchase
+            : InvoiceType.sale);
 
     final items = itemRows.map((i) => InvoiceItemEntity(
       productId: i.productId,
@@ -115,7 +122,7 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<List<InvoiceEntity>> getInvoices({InvoiceStatus? status, String? query}) async {
+  Future<List<InvoiceEntity>> getInvoices({InvoiceType? type, InvoiceStatus? status, String? query}) async {
     final q = db.select(db.invoices)..orderBy([(t) => OrderingTerm.desc(t.issueDate)]);
     final rows = await q.get();
 
@@ -126,6 +133,9 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
     }
 
     List<InvoiceEntity> filtered = list;
+    if (type != null) {
+      filtered = filtered.where((i) => i.type == type).toList();
+    }
     if (status != null) {
       filtered = filtered.where((i) => i.status == status).toList();
     }
@@ -133,7 +143,8 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       final lowerQ = query.toLowerCase();
       filtered = filtered.where((i) {
         return i.invoiceNumber.toLowerCase().contains(lowerQ) ||
-            i.customerName.toLowerCase().contains(lowerQ);
+            i.customerName.toLowerCase().contains(lowerQ) ||
+            i.customerPhone.toLowerCase().contains(lowerQ);
       }).toList();
     }
     return filtered;
@@ -191,7 +202,9 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       }
     });
 
-    final vType = localInvoice.isPurchase ? VoucherType.purchase : VoucherType.sale;
+    final vType = localInvoice.isQuotation
+        ? VoucherType.quotation
+        : (localInvoice.isPurchase ? VoucherType.purchase : VoucherType.sale);
     await VoucherSequenceService.instance.incrementSequence(vType);
 
     return localInvoice;
@@ -218,6 +231,14 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       }
     });
     return invoice;
+  }
+
+  @override
+  Future<void> deleteInvoice(String id) async {
+    await db.transaction(() async {
+      await (db.delete(db.invoiceItems)..where((t) => t.invoiceId.equals(id))).go();
+      await (db.delete(db.invoices)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   @override

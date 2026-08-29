@@ -228,7 +228,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               context.push(
                                 RouteNames.createInvoice,
                                 extra: {
-                                  'invoiceType': InvoiceType.sale,
+                                  'invoiceType': InvoiceType.quotation,
                                   'isQuotation': true,
                                 },
                               );

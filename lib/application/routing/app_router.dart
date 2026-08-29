@@ -32,6 +32,7 @@ import '../../presentation/invoices/pages/return_voucher_screen.dart';
 import '../../presentation/invoices/pages/returns_list_page.dart';
 import '../../presentation/invoices/pages/transaction_screen.dart';
 
+import '../../presentation/invoices/pages/quotations_page.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
@@ -261,11 +262,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.quotations,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Quotations',
-                  icon: Icons.request_quote,
-                  description: 'Create & send price estimations and sales quotes.',
-                ),
+                builder: (context, state) => const QuotationsPage(),
               ),
               GoRoute(
                 path: RouteNames.proformaInvoices,
@@ -564,6 +561,9 @@ class AppRouter {
         builder: (context, state) {
           InvoiceType invoiceType = InvoiceType.sale;
           InvoiceEntity? invoiceToEdit;
+          bool isQuotation = false;
+          InvoiceEntity? fromQuotation;
+
           if (state.extra is Map<String, dynamic>) {
             final map = state.extra as Map<String, dynamic>;
             if (map['invoiceType'] is InvoiceType) {
@@ -572,9 +572,18 @@ class AppRouter {
             if (map['invoiceToEdit'] is InvoiceEntity) {
               invoiceToEdit = map['invoiceToEdit'] as InvoiceEntity;
             }
+            if (map['isQuotation'] == true || invoiceType == InvoiceType.quotation) {
+              isQuotation = true;
+            }
+            if (map['fromQuotation'] is InvoiceEntity) {
+              fromQuotation = map['fromQuotation'] as InvoiceEntity;
+            }
           } else if (state.extra is InvoiceEntity) {
             invoiceToEdit = state.extra as InvoiceEntity;
             invoiceType = invoiceToEdit.type;
+            if (invoiceType == InvoiceType.quotation) {
+              isQuotation = true;
+            }
           }
           return ProviderScope(
             overrides: [
@@ -583,6 +592,8 @@ class AppRouter {
             child: CreateInvoicePage(
               invoiceType: invoiceType,
               invoiceToEdit: invoiceToEdit,
+              isQuotation: isQuotation,
+              fromQuotation: fromQuotation,
             ),
           );
         },
@@ -804,11 +815,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.quotations,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Quotations',
-          icon: Icons.request_quote,
-          description: 'Create & send price estimations and sales quotes.',
-        ),
+        builder: (context, state) => const QuotationsPage(),
       ),
       GoRoute(
         path: RouteNames.proformaInvoices,

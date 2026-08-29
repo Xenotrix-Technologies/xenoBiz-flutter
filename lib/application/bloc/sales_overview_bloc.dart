@@ -288,6 +288,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
 
       final todayInvoices = invoices.where((i) {
         return i.isSale &&
+            !i.isQuotation &&
             i.issueDate.isAfter(todayStart.subtract(const Duration(seconds: 1))) &&
             i.issueDate.isBefore(todayEnd.add(const Duration(seconds: 1)));
       }).toList();
@@ -309,7 +310,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       double totalOutstanding = customers.fold(0.0, (sum, c) => sum + c.outstandingBalance);
       if (totalOutstanding == 0.0) {
         totalOutstanding = invoices
-            .where((i) => i.isSale && (i.status == InvoiceStatus.unpaid || i.status == InvoiceStatus.partiallyPaid))
+            .where((i) => i.isSale && !i.isQuotation && (i.status == InvoiceStatus.unpaid || i.status == InvoiceStatus.partiallyPaid))
             .fold(0.0, (sum, i) => sum + i.dueAmount);
       }
 
@@ -324,6 +325,7 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
 
         final daySales = invoices.where((inv) {
           return inv.isSale &&
+              !inv.isQuotation &&
               inv.issueDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
               inv.issueDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
         }).fold(0.0, (sum, inv) => sum + inv.grandTotal);
@@ -350,8 +352,9 @@ class SalesOverviewBloc extends Bloc<SalesOverviewEvent, SalesOverviewState> {
       final List<SalesTransactionWrapper> transactionsList = [];
       final invoiceIdsSet = invoices.map((i) => i.id).toSet();
 
-      // 1. Invoices (Sale & Purchase)
+      // 1. Invoices (Sale & Purchase only - QUOTATIONS ARE STRICTLY EXCLUDED)
       for (var inv in invoices) {
+        if (inv.isQuotation || inv.type == InvoiceType.quotation) continue;
         final isPurch = inv.isPurchase || inv.type == InvoiceType.purchase;
         transactionsList.add(SalesTransactionWrapper(
           id: inv.id,

@@ -319,6 +319,17 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                 if (context.mounted) {
                   context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
                 }
+              } else if (val == 'convert') {
+                await context.push(
+                  RouteNames.createInvoice,
+                  extra: {
+                    'invoiceType': InvoiceType.sale,
+                    'fromQuotation': inv,
+                  },
+                );
+                if (context.mounted) {
+                  context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+                }
               } else if (val == 'return') {
                 await context.push(
                   RouteNames.createReturn,
@@ -338,20 +349,32 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                   children: [
                     Icon(Icons.edit_outlined, size: 18),
                     SizedBox(width: 8),
-                    Text('Edit Invoice')
+                    Text('Edit Document')
                   ],
                 ),
               ),
-              const PopupMenuItem(
-                value: 'return',
-                child: Row(
-                  children: [
-                    Icon(Icons.assignment_return_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Create Sales Return')
-                  ],
+              if (inv.type == InvoiceType.quotation)
+                const PopupMenuItem(
+                  value: 'convert',
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_horiz_rounded, size: 18, color: AppColors.primaryBlue),
+                      SizedBox(width: 8),
+                      Text('Convert to Sale', style: TextStyle(color: AppColors.primaryBlue)),
+                    ],
+                  ),
                 ),
-              ),
+              if (inv.type != InvoiceType.quotation)
+                const PopupMenuItem(
+                  value: 'return',
+                  child: Row(
+                    children: [
+                      Icon(Icons.assignment_return_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Create Sales Return')
+                    ],
+                  ),
+                ),
               if (inv.status != InvoiceStatus.cancelled)
                 const PopupMenuItem(
                   value: 'cancel',
@@ -360,7 +383,7 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                       Icon(Icons.cancel_outlined,
                           size: 18, color: AppColors.danger),
                       SizedBox(width: 8),
-                      Text('Cancel Invoice',
+                      Text('Cancel Document',
                           style: TextStyle(color: AppColors.danger))
                     ],
                   ),
@@ -387,9 +410,11 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            inv.type == InvoiceType.purchase
-                                ? 'PURCHASE VOUCHER'
-                                : 'SALES INVOICE',
+                            inv.type == InvoiceType.quotation
+                                ? 'QUOTATION'
+                                : (inv.type == InvoiceType.purchase
+                                    ? 'PURCHASE VOUCHER'
+                                    : 'SALES INVOICE'),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
@@ -418,8 +443,11 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Issue Date',
-                              style: TextStyle(
+                          Text(
+                              inv.type == InvoiceType.quotation
+                                  ? 'Quotation Date'
+                                  : 'Issue Date',
+                              style: const TextStyle(
                                   fontSize: 11,
                                   color: AppColors.secondaryText)),
                           const SizedBox(height: 2),
@@ -431,8 +459,11 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Due Date',
-                              style: TextStyle(
+                          Text(
+                              inv.type == InvoiceType.quotation
+                                  ? 'Valid Until'
+                                  : 'Due Date',
+                              style: const TextStyle(
                                   fontSize: 11,
                                   color: AppColors.secondaryText)),
                           const SizedBox(height: 2),
@@ -684,7 +715,24 @@ class _InvoiceDetailsPageState extends State<InvoiceDetailsPage> {
                     onPressed: () => _shareInvoice(context, inv),
                   ),
                 ),
-                if (inv.dueAmount > 0 &&
+                if (inv.type == InvoiceType.quotation) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AppButton(
+                      text: 'Convert to Sale',
+                      icon: Icons.swap_horiz_rounded,
+                      onPressed: () {
+                        context.push(
+                          RouteNames.createInvoice,
+                          extra: {
+                            'invoiceType': InvoiceType.sale,
+                            'fromQuotation': inv,
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ] else if (inv.dueAmount > 0 &&
                     inv.status != InvoiceStatus.paid &&
                     inv.status != InvoiceStatus.cancelled) ...[
                   const SizedBox(width: 12),

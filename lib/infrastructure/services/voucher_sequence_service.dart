@@ -8,6 +8,7 @@ enum VoucherType {
   purchaseReturn,
   payment,
   receipt,
+  quotation,
 }
 
 class VoucherSequenceService {
@@ -39,6 +40,8 @@ class VoucherSequenceService {
         return 'prefix_payment';
       case VoucherType.receipt:
         return 'prefix_receipt';
+      case VoucherType.quotation:
+        return 'prefix_quotation';
     }
   }
 
@@ -56,6 +59,8 @@ class VoucherSequenceService {
         return 'seq_payment';
       case VoucherType.receipt:
         return 'seq_receipt';
+      case VoucherType.quotation:
+        return 'seq_quotation';
     }
   }
 
@@ -73,6 +78,8 @@ class VoucherSequenceService {
         return 'PMT';
       case VoucherType.receipt:
         return 'RCT';
+      case VoucherType.quotation:
+        return 'QT';
     }
   }
 
@@ -112,6 +119,10 @@ class VoucherSequenceService {
           break;
         case VoucherType.purchase:
           final list = await (db.select(db.invoices)..where((t) => t.type.equals('purchase'))).get();
+          count = list.length;
+          break;
+        case VoucherType.quotation:
+          final list = await (db.select(db.invoices)..where((t) => t.type.equals('quotation'))).get();
           count = list.length;
           break;
         case VoucherType.salesReturn:

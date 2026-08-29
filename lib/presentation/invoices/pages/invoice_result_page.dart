@@ -637,6 +637,35 @@ class InvoiceResultPage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              if (invoice.type == InvoiceType.quotation) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      context.push(
+                        RouteNames.createInvoice,
+                        extra: {
+                          'invoiceType': InvoiceType.sale,
+                          'fromQuotation': invoice,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 20),
+                    label: const Text(
+                      'CONVERT TO SALE',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -650,20 +679,54 @@ class InvoiceResultPage extends ConsumerWidget {
                   onPressed: () {
                     context.push(
                       RouteNames.createInvoice,
-                      extra: {'invoiceType': invoice.type},
+                      extra: {
+                        'invoiceType': invoice.type,
+                        'isQuotation': invoice.type == InvoiceType.quotation,
+                      },
                     );
                   },
                   icon: const Icon(Icons.add_circle_outline, size: 20),
                   label: Text(
-                    invoice.type == InvoiceType.purchase
-                        ? 'CREATE ANOTHER PURCHASE'
-                        : 'CREATE ANOTHER SALE',
+                    invoice.type == InvoiceType.quotation
+                        ? 'CREATE ANOTHER QUOTATION'
+                        : (invoice.type == InvoiceType.purchase
+                            ? 'CREATE ANOTHER PURCHASE'
+                            : 'CREATE ANOTHER SALE'),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                   ),
                 ),
               ),
             ] else ...[
-              // CONTEXT 2: Newly Completed Standalone -> CREATE ANOTHER SALE
+              // CONTEXT 2: Newly Completed Standalone
+              if (invoice.type == InvoiceType.quotation) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      context.push(
+                        RouteNames.createInvoice,
+                        extra: {
+                          'invoiceType': InvoiceType.sale,
+                          'fromQuotation': invoice,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 20),
+                    label: const Text(
+                      'CONVERT TO SALE',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -677,14 +740,19 @@ class InvoiceResultPage extends ConsumerWidget {
                   onPressed: () {
                     context.push(
                       RouteNames.createInvoice,
-                      extra: {'invoiceType': invoice.type},
+                      extra: {
+                        'invoiceType': invoice.type,
+                        'isQuotation': invoice.type == InvoiceType.quotation,
+                      },
                     );
                   },
                   icon: const Icon(Icons.add_circle_outline, size: 20),
                   label: Text(
-                    invoice.type == InvoiceType.purchase
-                        ? 'CREATE ANOTHER PURCHASE'
-                        : 'CREATE ANOTHER SALE',
+                    invoice.type == InvoiceType.quotation
+                        ? 'CREATE ANOTHER QUOTATION'
+                        : (invoice.type == InvoiceType.purchase
+                            ? 'CREATE ANOTHER PURCHASE'
+                            : 'CREATE ANOTHER SALE'),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                   ),
                 ),

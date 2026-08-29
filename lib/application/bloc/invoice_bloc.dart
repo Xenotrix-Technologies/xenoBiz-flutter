@@ -47,6 +47,14 @@ class RecordPaymentSubmittedEvent extends InvoiceEvent {
   List<Object?> get props => [payment];
 }
 
+class DeleteInvoiceSubmittedEvent extends InvoiceEvent {
+  final String invoiceId;
+  const DeleteInvoiceSubmittedEvent(this.invoiceId);
+
+  @override
+  List<Object?> get props => [invoiceId];
+}
+
 // States
 abstract class InvoiceState extends Equatable {
   const InvoiceState();
@@ -105,6 +113,7 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     on<CreateInvoiceSubmittedEvent>(_onCreateInvoiceSubmitted);
     on<UpdateInvoiceSubmittedEvent>(_onUpdateInvoiceSubmitted);
     on<RecordPaymentSubmittedEvent>(_onRecordPaymentSubmitted);
+    on<DeleteInvoiceSubmittedEvent>(_onDeleteInvoiceSubmitted);
   }
 
   Future<void> _onFetchInvoices(
@@ -161,6 +170,18 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     try {
       await recordPaymentUseCase.execute(event.payment);
       emit(const InvoiceOperationSuccessState('Payment recorded and balances updated!'));
+      add(const FetchInvoicesEvent());
+    } catch (e) {
+      emit(InvoiceErrorState(e.toString()));
+    }
+  }
+
+  Future<void> _onDeleteInvoiceSubmitted(
+      DeleteInvoiceSubmittedEvent event, Emitter<InvoiceState> emit) async {
+    emit(InvoiceLoadingState());
+    try {
+      await invoiceRepository.deleteInvoice(event.invoiceId);
+      emit(const InvoiceOperationSuccessState('Document deleted successfully!'));
       add(const FetchInvoicesEvent());
     } catch (e) {
       emit(InvoiceErrorState(e.toString()));
