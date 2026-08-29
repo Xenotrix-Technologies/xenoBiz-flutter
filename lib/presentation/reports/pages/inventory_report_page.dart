@@ -7,6 +7,7 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/product_entity.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../widgets/report_export_sheet.dart';
 
 // ============================================================================
 // DEDICATED INVENTORY REPORT PAGE (FORMAL STOCK STATEMENT)
@@ -78,59 +79,10 @@ class _InventoryReportPageState extends State<InventoryReportPage> {
       'Product Stock Ledger Report',
     ];
     final currentTitle = presetNames[_activePresetIndex];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surfaceCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Export $currentTitle',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.darkBlueText,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                title: const Text('Export Stock PDF Statement',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle:
-                    Text('${currentTitle.replaceAll(' ', '_')}_Statement.pdf'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          'Exported ${currentTitle.replaceAll(' ', '_')}_Statement.pdf'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    showReportPdfExportModal(
+      context,
+      reportTitle: currentTitle,
+      period: 'Current Real-Time Inventory',
     );
   }
 

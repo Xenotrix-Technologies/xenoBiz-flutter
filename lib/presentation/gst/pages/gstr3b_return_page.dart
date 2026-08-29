@@ -7,8 +7,10 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../widgets/app_card.dart';
 
+import '../../reports/widgets/report_export_sheet.dart';
+
 // ============================================================================
-// DEDICATED GSTR-3B RETURN COMPLIANCE PAGE
+// DEDICATED GSTR-3B RETURN PAGE
 // ============================================================================
 
 class Gstr3bReturnPage extends StatefulWidget {
@@ -49,13 +51,24 @@ class _Gstr3bReturnPageState extends State<Gstr3bReturnPage> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Download / Export PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Exported GSTR-3B Filing Summary!'),
-                  backgroundColor: AppColors.success,
-                ),
+              showReportPdfExportModal(
+                context,
+                reportTitle: 'GSTR-3B Return Summary',
+                period: 'Monthly Filing Period',
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Share Return PDF',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () {
+              showReportPdfExportModal(
+                context,
+                reportTitle: 'GSTR-3B Return Summary',
+                period: 'Monthly Filing Period',
               );
             },
           ),

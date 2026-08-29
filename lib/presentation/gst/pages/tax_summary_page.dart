@@ -7,6 +7,8 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../widgets/app_card.dart';
 
+import '../../reports/widgets/report_export_sheet.dart';
+
 // ============================================================================
 // DEDICATED TAX SUMMARY REPORT PAGE
 // ============================================================================
@@ -45,6 +47,30 @@ class _TaxSummaryPageState extends State<TaxSummaryPage> {
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Download / Export PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () {
+              showReportPdfExportModal(
+                context,
+                reportTitle: 'Tax Summary Report',
+                period: 'Current Financial Period',
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Share Report',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () {
+              showReportPdfExportModal(
+                context,
+                reportTitle: 'Tax Summary Report',
+                period: 'Current Financial Period',
+              );
+            },
+          ),
+        ],
       ),
       body: BlocBuilder<InvoiceBloc, InvoiceState>(
         builder: (context, invoiceState) {

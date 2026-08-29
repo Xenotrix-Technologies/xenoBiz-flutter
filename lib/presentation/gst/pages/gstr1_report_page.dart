@@ -7,6 +7,7 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../../reports/widgets/report_export_sheet.dart';
 
 // ============================================================================
 // DEDICATED GSTR-1 COMPLIANCE REPORT PAGE
@@ -144,7 +145,18 @@ class _Gstr1ReportPageState extends State<Gstr1ReportPage> {
         elevation: 0,
         actions: [
           IconButton(
-            tooltip: 'Export GSTR-1 File',
+            tooltip: 'Download PDF Report',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () {
+              showReportPdfExportModal(
+                context,
+                reportTitle: 'GSTR-1 Outward Supply Statement',
+                period: _activeTaxPeriod,
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Export GSTR-1 JSON File',
             icon: const Icon(Icons.download_rounded),
             onPressed: () => _exportGstr1Json(context),
           ),

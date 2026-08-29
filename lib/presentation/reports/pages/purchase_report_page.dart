@@ -14,6 +14,7 @@ import '../../../domain/entities/purchase_entity.dart';
 import '../../../domain/repositories/returns_repository.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../widgets/report_export_sheet.dart';
 
 // ============================================================================
 // DEDICATED PURCHASE REPORT PAGE (FORMAL ACCOUNTING STATEMENT)
@@ -224,83 +225,11 @@ class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
       'Outstanding Payables Report',
     ];
     final currentTitle = presetNames[_activePresetIndex];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surfaceCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Export $currentTitle',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.darkBlueText,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.pageBackground,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Report Title: $currentTitle',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                            color: AppColors.darkBlueText)),
-                    const SizedBox(height: 2),
-                    Text('Period: $activePeriod',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.secondaryText)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                title: const Text('Export A4 PDF Statement',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle:
-                    Text('${currentTitle.replaceAll(' ', '_')}_Statement.pdf'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          'Exported ${currentTitle.replaceAll(' ', '_')}_Statement.pdf'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    showReportPdfExportModal(
+      context,
+      reportTitle: currentTitle,
+      period: activePeriod,
+      filterSummary: _paymentStatusFilter != 'All' ? 'Payment Status: $_paymentStatusFilter' : null,
     );
   }
 

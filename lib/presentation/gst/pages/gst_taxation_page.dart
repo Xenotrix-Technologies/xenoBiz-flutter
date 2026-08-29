@@ -9,6 +9,7 @@ import '../../../const/colors.dart';
 import '../../../domain/entities/invoice_entity.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import '../../reports/widgets/report_export_sheet.dart';
 
 // ============================================================================
 // DEDICATED GST TAXATION & OUTWARD SUPPLIES REPORT PAGE
@@ -159,81 +160,10 @@ class _GstTaxationPageState extends ConsumerState<GstTaxationPage> {
   void _exportReportPdf(BuildContext context, String activePeriod) {
     final title =
         _activePresetIndex == 0 ? 'GST Summary Report' : 'Outward Supplies Report';
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surfaceCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Export $title',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.darkBlueText,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.pageBackground,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Report Mode: $title',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                            color: AppColors.darkBlueText)),
-                    Text('Period: $activePeriod',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.secondaryText)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                title: const Text('Export A4 PDF Statement',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('${title.replaceAll(' ', '_')}_Statement.pdf'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content:
-                          Text('Exported ${title.replaceAll(' ', '_')}_Statement.pdf'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    showReportPdfExportModal(
+      context,
+      reportTitle: title,
+      period: activePeriod,
     );
   }
 
