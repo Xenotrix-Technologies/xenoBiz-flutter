@@ -375,6 +375,13 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           color: Color(0xFF0066CC),
         ),
         _MenuItem(
+          icon: Icons.settings_backup_restore_outlined,
+          title: 'Backup & Restore',
+          description: 'Backup & restore business data',
+          route: RouteNames.backupRestore,
+          color: Color(0xFF0066CC),
+        ),
+        _MenuItem(
           icon: Icons.people_outline,
           title: 'Staff & Users',
           description: 'Manage staff access and permissions',
