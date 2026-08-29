@@ -24,6 +24,13 @@ class _VoucherPrefixSettingsPageState
   final TextEditingController _purchaseReturnPrefixCtrl = TextEditingController();
   final TextEditingController _paymentPrefixCtrl = TextEditingController();
   final TextEditingController _receiptPrefixCtrl = TextEditingController();
+  final TextEditingController _quotationPrefixCtrl = TextEditingController();
+  final TextEditingController _deliveryChallanPrefixCtrl = TextEditingController();
+  final TextEditingController _creditNotePrefixCtrl = TextEditingController();
+  final TextEditingController _debitNotePrefixCtrl = TextEditingController();
+  final TextEditingController _expensePrefixCtrl = TextEditingController();
+  final TextEditingController _proformaPrefixCtrl = TextEditingController();
+  final TextEditingController _ewayBillPrefixCtrl = TextEditingController();
 
   int _saleSeq = 1;
   int _salesReturnSeq = 1;
@@ -31,6 +38,13 @@ class _VoucherPrefixSettingsPageState
   int _purchaseReturnSeq = 1;
   int _paymentSeq = 1;
   int _receiptSeq = 1;
+  int _quotationSeq = 1;
+  int _deliveryChallanSeq = 1;
+  int _creditNoteSeq = 1;
+  int _debitNoteSeq = 1;
+  int _expenseSeq = 1;
+  int _proformaSeq = 1;
+  int _ewayBillSeq = 1;
 
   @override
   void initState() {
@@ -47,6 +61,13 @@ class _VoucherPrefixSettingsPageState
     _purchaseReturnPrefixCtrl.dispose();
     _paymentPrefixCtrl.dispose();
     _receiptPrefixCtrl.dispose();
+    _quotationPrefixCtrl.dispose();
+    _deliveryChallanPrefixCtrl.dispose();
+    _creditNotePrefixCtrl.dispose();
+    _debitNotePrefixCtrl.dispose();
+    _expensePrefixCtrl.dispose();
+    _proformaPrefixCtrl.dispose();
+    _ewayBillPrefixCtrl.dispose();
     super.dispose();
   }
 
@@ -64,6 +85,20 @@ class _VoucherPrefixSettingsPageState
         await _sequenceService.getPrefix(VoucherType.payment);
     _receiptPrefixCtrl.text =
         await _sequenceService.getPrefix(VoucherType.receipt);
+    _quotationPrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.quotation);
+    _deliveryChallanPrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.deliveryChallan);
+    _creditNotePrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.creditNote);
+    _debitNotePrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.debitNote);
+    _expensePrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.expense);
+    _proformaPrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.proforma);
+    _ewayBillPrefixCtrl.text =
+        await _sequenceService.getPrefix(VoucherType.eWayBill);
 
     _saleSeq = await _sequenceService.getCurrentSequence(VoucherType.sale);
     _salesReturnSeq =
@@ -76,6 +111,20 @@ class _VoucherPrefixSettingsPageState
         await _sequenceService.getCurrentSequence(VoucherType.payment);
     _receiptSeq =
         await _sequenceService.getCurrentSequence(VoucherType.receipt);
+    _quotationSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.quotation);
+    _deliveryChallanSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.deliveryChallan);
+    _creditNoteSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.creditNote);
+    _debitNoteSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.debitNote);
+    _expenseSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.expense);
+    _proformaSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.proforma);
+    _ewayBillSeq =
+        await _sequenceService.getCurrentSequence(VoucherType.eWayBill);
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -96,11 +145,25 @@ class _VoucherPrefixSettingsPageState
           VoucherType.payment, _paymentPrefixCtrl.text);
       await _sequenceService.setPrefix(
           VoucherType.receipt, _receiptPrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.quotation, _quotationPrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.deliveryChallan, _deliveryChallanPrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.creditNote, _creditNotePrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.debitNote, _debitNotePrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.expense, _expensePrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.proforma, _proformaPrefixCtrl.text);
+      await _sequenceService.setPrefix(
+          VoucherType.eWayBill, _ewayBillPrefixCtrl.text);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Voucher prefix settings saved successfully!'),
+            content: Text('All voucher prefix settings saved successfully!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -198,17 +261,21 @@ class _VoucherPrefixSettingsPageState
                       vertical: 12,
                     ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.outline),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
                         color: AppColors.outline.withValues(alpha: 0.3),
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.primary),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: AppColors.primary,
+                        width: 1.8,
+                      ),
                     ),
                   ),
                 ),
@@ -217,13 +284,16 @@ class _VoucherPrefixSettingsPageState
               Expanded(
                 flex: 5,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.primary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,17 +303,21 @@ class _VoucherPrefixSettingsPageState
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText,
+                          color: AppColors.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _formatPreview(controller.text, currentSeq),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primaryBlue,
-                          letterSpacing: 0.5,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _formatPreview(controller.text, currentSeq),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -260,9 +334,14 @@ class _VoucherPrefixSettingsPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Voucher Prefix Settings'),
+        title: const Text(
+          'Voucher Prefix Settings',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white),
+        ),
+        backgroundColor: AppColors.deepNavy,
+        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: _isLoading
@@ -272,92 +351,171 @@ class _VoucherPrefixSettingsPageState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Informational Header Banner
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                      color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                      ),
                     ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.numbers_rounded,
-                            color: AppColors.primaryBlue, size: 24),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.numbers, color: AppColors.primary, size: 22),
                         SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Customize prefixes for each voucher type. Generated IDs auto-increment sequentially (e.g., INV-#00-0001).',
+                            'Customize prefixes for each transaction type. Generated IDs auto-increment sequentially (e.g., INV-#00-0001).',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppColors.onSurface,
-                              height: 1.3,
+                              height: 1.35,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
+
+                  const Text(
+                    'SALES TRANSACTIONS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.secondaryText,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
 
                   _buildPrefixCard(
-                    title: 'Sale Voucher',
-                    icon: Icons.point_of_sale_rounded,
-                    iconColor: AppColors.primaryBlue,
+                    title: 'Sale Voucher (Tax Invoice)',
+                    icon: Icons.receipt_long,
+                    iconColor: AppColors.primary,
                     controller: _salePrefixCtrl,
                     currentSeq: _saleSeq,
                   ),
-
                   _buildPrefixCard(
                     title: 'Sales Return Voucher',
-                    icon: Icons.assignment_return_rounded,
-                    iconColor: AppColors.danger,
+                    icon: Icons.assignment_return,
+                    iconColor: Colors.red.shade600,
                     controller: _salesReturnPrefixCtrl,
                     currentSeq: _salesReturnSeq,
                   ),
+                  _buildPrefixCard(
+                    title: 'Credit Note Voucher',
+                    icon: Icons.note_add,
+                    iconColor: Colors.indigo,
+                    controller: _creditNotePrefixCtrl,
+                    currentSeq: _creditNoteSeq,
+                  ),
+                  _buildPrefixCard(
+                    title: 'Quotation / Estimate',
+                    icon: Icons.request_quote,
+                    iconColor: Colors.cyan.shade700,
+                    controller: _quotationPrefixCtrl,
+                    currentSeq: _quotationSeq,
+                  ),
+                  _buildPrefixCard(
+                    title: 'Proforma Invoice',
+                    icon: Icons.description,
+                    iconColor: Colors.blue.shade700,
+                    controller: _proformaPrefixCtrl,
+                    currentSeq: _proformaSeq,
+                  ),
+                  _buildPrefixCard(
+                    title: 'Delivery Challan',
+                    icon: Icons.local_shipping,
+                    iconColor: Colors.brown,
+                    controller: _deliveryChallanPrefixCtrl,
+                    currentSeq: _deliveryChallanSeq,
+                  ),
+
+                  const SizedBox(height: 14),
+                  const Text(
+                    'PURCHASE TRANSACTIONS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.secondaryText,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
 
                   _buildPrefixCard(
                     title: 'Purchase Voucher',
-                    icon: Icons.shopping_bag_rounded,
-                    iconColor: AppColors.success,
+                    icon: Icons.shopping_bag,
+                    iconColor: Colors.teal,
                     controller: _purchasePrefixCtrl,
                     currentSeq: _purchaseSeq,
                   ),
-
                   _buildPrefixCard(
                     title: 'Purchase Return Voucher',
-                    icon: Icons.keyboard_return_rounded,
-                    iconColor: Colors.orange,
+                    icon: Icons.replay,
+                    iconColor: Colors.orange.shade700,
                     controller: _purchaseReturnPrefixCtrl,
                     currentSeq: _purchaseReturnSeq,
                   ),
+                  _buildPrefixCard(
+                    title: 'Debit Note Voucher',
+                    icon: Icons.post_add,
+                    iconColor: Colors.amber.shade800,
+                    controller: _debitNotePrefixCtrl,
+                    currentSeq: _debitNoteSeq,
+                  ),
+
+                  const SizedBox(height: 14),
+                  const Text(
+                    'PAYMENTS & COMPLIANCE',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.secondaryText,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
 
                   _buildPrefixCard(
                     title: 'Payment Voucher',
-                    icon: Icons.arrow_circle_up_rounded,
+                    icon: Icons.payment,
                     iconColor: Colors.purple,
                     controller: _paymentPrefixCtrl,
                     currentSeq: _paymentSeq,
                   ),
-
                   _buildPrefixCard(
                     title: 'Receipt Voucher',
-                    icon: Icons.arrow_circle_down_rounded,
-                    iconColor: Colors.teal,
+                    icon: Icons.account_balance_wallet,
+                    iconColor: AppColors.success,
                     controller: _receiptPrefixCtrl,
                     currentSeq: _receiptSeq,
+                  ),
+                  _buildPrefixCard(
+                    title: 'Expense Voucher',
+                    icon: Icons.receipt,
+                    iconColor: Colors.deepOrange,
+                    controller: _expensePrefixCtrl,
+                    currentSeq: _expenseSeq,
+                  ),
+                  _buildPrefixCard(
+                    title: 'E-Way Bill Voucher',
+                    icon: Icons.drive_eta,
+                    iconColor: Colors.green.shade700,
+                    controller: _ewayBillPrefixCtrl,
+                    currentSeq: _ewayBillSeq,
                   ),
 
                   const SizedBox(height: 24),
                   AppButton(
                     text: 'Save Prefix Settings',
-                    icon: Icons.save_rounded,
-                    isLoading: _isSaving,
                     onPressed: _saveSettings,
+                    isLoading: _isSaving,
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 30),
                 ],
               ),
             ),

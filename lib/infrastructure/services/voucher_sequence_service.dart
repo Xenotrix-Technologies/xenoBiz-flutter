@@ -10,6 +10,11 @@ enum VoucherType {
   receipt,
   quotation,
   deliveryChallan,
+  creditNote,
+  debitNote,
+  expense,
+  proforma,
+  eWayBill,
 }
 
 class VoucherSequenceService {
@@ -45,6 +50,16 @@ class VoucherSequenceService {
         return 'prefix_quotation';
       case VoucherType.deliveryChallan:
         return 'prefix_delivery_challan';
+      case VoucherType.creditNote:
+        return 'prefix_credit_note';
+      case VoucherType.debitNote:
+        return 'prefix_debit_note';
+      case VoucherType.expense:
+        return 'prefix_expense';
+      case VoucherType.proforma:
+        return 'prefix_proforma';
+      case VoucherType.eWayBill:
+        return 'prefix_eway_bill';
     }
   }
 
@@ -66,6 +81,16 @@ class VoucherSequenceService {
         return 'seq_quotation';
       case VoucherType.deliveryChallan:
         return 'seq_delivery_challan';
+      case VoucherType.creditNote:
+        return 'seq_credit_note';
+      case VoucherType.debitNote:
+        return 'seq_debit_note';
+      case VoucherType.expense:
+        return 'seq_expense';
+      case VoucherType.proforma:
+        return 'seq_proforma';
+      case VoucherType.eWayBill:
+        return 'seq_eway_bill';
     }
   }
 
@@ -87,6 +112,16 @@ class VoucherSequenceService {
         return 'QT';
       case VoucherType.deliveryChallan:
         return 'DC';
+      case VoucherType.creditNote:
+        return 'CN';
+      case VoucherType.debitNote:
+        return 'DN';
+      case VoucherType.expense:
+        return 'EXP';
+      case VoucherType.proforma:
+        return 'PRO';
+      case VoucherType.eWayBill:
+        return 'EWB';
     }
   }
 
@@ -133,14 +168,17 @@ class VoucherSequenceService {
           count = list.length;
           break;
         case VoucherType.salesReturn:
+        case VoucherType.creditNote:
           final list = await (db.select(db.invoiceReturns)..where((t) => t.type.equals('sale'))).get();
           count = list.length;
           break;
         case VoucherType.purchaseReturn:
+        case VoucherType.debitNote:
           final list = await (db.select(db.invoiceReturns)..where((t) => t.type.equals('purchase'))).get();
           count = list.length;
           break;
         case VoucherType.payment:
+        case VoucherType.expense:
           final list = await db.select(db.expenses).get();
           count = list.length;
           break;
@@ -149,8 +187,10 @@ class VoucherSequenceService {
           count = list.length;
           break;
         case VoucherType.deliveryChallan:
+        case VoucherType.proforma:
+        case VoucherType.eWayBill:
           final rows = await db.select(db.appKeyValueStore).get();
-          count = rows.where((r) => r.key.startsWith('tbl_dc_')).length;
+          count = rows.where((r) => r.key.startsWith('tbl_')).length;
           break;
       }
     } catch (_) {}
