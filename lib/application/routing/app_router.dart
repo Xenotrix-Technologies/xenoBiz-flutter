@@ -85,6 +85,7 @@ import '../../presentation/gst/pages/gst_taxation_page.dart';
 import '../../presentation/gst/pages/gstr1_report_page.dart';
 import '../../presentation/gst/pages/gstr3b_return_page.dart';
 import '../../presentation/gst/pages/tax_summary_page.dart';
+import '../../presentation/gst/pages/hsn_sac_summary_page.dart';
 import '../../presentation/reports/pages/sales_report_page.dart';
 import '../../presentation/reports/pages/purchase_report_page.dart';
 import '../../presentation/reports/pages/inventory_report_page.dart';
@@ -292,6 +293,10 @@ class AppRouter {
               GoRoute(
                 path: RouteNames.taxSummary,
                 builder: (context, state) => const TaxSummaryPage(),
+              ),
+              GoRoute(
+                path: RouteNames.hsnSacSummary,
+                builder: (context, state) => const HsnSacSummaryPage(),
               ),
               GoRoute(
                 path: RouteNames.financialAnalytics,
@@ -1011,6 +1016,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.taxSummary,
         builder: (context, state) => const TaxSummaryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.hsnSacSummary,
+        builder: (context, state) => const HsnSacSummaryPage(),
       ),
       GoRoute(
         path: RouteNames.financialAnalytics,
