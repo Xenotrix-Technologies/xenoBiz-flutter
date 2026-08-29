@@ -32,6 +32,13 @@ import '../../presentation/invoices/pages/return_voucher_screen.dart';
 import '../../presentation/invoices/pages/returns_list_page.dart';
 import '../../presentation/invoices/pages/transaction_screen.dart';
 
+import '../../presentation/invoices/pages/quotations_page.dart';
+import '../../presentation/invoices/pages/delivery_challans_page.dart';
+import '../../presentation/invoices/pages/delivery_challan_details_page.dart';
+import '../../presentation/invoices/pages/create_delivery_challan_page.dart';
+import '../../presentation/invoices/pages/credit_debit_notes_page.dart';
+import '../../domain/entities/delivery_challan_entity.dart';
+import '../../domain/entities/accounting_entities.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
@@ -75,7 +82,17 @@ import '../../presentation/accounting/pages/cash_bank_page.dart';
 import '../../presentation/accounting/pages/receivables_payables_pages.dart';
 import '../../presentation/accounting/pages/trial_balance_page.dart';
 import '../../presentation/gst/pages/gst_taxation_page.dart';
+import '../../presentation/gst/pages/gstr1_report_page.dart';
+import '../../presentation/gst/pages/gstr3b_return_page.dart';
+import '../../presentation/gst/pages/tax_summary_page.dart';
+import '../../presentation/gst/pages/hsn_sac_summary_page.dart';
+import '../../presentation/reports/pages/sales_report_page.dart';
+import '../../presentation/reports/pages/purchase_report_page.dart';
+import '../../presentation/reports/pages/inventory_report_page.dart';
+import '../../presentation/reports/pages/account_report_page.dart';
 import '../../presentation/tools/pages/business_tools_subpages.dart';
+import '../../presentation/tools/pages/import_data_page.dart';
+import '../../presentation/settings/pages/staff_users_page.dart';
 import 'route_names.dart';
 
 Widget _buildCreateMasterPage(GoRouterState state) {
@@ -252,6 +269,38 @@ class AppRouter {
                 builder: (context, state) => const SalesAnalyticsPage(),
               ),
               GoRoute(
+                path: RouteNames.salesReport,
+                builder: (context, state) => SalesReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.purchaseReport,
+                builder: (context, state) => PurchaseReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.inventoryReport,
+                builder: (context, state) => InventoryReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.accountReport,
+                builder: (context, state) => AccountReportPage(initialPreset: state.extra),
+              ),
+              GoRoute(
+                path: RouteNames.gstr1Report,
+                builder: (context, state) => const Gstr1ReportPage(),
+              ),
+              GoRoute(
+                path: RouteNames.gstr3bReturn,
+                builder: (context, state) => const Gstr3bReturnPage(),
+              ),
+              GoRoute(
+                path: RouteNames.taxSummary,
+                builder: (context, state) => const TaxSummaryPage(),
+              ),
+              GoRoute(
+                path: RouteNames.hsnSacSummary,
+                builder: (context, state) => const HsnSacSummaryPage(),
+              ),
+              GoRoute(
                 path: RouteNames.financialAnalytics,
                 builder: (context, state) => const FinancialAnalyticsPage(),
               ),
@@ -261,11 +310,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.quotations,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Quotations',
-                  icon: Icons.request_quote,
-                  description: 'Create & send price estimations and sales quotes.',
-                ),
+                builder: (context, state) => const QuotationsPage(),
               ),
               GoRoute(
                 path: RouteNames.proformaInvoices,
@@ -277,11 +322,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.deliveryChallans,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Delivery Challans',
-                  icon: Icons.local_shipping_outlined,
-                  description: 'Dispatch challans & delivery tracking documents.',
-                ),
+                builder: (context, state) => const DeliveryChallansPage(),
               ),
               GoRoute(
                 path: RouteNames.services,
@@ -289,19 +330,11 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.creditNotes,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Credit Notes',
-                  icon: Icons.note_alt,
-                  description: 'Sales return credit vouchers & customer balance adjustments.',
-                ),
+                builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.sale),
               ),
               GoRoute(
                 path: RouteNames.debitNotes,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Debit Notes',
-                  icon: Icons.note_add,
-                  description: 'Purchase return debit vouchers & vendor price adjustments.',
-                ),
+                builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.purchase),
               ),
               GoRoute(
                 path: RouteNames.journal,
@@ -309,7 +342,10 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.newJournalEntry,
-                builder: (context, state) => const NewJournalEntryPage(),
+                builder: (context, state) {
+                  final edit = state.extra is JournalEntryEntity ? state.extra as JournalEntryEntity : null;
+                  return NewJournalEntryPage(entryToEdit: edit);
+                },
               ),
               GoRoute(
                 path: RouteNames.contra,
@@ -317,7 +353,10 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.newContraEntry,
-                builder: (context, state) => const NewContraEntryPage(),
+                builder: (context, state) {
+                  final edit = state.extra is ContraEntryEntity ? state.extra as ContraEntryEntity : null;
+                  return NewContraEntryPage(entryToEdit: edit);
+                },
               ),
               GoRoute(
                 path: RouteNames.dailyBook,
@@ -403,11 +442,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.importData,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Import Data',
-                  icon: Icons.file_upload,
-                  description: 'Bulk import products, customers & invoices from Excel/CSV.',
-                ),
+                builder: (context, state) => const ImportDataPage(),
               ),
               GoRoute(
                 path: RouteNames.exportData,
@@ -419,11 +454,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.staffUsers,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Staff & Users',
-                  icon: Icons.people_outline,
-                  description: 'Manage staff access, cashier permissions & user roles.',
-                ),
+                builder: (context, state) => const StaffUsersPage(),
               ),
               GoRoute(
                 path: RouteNames.voucherPrefixSettings,
@@ -564,6 +595,9 @@ class AppRouter {
         builder: (context, state) {
           InvoiceType invoiceType = InvoiceType.sale;
           InvoiceEntity? invoiceToEdit;
+          bool isQuotation = false;
+          InvoiceEntity? fromQuotation;
+
           if (state.extra is Map<String, dynamic>) {
             final map = state.extra as Map<String, dynamic>;
             if (map['invoiceType'] is InvoiceType) {
@@ -572,9 +606,18 @@ class AppRouter {
             if (map['invoiceToEdit'] is InvoiceEntity) {
               invoiceToEdit = map['invoiceToEdit'] as InvoiceEntity;
             }
+            if (map['isQuotation'] == true || invoiceType == InvoiceType.quotation) {
+              isQuotation = true;
+            }
+            if (map['fromQuotation'] is InvoiceEntity) {
+              fromQuotation = map['fromQuotation'] as InvoiceEntity;
+            }
           } else if (state.extra is InvoiceEntity) {
             invoiceToEdit = state.extra as InvoiceEntity;
             invoiceType = invoiceToEdit.type;
+            if (invoiceType == InvoiceType.quotation) {
+              isQuotation = true;
+            }
           }
           return ProviderScope(
             overrides: [
@@ -583,6 +626,8 @@ class AppRouter {
             child: CreateInvoicePage(
               invoiceType: invoiceType,
               invoiceToEdit: invoiceToEdit,
+              isQuotation: isQuotation,
+              fromQuotation: fromQuotation,
             ),
           );
         },
@@ -737,7 +782,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.newJournalEntry,
-        builder: (context, state) => const NewJournalEntryPage(),
+        builder: (context, state) {
+          final edit = state.extra is JournalEntryEntity ? state.extra as JournalEntryEntity : null;
+          return NewJournalEntryPage(entryToEdit: edit);
+        },
       ),
       GoRoute(
         path: RouteNames.contra,
@@ -745,7 +793,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.newContraEntry,
-        builder: (context, state) => const NewContraEntryPage(),
+        builder: (context, state) {
+          final edit = state.extra is ContraEntryEntity ? state.extra as ContraEntryEntity : null;
+          return NewContraEntryPage(entryToEdit: edit);
+        },
       ),
       GoRoute(
         path: RouteNames.dailyBook,
@@ -804,11 +855,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.quotations,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Quotations',
-          icon: Icons.request_quote,
-          description: 'Create & send price estimations and sales quotes.',
-        ),
+        builder: (context, state) => const QuotationsPage(),
       ),
       GoRoute(
         path: RouteNames.proformaInvoices,
@@ -820,27 +867,29 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.deliveryChallans,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Delivery Challans',
-          icon: Icons.local_shipping_outlined,
-          description: 'Dispatch challans & delivery tracking documents.',
-        ),
+        builder: (context, state) => const DeliveryChallansPage(),
+      ),
+      GoRoute(
+        path: RouteNames.deliveryChallanDetails,
+        builder: (context, state) {
+          final challan = state.extra as DeliveryChallanEntity;
+          return DeliveryChallanDetailsPage(challan: challan);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.createDeliveryChallan,
+        builder: (context, state) {
+          final edit = state.extra as DeliveryChallanEntity?;
+          return CreateDeliveryChallanPage(challanToEdit: edit);
+        },
       ),
       GoRoute(
         path: RouteNames.creditNotes,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Credit Notes',
-          icon: Icons.note_alt,
-          description: 'Sales return credit vouchers & customer balance adjustments.',
-        ),
+        builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.sale),
       ),
       GoRoute(
         path: RouteNames.debitNotes,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Debit Notes',
-          icon: Icons.note_add,
-          description: 'Purchase return debit vouchers & vendor price adjustments.',
-        ),
+        builder: (context, state) => const CreditDebitNotesPage(initialType: InvoiceType.purchase),
       ),
       GoRoute(
         path: RouteNames.stockTransfer,
@@ -884,11 +933,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.importData,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Import Data',
-          icon: Icons.file_upload,
-          description: 'Bulk import products, customers & invoices from Excel/CSV.',
-        ),
+        builder: (context, state) => const ImportDataPage(),
       ),
       GoRoute(
         path: RouteNames.exportData,
@@ -908,11 +953,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.staffUsers,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Staff & Users',
-          icon: Icons.people_outline,
-          description: 'Manage staff access, cashier permissions & user roles.',
-        ),
+        builder: (context, state) => const StaffUsersPage(),
       ),
       GoRoute(
         path: RouteNames.printerSettings,
@@ -933,6 +974,38 @@ class AppRouter {
       GoRoute(
         path: RouteNames.salesAnalytics,
         builder: (context, state) => const SalesAnalyticsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.salesReport,
+        builder: (context, state) => SalesReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.purchaseReport,
+        builder: (context, state) => PurchaseReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.inventoryReport,
+        builder: (context, state) => InventoryReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.accountReport,
+        builder: (context, state) => AccountReportPage(initialPreset: state.extra),
+      ),
+      GoRoute(
+        path: RouteNames.gstr1Report,
+        builder: (context, state) => const Gstr1ReportPage(),
+      ),
+      GoRoute(
+        path: RouteNames.gstr3bReturn,
+        builder: (context, state) => const Gstr3bReturnPage(),
+      ),
+      GoRoute(
+        path: RouteNames.taxSummary,
+        builder: (context, state) => const TaxSummaryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.hsnSacSummary,
+        builder: (context, state) => const HsnSacSummaryPage(),
       ),
       GoRoute(
         path: RouteNames.financialAnalytics,

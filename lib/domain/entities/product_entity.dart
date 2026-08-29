@@ -37,7 +37,10 @@ class ProductEntity extends Equatable {
     this.updatedAt,
   });
 
-  bool get isService => unit.trim().toLowerCase() == 'service';
+  bool get isService =>
+      unit.trim().toLowerCase() == 'service' ||
+      category.trim().toLowerCase() == 'services' ||
+      category.trim().toLowerCase() == 'service';
   bool get isProduct => !isService;
 
   bool get isOutOfStock => isProduct && stockQuantity <= 0;

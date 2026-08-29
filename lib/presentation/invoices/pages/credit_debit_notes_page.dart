@@ -6,32 +6,41 @@ import '../../../application/di/injection.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
 import '../../../const/sizes.dart';
-import '../../../domain/entities/accounting_entities.dart';
-import '../../../infrastructure/repositories/accounting_repository.dart';
+import '../../../domain/entities/invoice_entity.dart';
+import '../../../domain/entities/invoice_return_entity.dart';
+import '../../../domain/repositories/returns_repository.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/ui_state_widgets.dart';
+import 'return_voucher_screen.dart';
 
-class JournalPage extends StatefulWidget {
-  const JournalPage({super.key});
+class CreditDebitNotesPage extends StatefulWidget {
+  final InvoiceType? initialType;
+
+  const CreditDebitNotesPage({super.key, this.initialType});
 
   @override
-  State<JournalPage> createState() => _JournalPageState();
+  State<CreditDebitNotesPage> createState() => _CreditDebitNotesPageState();
 }
 
-class _JournalPageState extends State<JournalPage> {
+class _CreditDebitNotesPageState extends State<CreditDebitNotesPage> {
   final TextEditingController _searchCtrl = TextEditingController();
-  late List<JournalEntryEntity> _journals;
   bool _isLoading = true;
+  List<InvoiceReturnEntity> _allReturns = [];
 
   // Filter & Sort State
-  String _selectedFilter = 'all'; // 'all', 'this_month', 'this_year'
-  String _selectedDateRange = 'All'; // 'All', 'Today', 'This Week', 'This Month', 'This Quarter', 'This Year'
-  String _selectedSort = 'created_newest';
+  String _selectedFilter = 'all'; // 'all', 'credit', 'debit'
+  String _selectedSort = 'newest'; // 'newest', 'oldest', 'amount_high', 'amount_low'
+  String _selectedDateRange = 'All'; // 'All', 'Today', 'This Week', 'This Month'
 
   @override
   void initState() {
     super.initState();
-    _loadEntries();
+    if (widget.initialType == InvoiceType.sale) {
+      _selectedFilter = 'credit';
+    } else if (widget.initialType == InvoiceType.purchase) {
+      _selectedFilter = 'debit';
+    }
+    _fetchReturns();
   }
 
   @override
@@ -40,14 +49,19 @@ class _JournalPageState extends State<JournalPage> {
     super.dispose();
   }
 
-  void _loadEntries() {
+  Future<void> _fetchReturns() async {
     setState(() => _isLoading = true);
-    final repo = getIt<AccountingRepository>();
-    final list = repo.getJournalEntries();
-    setState(() {
-      _journals = list;
-      _isLoading = false;
-    });
+    try {
+      final list = await getIt<ReturnsRepository>().getAllReturns();
+      if (mounted) {
+        setState(() {
+          _allReturns = list;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   String _formatCurrency(double amount) {
@@ -56,13 +70,16 @@ class _JournalPageState extends State<JournalPage> {
     return formatter.format(amount);
   }
 
-  void _confirmDelete(BuildContext context, JournalEntryEntity entry) {
+  void _confirmDelete(BuildContext context, InvoiceReturnEntity item) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Journal Entry?'),
+        title: Text(
+          item.isSale ? 'Delete Credit Note?' : 'Delete Debit Note?',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
         content: Text(
-            'Are you sure you want to delete Journal Entry #${entry.referenceNumber}? This action cannot be undone.'),
+            'Are you sure you want to delete ${item.isSale ? 'Credit Note' : 'Debit Note'} #${item.returnNumber}? Stock adjustments made by this note will be safely restored.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -75,17 +92,17 @@ class _JournalPageState extends State<JournalPage> {
             ),
             onPressed: () async {
               Navigator.pop(ctx);
-              await getIt<AccountingRepository>().deleteJournalEntry(entry.id);
+              await getIt<ReturnsRepository>().deleteReturn(item.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                        'Journal Entry #${entry.referenceNumber} deleted.'),
+                        '${item.isSale ? 'Credit Note' : 'Debit Note'} #${item.returnNumber} deleted.'),
                     backgroundColor: AppColors.warning,
                   ),
                 );
               }
-              _loadEntries();
+              _fetchReturns();
             },
             child: const Text('Delete'),
           ),
@@ -95,8 +112,9 @@ class _JournalPageState extends State<JournalPage> {
   }
 
   void _showFilterBottomSheet(BuildContext context) {
-    String tempDateRange = _selectedDateRange;
+    String tempFilter = _selectedFilter;
     String tempSort = _selectedSort;
+    String tempDateRange = _selectedDateRange;
 
     showModalBottomSheet(
       context: context,
@@ -119,7 +137,7 @@ class _JournalPageState extends State<JournalPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Filter & Sort Journal Entries',
+                          'Filter & Sort Notes',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
@@ -134,6 +152,31 @@ class _JournalPageState extends State<JournalPage> {
                     ),
                     const Divider(height: 20),
 
+                    // Note Type Filter
+                    const Text(
+                      'Note Type',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _buildModalChip('all', 'All Notes', tempFilter == 'all',
+                            (val) => setSheetState(() => tempFilter = 'all')),
+                        _buildModalChip('credit', 'Credit Notes',
+                            tempFilter == 'credit',
+                            (val) => setSheetState(() => tempFilter = 'credit')),
+                        _buildModalChip('debit', 'Debit Notes',
+                            tempFilter == 'debit',
+                            (val) => setSheetState(() => tempFilter = 'debit')),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
                     // Date Range
                     const Text(
                       'Date Range',
@@ -147,28 +190,12 @@ class _JournalPageState extends State<JournalPage> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: [
-                        'All',
-                        'Today',
-                        'This Week',
-                        'This Month',
-                        'This Quarter',
-                        'This Year'
-                      ].map((d) {
-                        final isSel = tempDateRange == d;
-                        return ChoiceChip(
-                          label: Text(d),
-                          selected: isSel,
-                          selectedColor: AppColors.primaryBlue,
-                          backgroundColor: AppColors.surfaceContainerLow,
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isSel ? Colors.white : AppColors.darkBlueText,
-                          ),
-                          onSelected: (val) {
-                            if (val) setSheetState(() => tempDateRange = d);
-                          },
+                      children: ['All', 'Today', 'This Week', 'This Month'].map((d) {
+                        return _buildModalChip(
+                          d,
+                          d,
+                          tempDateRange == d,
+                          (val) => setSheetState(() => tempDateRange = d),
                         );
                       }).toList(),
                     ),
@@ -188,24 +215,18 @@ class _JournalPageState extends State<JournalPage> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _buildSortChip(
-                            'created_newest', 'Created Date — Newest', tempSort,
-                            (s) => setSheetState(() => tempSort = s)),
-                        _buildSortChip(
-                            'created_oldest', 'Created Date — Oldest', tempSort,
-                            (s) => setSheetState(() => tempSort = s)),
-                        _buildSortChip(
-                            'journal_newest', 'Journal Date — Newest', tempSort,
-                            (s) => setSheetState(() => tempSort = s)),
-                        _buildSortChip(
-                            'journal_oldest', 'Journal Date — Oldest', tempSort,
-                            (s) => setSheetState(() => tempSort = s)),
-                        _buildSortChip(
-                            'amount_high', 'Amount — Highest', tempSort,
-                            (s) => setSheetState(() => tempSort = s)),
-                        _buildSortChip(
-                            'amount_low', 'Amount — Lowest', tempSort,
-                            (s) => setSheetState(() => tempSort = s)),
+                        _buildModalChip('newest', 'Newest First',
+                            tempSort == 'newest',
+                            (val) => setSheetState(() => tempSort = 'newest')),
+                        _buildModalChip('oldest', 'Oldest First',
+                            tempSort == 'oldest',
+                            (val) => setSheetState(() => tempSort = 'oldest')),
+                        _buildModalChip('amount_high', 'Amount: High to Low',
+                            tempSort == 'amount_high',
+                            (val) => setSheetState(() => tempSort = 'amount_high')),
+                        _buildModalChip('amount_low', 'Amount: Low to High',
+                            tempSort == 'amount_low',
+                            (val) => setSheetState(() => tempSort = 'amount_low')),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -224,8 +245,8 @@ class _JournalPageState extends State<JournalPage> {
                             onPressed: () {
                               setState(() {
                                 _selectedFilter = 'all';
+                                _selectedSort = 'newest';
                                 _selectedDateRange = 'All';
-                                _selectedSort = 'created_newest';
                               });
                               Navigator.pop(sheetCtx);
                             },
@@ -246,8 +267,9 @@ class _JournalPageState extends State<JournalPage> {
                             ),
                             onPressed: () {
                               setState(() {
-                                _selectedDateRange = tempDateRange;
+                                _selectedFilter = tempFilter;
                                 _selectedSort = tempSort;
+                                _selectedDateRange = tempDateRange;
                               });
                               Navigator.pop(sheetCtx);
                             },
@@ -267,9 +289,8 @@ class _JournalPageState extends State<JournalPage> {
     );
   }
 
-  Widget _buildSortChip(String value, String label, String currentSort,
-      ValueChanged<String> onSelect) {
-    final isSelected = currentSort == value;
+  Widget _buildModalChip(
+      String key, String label, bool isSelected, ValueChanged<bool> onSelect) {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
@@ -280,13 +301,11 @@ class _JournalPageState extends State<JournalPage> {
         fontWeight: FontWeight.w700,
         color: isSelected ? Colors.white : AppColors.darkBlueText,
       ),
-      onSelected: (val) {
-        if (val) onSelect(value);
-      },
+      onSelected: onSelect,
     );
   }
 
-  void _showViewModal(BuildContext context, JournalEntryEntity entry) {
+  void _showDetailsModal(BuildContext context, InvoiceReturnEntity item) {
     final dateFormatter = DateFormat('dd MMM yyyy');
 
     showModalBottomSheet(
@@ -307,9 +326,9 @@ class _JournalPageState extends State<JournalPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Journal Entry',
-                      style: TextStyle(
+                    Text(
+                      item.isSale ? 'Credit Note Details' : 'Debit Note Details',
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: AppColors.darkBlueText,
@@ -329,13 +348,20 @@ class _JournalPageState extends State<JournalPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                          color: (item.isSale
+                                  ? AppColors.danger
+                                  : AppColors.warning)
+                              .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
-                          Icons.edit_note_outlined,
+                        child: Icon(
+                          item.isSale
+                              ? Icons.note_alt_outlined
+                              : Icons.note_add_outlined,
                           size: 26,
-                          color: AppColors.primaryBlue,
+                          color: item.isSale
+                              ? AppColors.danger
+                              : AppColors.warning,
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -344,7 +370,7 @@ class _JournalPageState extends State<JournalPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              entry.referenceNumber,
+                              item.returnNumber,
                               style: const TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w900,
@@ -353,41 +379,40 @@ class _JournalPageState extends State<JournalPage> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Date: ${dateFormatter.format(entry.date)}',
+                              'Original Invoice: #${item.invoiceNumber}',
                               style: const TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.secondaryText,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryBlue,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          '✓ Balanced',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.success,
-                          ),
+                      Text(
+                        _formatCurrency(item.totalAmount),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: item.isSale
+                              ? AppColors.danger
+                              : AppColors.success,
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 14),
-                if (entry.narration.isNotEmpty)
-                  _buildDetailRow('Narration', entry.narration),
+                _buildDetailRow('Party Name', item.partyName),
+                _buildDetailRow(
+                    'Note Date', dateFormatter.format(item.returnDate)),
+                _buildDetailRow(
+                    'Note Type', item.isSale ? 'Credit Note' : 'Debit Note'),
+                if (item.notes.isNotEmpty)
+                  _buildDetailRow('Remarks / Notes', item.notes),
                 const SizedBox(height: 14),
                 const Text(
-                  'ACCOUNTING ENTRIES',
+                  'RETURNED ITEMS',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -396,120 +421,42 @@ class _JournalPageState extends State<JournalPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-
-                // Table of Accounting Entries
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: const BoxDecoration(
-                          color: AppColors.pageBackground,
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(11)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Text('Account',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.secondaryText)),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text('Debit',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.secondaryText),
-                                  textAlign: TextAlign.right),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text('Credit',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.secondaryText),
-                                  textAlign: TextAlign.right),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ...entry.items.map((itm) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                  color: AppColors.border, width: 0.5),
-                            ),
-                          ),
-                          child: Row(
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: item.items.length,
+                  separatorBuilder: (_, __) => const Divider(height: 12),
+                  itemBuilder: (c, idx) {
+                    final itm = item.items[idx];
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  itm.accountName,
+                              Text(itm.productName,
                                   style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  itm.debit > 0
-                                      ? _formatCurrency(itm.debit)
-                                      : '—',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.darkBlueText)),
+                              Text(
+                                  '${itm.returnedQuantity} x ${_formatCurrency(itm.unitPrice)}',
                                   style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText,
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  itm.credit > 0
-                                      ? _formatCurrency(itm.credit)
-                                      : '—',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkBlueText,
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
-                              ),
+                                      fontSize: 11,
+                                      color: AppColors.secondaryText)),
                             ],
                           ),
-                        );
-                      }),
-                    ],
-                  ),
+                        ),
+                        Text(_formatCurrency(itm.totalAmount),
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.darkBlueText)),
+                      ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 14),
-
-                // Totals
-                _buildDetailRow('Total Debit', _formatCurrency(entry.totalDebit)),
-                _buildDetailRow('Total Credit', _formatCurrency(entry.totalCredit)),
-                _buildDetailRow('Difference', '₹0.00'),
-
                 const SizedBox(height: 20),
                 Row(
                   children: [
@@ -526,13 +473,18 @@ class _JournalPageState extends State<JournalPage> {
                         onPressed: () async {
                           Navigator.pop(ctx);
                           await context.push(
-                            RouteNames.newJournalEntry,
-                            extra: entry,
+                            RouteNames.createReturn,
+                            extra: {
+                              'returnType': item.isSale
+                                  ? ReturnType.salesReturn
+                                  : ReturnType.purchaseReturn,
+                              'existingReturn': item,
+                            },
                           );
-                          _loadEntries();
+                          _fetchReturns();
                         },
                         icon: const Icon(Icons.edit_outlined, size: 18),
-                        label: const Text('Edit Entry',
+                        label: const Text('Edit Note',
                             style: TextStyle(fontWeight: FontWeight.w800)),
                       ),
                     ),
@@ -549,7 +501,7 @@ class _JournalPageState extends State<JournalPage> {
                         ),
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _confirmDelete(context, entry);
+                          _confirmDelete(context, item);
                         },
                         icon: const Icon(Icons.delete_outline, size: 18),
                         label: const Text('Delete',
@@ -568,7 +520,7 @@ class _JournalPageState extends State<JournalPage> {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
+      padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -596,67 +548,49 @@ class _JournalPageState extends State<JournalPage> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Filter entries
-    List<JournalEntryEntity> filtered = _journals.where((j) {
-      if (_selectedFilter == 'this_month') {
-        final startOfMonth = DateTime(now.year, now.month, 1);
-        if (j.date.isBefore(startOfMonth)) return false;
-      } else if (_selectedFilter == 'this_year') {
-        final startOfYear = DateTime(now.year, 1, 1);
-        if (j.date.isBefore(startOfYear)) return false;
-      }
+    // Filter returns
+    List<InvoiceReturnEntity> filtered = _allReturns.where((r) {
+      if (_selectedFilter == 'credit' && !r.isSale) return false;
+      if (_selectedFilter == 'debit' && r.isSale) return false;
 
       if (_selectedDateRange == 'Today') {
-        final d = DateTime(j.date.year, j.date.month, j.date.day);
+        final d = DateTime(r.returnDate.year, r.returnDate.month, r.returnDate.day);
         if (d != today) return false;
       } else if (_selectedDateRange == 'This Week') {
         final startOfWeek = today.subtract(Duration(days: now.weekday - 1));
-        if (j.date.isBefore(startOfWeek)) return false;
+        if (r.returnDate.isBefore(startOfWeek)) return false;
       } else if (_selectedDateRange == 'This Month') {
         final startOfMonth = DateTime(now.year, now.month, 1);
-        if (j.date.isBefore(startOfMonth)) return false;
-      } else if (_selectedDateRange == 'This Quarter') {
-        final currentQuarter = ((now.month - 1) ~/ 3) + 1;
-        final startOfQuarter = DateTime(now.year, (currentQuarter - 1) * 3 + 1, 1);
-        if (j.date.isBefore(startOfQuarter)) return false;
-      } else if (_selectedDateRange == 'This Year') {
-        final startOfYear = DateTime(now.year, 1, 1);
-        if (j.date.isBefore(startOfYear)) return false;
+        if (r.returnDate.isBefore(startOfMonth)) return false;
       }
 
       if (query.isEmpty) return true;
-      return j.referenceNumber.toLowerCase().contains(query) ||
-          j.narration.toLowerCase().contains(query) ||
-          j.items.any((item) => item.accountName.toLowerCase().contains(query));
+      return r.returnNumber.toLowerCase().contains(query) ||
+          r.invoiceNumber.toLowerCase().contains(query) ||
+          r.partyName.toLowerCase().contains(query);
     }).toList();
 
-    // Sorting entries
+    // Sorting
     switch (_selectedSort) {
-      case 'created_oldest':
-        filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        break;
-      case 'journal_newest':
-        filtered.sort((a, b) => b.date.compareTo(a.date));
-        break;
-      case 'journal_oldest':
-        filtered.sort((a, b) => a.date.compareTo(b.date));
+      case 'oldest':
+        filtered.sort((a, b) => a.returnDate.compareTo(b.returnDate));
         break;
       case 'amount_high':
-        filtered.sort((a, b) => b.totalDebit.compareTo(a.totalDebit));
+        filtered.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
         break;
       case 'amount_low':
-        filtered.sort((a, b) => a.totalDebit.compareTo(b.totalDebit));
+        filtered.sort((a, b) => a.totalAmount.compareTo(b.totalAmount));
         break;
-      case 'created_newest':
+      case 'newest':
       default:
-        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        filtered.sort((a, b) => b.returnDate.compareTo(a.returnDate));
         break;
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Journal'),
+        title: const Text('Credit & Debit Notes'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -684,8 +618,7 @@ class _JournalPageState extends State<JournalPage> {
                           controller: _searchCtrl,
                           onChanged: (_) => setState(() {}),
                           decoration: InputDecoration(
-                            hintText:
-                                'Search voucher number, account or narration...',
+                            hintText: 'Search party, transaction or number...',
                             hintStyle: const TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText,
@@ -718,14 +651,14 @@ class _JournalPageState extends State<JournalPage> {
                         height: 44,
                         decoration: BoxDecoration(
                           color: (_selectedFilter != 'all' ||
-                                  _selectedSort != 'created_newest' ||
+                                  _selectedSort != 'newest' ||
                                   _selectedDateRange != 'All')
                               ? AppColors.primaryBlue.withValues(alpha: 0.12)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: (_selectedFilter != 'all' ||
-                                    _selectedSort != 'created_newest' ||
+                                    _selectedSort != 'newest' ||
                                     _selectedDateRange != 'All')
                                 ? AppColors.primaryBlue
                                 : AppColors.border,
@@ -734,7 +667,7 @@ class _JournalPageState extends State<JournalPage> {
                         child: Icon(
                           Icons.tune_rounded,
                           color: (_selectedFilter != 'all' ||
-                                  _selectedSort != 'created_newest' ||
+                                  _selectedSort != 'newest' ||
                                   _selectedDateRange != 'All')
                               ? AppColors.primaryBlue
                               : AppColors.darkBlueText,
@@ -746,16 +679,16 @@ class _JournalPageState extends State<JournalPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Horizontally Scrollable Custom Chips Bar
+                // Horizontally Scrollable Custom Chips Bar (matching reference image)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
                       _filterChip('all', 'All'),
                       const SizedBox(width: 8),
-                      _filterChip('this_month', 'This Month'),
+                      _filterChip('credit', 'Credit Notes'),
                       const SizedBox(width: 8),
-                      _filterChip('this_year', 'This Year'),
+                      _filterChip('debit', 'Debit Notes'),
                     ],
                   ),
                 ),
@@ -763,17 +696,17 @@ class _JournalPageState extends State<JournalPage> {
             ),
           ),
 
-          // Main Journal List
+          // Main Notes List
           Expanded(
             child: _isLoading
                 ? const ReturnsListSkeleton()
                 : filtered.isEmpty
                     ? EmptyState(
-                        title: 'No Journal Entries',
+                        title: 'No Notes Found',
                         message: query.isNotEmpty || _selectedFilter != 'all'
-                            ? 'No journal entries match your search or filter.'
-                            : 'Journal transactions you create will appear here.',
-                        icon: Icons.edit_note_outlined,
+                            ? 'No credit or debit notes match your search or filter.'
+                            : 'Credit & Debit Notes created for sales and purchase returns will appear here.',
+                        icon: Icons.note_alt_outlined,
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.all(16),
@@ -781,7 +714,7 @@ class _JournalPageState extends State<JournalPage> {
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (ctx, idx) {
                           final item = filtered[idx];
-                          return _buildJournalCard(context, item);
+                          return _buildNoteCard(context, item);
                         },
                       ),
           ),
@@ -790,6 +723,7 @@ class _JournalPageState extends State<JournalPage> {
     );
   }
 
+  // Custom Chip Widget matching the user's reference screenshot (Vibrant Blue, Check Icon when selected)
   Widget _filterChip(String value, String label) {
     final selected = _selectedFilter == value;
     return GestureDetector(
@@ -839,79 +773,67 @@ class _JournalPageState extends State<JournalPage> {
     );
   }
 
-  Widget _buildJournalCard(BuildContext context, JournalEntryEntity entry) {
+  Widget _buildNoteCard(BuildContext context, InvoiceReturnEntity item) {
     final dateFormatter = DateFormat('dd MMM yyyy');
 
-    final debitItem = entry.items.firstWhere((i) => i.debit > 0,
-        orElse: () =>
-            entry.items.isNotEmpty ? entry.items.first : const JournalLineItem(accountName: 'General Account', accountType: 'Expense'));
-    final creditItem = entry.items.firstWhere((i) => i.credit > 0,
-        orElse: () =>
-            entry.items.isNotEmpty ? entry.items.last : const JournalLineItem(accountName: 'General Account', accountType: 'Asset'));
-
     return AppCard(
-      onTap: () => _showViewModal(context, entry),
+      onTap: () => _showDetailsModal(context, item),
       child: Row(
         children: [
-          // Icon Box
+          // Icon Badge
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.12),
+              color: (item.isSale ? AppColors.danger : AppColors.warning)
+                  .withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
             ),
-            child: const Icon(
-              Icons.edit_note_outlined,
-              color: AppColors.primaryBlue,
+            child: Icon(
+              item.isSale ? Icons.note_alt_outlined : Icons.note_add_outlined,
+              color: item.isSale ? AppColors.danger : AppColors.warning,
               size: 22,
             ),
           ),
           const SizedBox(width: 14),
 
-          // Details
+          // Note & Party Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Flexible(
-                      child: Text(
-                        entry.referenceNumber,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.darkBlueText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      item.returnNumber,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkBlueText,
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    _buildNoteTypeChip(item.isSale),
                   ],
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${debitItem.accountName} → ${creditItem.accountName}',
+                  'Invoice: #${item.invoiceNumber}',
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.darkBlueText,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.partyName.isNotEmpty ? item.partyName : 'General Party',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (entry.narration.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    entry.narration,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
               ],
             ),
           ),
@@ -922,11 +844,11 @@ class _JournalPageState extends State<JournalPage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _formatCurrency(entry.totalDebit),
-                style: const TextStyle(
+                _formatCurrency(item.totalAmount),
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
+                  color: item.isSale ? AppColors.danger : AppColors.success,
                 ),
               ),
               const SizedBox(height: 4),
@@ -934,7 +856,7 @@ class _JournalPageState extends State<JournalPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    dateFormatter.format(entry.date),
+                    dateFormatter.format(item.returnDate),
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.secondaryText,
@@ -948,15 +870,20 @@ class _JournalPageState extends State<JournalPage> {
                     constraints: const BoxConstraints(),
                     onSelected: (val) async {
                       if (val == 'view') {
-                        _showViewModal(context, entry);
+                        _showDetailsModal(context, item);
                       } else if (val == 'edit') {
                         await context.push(
-                          RouteNames.newJournalEntry,
-                          extra: entry,
+                          RouteNames.createReturn,
+                          extra: {
+                            'returnType': item.isSale
+                                ? ReturnType.salesReturn
+                                : ReturnType.purchaseReturn,
+                            'existingReturn': item,
+                          },
                         );
-                        _loadEntries();
+                        _fetchReturns();
                       } else if (val == 'delete') {
-                        _confirmDelete(context, entry);
+                        _confirmDelete(context, item);
                       }
                     },
                     itemBuilder: (ctx) => [
@@ -978,7 +905,7 @@ class _JournalPageState extends State<JournalPage> {
                             Icon(Icons.edit_outlined,
                                 size: 18, color: AppColors.primaryBlue),
                             SizedBox(width: 8),
-                            Text('Edit Entry'),
+                            Text('Edit Note'),
                           ],
                         ),
                       ),
@@ -1001,6 +928,25 @@ class _JournalPageState extends State<JournalPage> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNoteTypeChip(bool isSale) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: (isSale ? AppColors.danger : AppColors.warning)
+            .withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        isSale ? 'CREDIT NOTE' : 'DEBIT NOTE',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          color: isSale ? AppColors.danger : Colors.orange.shade800,
+        ),
       ),
     );
   }

@@ -1,7 +1,46 @@
 import 'package:equatable/equatable.dart';
 
-enum InvoiceStatus { draft, unpaid, partiallyPaid, paid, cancelled }
-enum InvoiceType { sale, purchase }
+enum InvoiceStatus {
+  draft,
+  unpaid,
+  partiallyPaid,
+  paid,
+  cancelled,
+  sent,
+  accepted,
+  rejected,
+  expired,
+  converted,
+}
+
+extension InvoiceStatusExt on InvoiceStatus {
+  String get label {
+    switch (this) {
+      case InvoiceStatus.draft:
+        return 'Draft';
+      case InvoiceStatus.sent:
+        return 'Sent';
+      case InvoiceStatus.accepted:
+        return 'Accepted';
+      case InvoiceStatus.rejected:
+        return 'Rejected';
+      case InvoiceStatus.expired:
+        return 'Expired';
+      case InvoiceStatus.converted:
+        return 'Converted';
+      case InvoiceStatus.paid:
+        return 'Paid';
+      case InvoiceStatus.partiallyPaid:
+        return 'Partially Paid';
+      case InvoiceStatus.unpaid:
+        return 'Unpaid';
+      case InvoiceStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+}
+
+enum InvoiceType { sale, purchase, quotation }
 
 class InvoiceItemEntity extends Equatable {
   final String productId;
@@ -97,6 +136,7 @@ class InvoiceEntity extends Equatable {
 
   bool get isPurchase => type == InvoiceType.purchase;
   bool get isSale => type == InvoiceType.sale;
+  bool get isQuotation => type == InvoiceType.quotation;
 
   double get dueAmount => grandTotal - paidAmount;
 

@@ -8,7 +8,9 @@ import '../../../domain/entities/accounting_entities.dart';
 import '../../../infrastructure/repositories/accounting_repository.dart';
 
 class NewContraEntryPage extends StatefulWidget {
-  const NewContraEntryPage({super.key});
+  final ContraEntryEntity? entryToEdit;
+
+  const NewContraEntryPage({super.key, this.entryToEdit});
 
   @override
   State<NewContraEntryPage> createState() => _NewContraEntryPageState();
@@ -43,10 +45,21 @@ class _NewContraEntryPageState extends State<NewContraEntryPage> {
   @override
   void initState() {
     super.initState();
-    final randomSuffix = (100 + (DateTime.now().millisecondsSinceEpoch % 899)).toString();
-    _refNoController = TextEditingController(text: 'CN-2026-$randomSuffix');
-    _amountController = TextEditingController(text: '5000');
-    _narrationController = TextEditingController();
+    final edit = widget.entryToEdit;
+    if (edit != null) {
+      _entryDate = edit.date;
+      _refNoController = TextEditingController(text: edit.referenceNumber);
+      _amountController = TextEditingController(text: edit.amount.toStringAsFixed(2));
+      _narrationController = TextEditingController(text: edit.narration);
+      _fromAccount = edit.fromAccount;
+      _toAccount = edit.toAccount;
+      _paymentMode = edit.paymentMode;
+    } else {
+      final randomSuffix = (100 + (DateTime.now().millisecondsSinceEpoch % 899)).toString();
+      _refNoController = TextEditingController(text: 'CN-2026-$randomSuffix');
+      _amountController = TextEditingController(text: '5000');
+      _narrationController = TextEditingController();
+    }
   }
 
   @override
@@ -73,7 +86,10 @@ class _NewContraEntryPageState extends State<NewContraEntryPage> {
     final amt = double.tryParse(_amountController.text.trim()) ?? 0.0;
     if (amt <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid transfer amount.')),
+        const SnackBar(
+          content: Text('Enter an amount greater than zero.'),
+          backgroundColor: AppColors.danger,
+        ),
       );
       return;
     }
@@ -81,7 +97,7 @@ class _NewContraEntryPageState extends State<NewContraEntryPage> {
     if (_fromAccount == _toAccount) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Source ("From Account") and Destination ("To Account") cannot be the same.'),
+          content: Text('From and To accounts must be different.'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -89,7 +105,7 @@ class _NewContraEntryPageState extends State<NewContraEntryPage> {
     }
 
     final entry = ContraEntryEntity(
-      id: 'cn-${DateTime.now().millisecondsSinceEpoch}',
+      id: widget.entryToEdit?.id ?? 'cn-${DateTime.now().millisecondsSinceEpoch}',
       date: _entryDate,
       referenceNumber: _refNoController.text.trim().isNotEmpty
           ? _refNoController.text.trim()
@@ -100,7 +116,7 @@ class _NewContraEntryPageState extends State<NewContraEntryPage> {
       paymentMode: _paymentMode,
       narration: _narrationController.text.trim(),
       status: isDraft ? JournalEntryStatus.draft : JournalEntryStatus.posted,
-      createdAt: DateTime.now(),
+      createdAt: widget.entryToEdit?.createdAt ?? DateTime.now(),
     );
 
     final repo = getIt<AccountingRepository>();

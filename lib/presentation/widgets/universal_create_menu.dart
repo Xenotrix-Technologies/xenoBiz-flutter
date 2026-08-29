@@ -228,7 +228,7 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                               context.push(
                                 RouteNames.createInvoice,
                                 extra: {
-                                  'invoiceType': InvoiceType.sale,
+                                  'invoiceType': InvoiceType.quotation,
                                   'isQuotation': true,
                                 },
                               );
@@ -310,6 +310,40 @@ class _UniversalCreateOverlayState extends State<UniversalCreateOverlay>
                                   'returnType': ReturnType.purchaseReturn
                                 },
                               );
+                            }),
+                          ),
+                          // 10. Delivery Challan
+                          _ActionCard(
+                            title: 'Delivery Challan',
+                            subtitle: 'Dispatch Document',
+                            icon: Icons.local_shipping_outlined,
+                            iconColor: const Color(0xFF2563EB),
+                            bgColor:
+                                const Color(0xFF2563EB).withValues(alpha: 0.1),
+                            onTap: () => _onActionTap(() {
+                              context.push(RouteNames.createDeliveryChallan);
+                            }),
+                          ),
+                          // 11. Journal
+                          _ActionCard(
+                            title: 'Journal',
+                            subtitle: 'Adjustment Entry',
+                            icon: Icons.edit_note_outlined,
+                            iconColor: Colors.indigo,
+                            bgColor: Colors.indigo.withValues(alpha: 0.1),
+                            onTap: () => _onActionTap(() {
+                              context.push(RouteNames.newJournalEntry);
+                            }),
+                          ),
+                          // 12. Contra
+                          _ActionCard(
+                            title: 'Contra',
+                            subtitle: 'Cash / Bank Transfer',
+                            icon: Icons.swap_horiz_rounded,
+                            iconColor: Colors.teal,
+                            bgColor: Colors.teal.withValues(alpha: 0.1),
+                            onTap: () => _onActionTap(() {
+                              context.push(RouteNames.newContraEntry);
                             }),
                           ),
                         ],

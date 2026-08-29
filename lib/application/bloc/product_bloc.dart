@@ -122,6 +122,14 @@ class ProductsLoadedState extends ProductState {
     return set.toList();
   }
 
+  List<String> get serviceCategories {
+    final set = <String>{'All'};
+    for (final p in allProducts) {
+      if (p.isActive && p.isService && p.category.isNotEmpty) set.add(p.category);
+    }
+    return set.toList();
+  }
+
   int get totalProducts => allProducts.where((p) => p.isActive && p.isProduct).length;
 
   int get totalItems => allProducts

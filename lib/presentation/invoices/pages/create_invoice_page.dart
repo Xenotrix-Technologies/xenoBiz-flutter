@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../application/bloc/invoice_bloc.dart';
 import '../../../application/bloc/tax_settings_bloc.dart';
@@ -31,6 +32,7 @@ import 'return_voucher_screen.dart';
 enum DocumentType {
   sale,
   purchase,
+  quotation,
   payment,
   receipt,
   salesReturn,
@@ -44,6 +46,8 @@ extension DocumentTypeExt on DocumentType {
         return 'Sale';
       case DocumentType.purchase:
         return 'Purchase';
+      case DocumentType.quotation:
+        return 'Quotation';
       case DocumentType.payment:
         return 'Payment';
       case DocumentType.receipt:
@@ -57,7 +61,7 @@ extension DocumentTypeExt on DocumentType {
 
   String getAppBarTitle({bool isEditMode = false}) {
     final prefix = titlePrefix;
-    return isEditMode ? 'Edit $prefix' : 'Add $prefix';
+    return isEditMode ? 'Edit $prefix' : 'Create $prefix';
   }
 
   InvoiceType toInvoiceType() {
@@ -65,6 +69,8 @@ extension DocumentTypeExt on DocumentType {
       case DocumentType.purchase:
       case DocumentType.purchaseReturn:
         return InvoiceType.purchase;
+      case DocumentType.quotation:
+        return InvoiceType.quotation;
       default:
         return InvoiceType.sale;
     }
@@ -74,11 +80,15 @@ extension DocumentTypeExt on DocumentType {
 class CreateInvoicePage extends ConsumerStatefulWidget {
   final InvoiceType invoiceType;
   final InvoiceEntity? invoiceToEdit;
+  final bool isQuotation;
+  final InvoiceEntity? fromQuotation;
 
   const CreateInvoicePage({
     super.key,
     this.invoiceType = InvoiceType.sale,
     this.invoiceToEdit,
+    this.isQuotation = false,
+    this.fromQuotation,
   });
 
   @override
@@ -90,9 +100,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   late DocumentType _docType;
   late String _invoiceId;
   late DateTime _createdDateTime;
+  late DateTime _validUntilDate;
+  late TextEditingController _termsCtrl;
 
   bool get isEditMode => widget.invoiceToEdit != null;
   bool get isPurchase => _docType == DocumentType.purchase;
+  bool get isQuotation =>
+      widget.isQuotation ||
+      _docType == DocumentType.quotation ||
+      (widget.invoiceToEdit != null &&
+          widget.invoiceToEdit!.type == InvoiceType.quotation);
 
   bool get _isCashSale => _selectedCustomer == null;
   CustomerEntity? get _selectedCustomer =>
@@ -169,20 +186,33 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
     _loadProducts();
 
-    _docType = widget.invoiceToEdit != null
-        ? (widget.invoiceToEdit!.type == InvoiceType.purchase
-            ? DocumentType.purchase
-            : DocumentType.sale)
-        : (widget.invoiceType == InvoiceType.purchase
-            ? DocumentType.purchase
-            : DocumentType.sale);
+    _validUntilDate = widget.invoiceToEdit != null
+        ? widget.invoiceToEdit!.dueDate
+        : DateTime.now().add(const Duration(days: 30));
+    _termsCtrl = TextEditingController(
+        text: '1. Quotation valid for 30 days.\n2. Prices subject to change.');
+
+    _docType = widget.isQuotation ||
+            widget.invoiceType == InvoiceType.quotation ||
+            (widget.invoiceToEdit != null &&
+                widget.invoiceToEdit!.type == InvoiceType.quotation)
+        ? DocumentType.quotation
+        : (widget.invoiceToEdit != null
+            ? (widget.invoiceToEdit!.type == InvoiceType.purchase
+                ? DocumentType.purchase
+                : DocumentType.sale)
+            : (widget.invoiceType == InvoiceType.purchase
+                ? DocumentType.purchase
+                : DocumentType.sale));
 
     if (widget.invoiceToEdit != null) {
       _invoiceId = widget.invoiceToEdit!.invoiceNumber;
     } else {
-      _invoiceId = widget.invoiceType == InvoiceType.purchase
-          ? 'PUR-#00-0001'
-          : 'INV-#00-0001';
+      _invoiceId = isQuotation
+          ? 'QT-#00-0001'
+          : (widget.invoiceType == InvoiceType.purchase
+              ? 'PUR-#00-0001'
+              : 'INV-#00-0001');
       _loadVoucherIdFromService();
     }
 
@@ -203,9 +233,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     TransactionStackManager.instance.registerSession(
       TransactionSession(
         id: _sessionId,
-        type: isPurchase
-            ? TransactionTypeCategory.purchase
-            : TransactionTypeCategory.sale,
+        type: isQuotation
+            ? TransactionTypeCategory.sale
+            : (isPurchase
+                ? TransactionTypeCategory.purchase
+                : TransactionTypeCategory.sale),
         isEdit: isEditMode,
         entityId: widget.invoiceToEdit?.id,
         hasMeaningfulData: () => _hasUnsavedData,
@@ -246,6 +278,28 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
             ? inv.extraExpenseAmount.toStringAsFixed(2)
             : '';
         _extraDescCtrl.text = inv.extraExpenseDescription;
+      } else if (widget.fromQuotation != null) {
+        final q = widget.fromQuotation!;
+        final party = CustomerEntity(
+          id: q.customerId,
+          name: q.customerName,
+          phone: q.customerPhone,
+          email: '',
+          address: '',
+          outstandingBalance: 0.0,
+          createdAt: q.issueDate,
+        );
+        ref.read(createInvoiceFormProvider.notifier).setItems(q.items);
+        if (q.customerId.isNotEmpty) {
+          ref.read(createInvoiceFormProvider.notifier).selectCustomer(party);
+        }
+        _notesCtrl.text = q.notes;
+        ref.read(createInvoiceFormProvider.notifier).toggleGst(q.gstEnabled);
+        ref.read(createInvoiceFormProvider.notifier).updateDiscount(q.discountAmount, q.discountIsPercentage);
+        ref.read(createInvoiceFormProvider.notifier).updateExtraExpense(q.extraExpenseAmount, q.extraExpenseDescription);
+        _discountCtrl.text = q.discountAmount > 0 ? q.discountAmount.toStringAsFixed(2) : '';
+        _extraAmtCtrl.text = q.extraExpenseAmount > 0 ? q.extraExpenseAmount.toStringAsFixed(2) : '';
+        _extraDescCtrl.text = q.extraExpenseDescription;
       } else {
         ref.read(createInvoiceFormProvider.notifier).reset();
       }
@@ -253,11 +307,16 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
   }
 
   Future<void> _loadVoucherIdFromService() async {
-    final type = widget.invoiceType == InvoiceType.purchase
-        ? VoucherType.purchase
-        : VoucherType.sale;
+    final VoucherType vType;
+    if (isQuotation) {
+      vType = VoucherType.quotation;
+    } else if (widget.invoiceType == InvoiceType.purchase) {
+      vType = VoucherType.purchase;
+    } else {
+      vType = VoucherType.sale;
+    }
     final generated =
-        await VoucherSequenceService.instance.generateNextVoucherId(type);
+        await VoucherSequenceService.instance.generateNextVoucherId(vType);
     if (mounted) {
       setState(() {
         _invoiceId = generated;
@@ -277,14 +336,17 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.confirmation_number_outlined,
-                  color: AppColors.primaryBlue, size: 18),
-              SizedBox(width: 8),
+              Icon(
+                isQuotation ? Icons.request_quote_outlined : Icons.confirmation_number_outlined,
+                color: AppColors.primaryBlue,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
               Text(
-                'Voucher / Invoice ID',
-                style: TextStyle(
+                isQuotation ? 'Quotation No.' : 'Voucher / Invoice ID',
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppColors.secondaryText,
@@ -308,6 +370,160 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuotationDateSection() {
+    final isDateError = _validUntilDate.isBefore(
+        DateTime(_createdDateTime.year, _createdDateTime.month, _createdDateTime.day));
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDateError ? AppColors.error : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quotation Details',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkBlueText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _createdDateTime,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _createdDateTime = picked;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.pageBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Quotation Date',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.secondaryText,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today_rounded,
+                                size: 14, color: AppColors.primaryBlue),
+                            const SizedBox(width: 6),
+                            Text(
+                              DateFormat('dd MMM yyyy').format(_createdDateTime),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.darkBlueText),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _validUntilDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _validUntilDate = picked;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.pageBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: isDateError ? AppColors.error : AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Valid Until',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.secondaryText,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.event_available_rounded,
+                                size: 14,
+                                color: isDateError
+                                    ? AppColors.error
+                                    : AppColors.primaryBlue),
+                            const SizedBox(width: 6),
+                            Text(
+                              DateFormat('dd MMM yyyy').format(_validUntilDate),
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDateError
+                                      ? AppColors.error
+                                      : AppColors.darkBlueText),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isDateError) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Valid Until date cannot be earlier than Quotation Date.',
+              style: TextStyle(
+                  fontSize: 11, color: AppColors.error, fontWeight: FontWeight.w600),
+            ),
+          ],
         ],
       ),
     );
@@ -724,6 +940,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     _discountCtrl.dispose();
     _extraAmtCtrl.dispose();
     _extraDescCtrl.dispose();
+    _termsCtrl.dispose();
     super.dispose();
   }
 
@@ -1409,7 +1626,19 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please add at least one item'),
+          content: Text('Please add at least one product.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (isQuotation &&
+        _validUntilDate.isBefore(DateTime(
+            _createdDateTime.year, _createdDateTime.month, _createdDateTime.day))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Valid Until date cannot be earlier than Quotation Date.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -1417,7 +1646,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
     }
 
     final String partyName = _isCashSale
-        ? (isPurchase ? 'Cash Supplier' : 'Cash Customer')
+        ? (isQuotation ? 'Cash Customer' : (isPurchase ? 'Cash Supplier' : 'Cash Customer'))
         : (_selectedCustomer?.name ?? (isPurchase ? 'Supplier' : 'Customer'));
 
     final String partyPhone =
@@ -1425,7 +1654,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
 
     if (isEditMode) {
       final updatedInvoice = widget.invoiceToEdit!.copyWith(
-        type: isPurchase ? InvoiceType.purchase : InvoiceType.sale,
+        type: isQuotation
+            ? InvoiceType.quotation
+            : (isPurchase ? InvoiceType.purchase : InvoiceType.sale),
         customerId: _selectedCustomer?.id ?? widget.invoiceToEdit!.customerId,
         customerName: partyName,
         customerPhone: partyPhone,
@@ -1440,18 +1671,38 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         discountIsPercentage: _discountIsPercentage,
         extraExpenseAmount: _extraExpenseAmount,
         extraExpenseDescription: _extraExpenseDescription,
+        issueDate: _createdDateTime,
+        dueDate: isQuotation ? _validUntilDate : widget.invoiceToEdit!.dueDate,
       );
 
       context
           .read<InvoiceBloc>()
           .add(UpdateInvoiceSubmittedEvent(updatedInvoice));
+
+      if (isQuotation) {
+        context.pushReplacement(
+          RouteNames.invoiceResult,
+          extra: {
+            'invoice': updatedInvoice,
+            'customer': _selectedCustomer,
+            'paymentMethod': 'N/A',
+            'amountPaid': 0.0,
+            'previousBalance': 0.0,
+            'isNewlyCreated': false,
+          },
+        );
+      }
     } else {
       final invoiceToProcess = InvoiceEntity(
-        id: isPurchase
-            ? 'pur_${DateTime.now().millisecondsSinceEpoch}'
-            : 'inv_${DateTime.now().millisecondsSinceEpoch}',
+        id: isQuotation
+            ? 'qt_${DateTime.now().millisecondsSinceEpoch}'
+            : (isPurchase
+                ? 'pur_${DateTime.now().millisecondsSinceEpoch}'
+                : 'inv_${DateTime.now().millisecondsSinceEpoch}'),
         invoiceNumber: _invoiceId,
-        type: isPurchase ? InvoiceType.purchase : InvoiceType.sale,
+        type: isQuotation
+            ? InvoiceType.quotation
+            : (isPurchase ? InvoiceType.purchase : InvoiceType.sale),
         customerId: _isCashSale
             ? ''
             : (_selectedCustomer?.id ?? (isPurchase ? 'sup_101' : 'cust_101')),
@@ -1463,9 +1714,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         discountTotal: calculatedDiscountTotal,
         grandTotal: grandTotal,
         paidAmount: 0.0,
-        status: InvoiceStatus.unpaid,
+        status: InvoiceStatus.draft,
         issueDate: _createdDateTime,
-        dueDate: _createdDateTime.add(Duration(days: isPurchase ? 30 : 10)),
+        dueDate: isQuotation
+            ? _validUntilDate
+            : _createdDateTime.add(Duration(days: isPurchase ? 30 : 10)),
         notes: _notesCtrl.text,
         gstEnabled: _gstEnabled,
         discountAmount: _discountAmount,
@@ -1474,25 +1727,50 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
         extraExpenseDescription: _extraExpenseDescription,
       );
 
-      final result = await context.push<Map<String, dynamic>>(
-        RouteNames.payment,
-        extra: {
-          'invoice': invoiceToProcess,
-          'customer': _selectedCustomer,
-        },
-      );
+      if (isQuotation) {
+        context
+            .read<InvoiceBloc>()
+            .add(CreateInvoiceSubmittedEvent(invoiceToProcess));
 
-      if (result != null && context.mounted) {
-        if (result['isPurchaseDone'] == true) {
-          _safePop();
-        } else {
-          context.pushReplacement(
-            RouteNames.invoiceResult,
-            extra: {
-              ...result,
-              'isNewlyCreated': true,
-            },
-          );
+        context.pushReplacement(
+          RouteNames.invoiceResult,
+          extra: {
+            'invoice': invoiceToProcess,
+            'customer': _selectedCustomer,
+            'paymentMethod': 'N/A',
+            'amountPaid': 0.0,
+            'previousBalance': 0.0,
+            'isNewlyCreated': true,
+          },
+        );
+      } else {
+        if (widget.fromQuotation != null) {
+          final convertedQuotation = widget.fromQuotation!.copyWith(status: InvoiceStatus.converted);
+          context.read<InvoiceBloc>().add(UpdateInvoiceSubmittedEvent(convertedQuotation));
+        }
+
+        final result = await context.push<Map<String, dynamic>>(
+          RouteNames.payment,
+          extra: {
+            'invoice': invoiceToProcess,
+            'customer': _selectedCustomer,
+          },
+        );
+
+        if (result != null && mounted) {
+          if (result['isPurchaseDone'] == true) {
+            _safePop();
+          } else {
+            if (mounted) {
+              context.pushReplacement(
+                RouteNames.invoiceResult,
+                extra: {
+                  ...result,
+                  'isNewlyCreated': true,
+                },
+              );
+            }
+          }
         }
       }
     }
@@ -1544,6 +1822,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildVoucherIdBanner(_invoiceId),
+                        if (isQuotation) _buildQuotationDateSection(),
                         Row(
                           children: [
                             Icon(
@@ -4011,9 +4290,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage>
                     child: BlocBuilder<InvoiceBloc, InvoiceState>(
                       builder: (context, state) {
                         return AppButton(
-                          text: isEditMode
-                              ? 'Update Invoice'
-                              : 'Proceed to Payment',
+                          text: isQuotation
+                              ? (isEditMode ? 'Update Quotation' : 'Save Quotation')
+                              : (isEditMode ? 'Update Invoice' : 'Proceed to Payment'),
                           onPressed: _onCreateInvoice,
                           isLoading: state is InvoiceLoadingState,
                         );

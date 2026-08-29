@@ -36,6 +36,13 @@ abstract class RouteNames {
 
   // Analytics & Reports
   static const String salesAnalytics = '/sales-analytics';
+  static const String salesReport = '/sales-report';
+  static const String purchaseReport = '/purchase-report';
+  static const String inventoryReport = '/inventory-report';
+  static const String accountReport = '/account-report';
+  static const String gstr1Report = '/gstr1-report';
+  static const String gstr3bReturn = '/gstr3b-return';
+  static const String taxSummary = '/tax-summary-report';
   static const String financialAnalytics = '/financial-analytics';
   static const String inventoryAnalytics = '/inventory-analytics';
   static const String reports = '/reports';
@@ -100,6 +107,8 @@ abstract class RouteNames {
   static const String quotations = '/quotations';
   static const String proformaInvoices = '/proforma-invoices';
   static const String deliveryChallans = '/delivery-challans';
+  static const String deliveryChallanDetails = '/delivery-challan-details';
+  static const String createDeliveryChallan = '/create-delivery-challan';
   static const String creditNotes = '/credit-notes';
   static const String debitNotes = '/debit-notes';
   static const String stockTransfer = '/stock-transfer';

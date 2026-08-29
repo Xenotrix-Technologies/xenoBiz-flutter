@@ -204,4 +204,37 @@ class ReturnsRepositoryImpl implements ReturnsRepository {
       }
     }
   }
+
+  @override
+  Future<List<InvoiceReturnEntity>> getAllReturns() async {
+    final q = db.select(db.invoiceReturns)
+      ..orderBy([(t) => OrderingTerm.desc(t.returnDate)]);
+
+    final rows = await q.get();
+
+    final List<InvoiceReturnEntity> list = [];
+    for (var row in rows) {
+      final itemRows = await (db.select(db.invoiceReturnItems)..where((t) => t.returnId.equals(row.id))).get();
+      list.add(_rowToReturn(row, itemRows));
+    }
+    return list;
+  }
+
+  @override
+  Future<void> deleteReturn(String id) async {
+    final old = await getReturn(id);
+    if (old != null) {
+      for (var item in old.items) {
+        if (item.returnedQuantity > 0) {
+          final stockDelta = old.isSale ? -item.returnedQuantity : item.returnedQuantity;
+          await productRepository.adjustStock(
+            item.productId,
+            stockDelta,
+            'Delete Return #${old.returnNumber}',
+          );
+        }
+      }
+    }
+    await (db.delete(db.invoiceReturns)..where((t) => t.id.equals(id))).go();
+  }
 }

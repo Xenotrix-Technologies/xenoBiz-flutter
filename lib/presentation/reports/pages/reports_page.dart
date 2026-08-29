@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
-import '../../widgets/app_card.dart';
+
+// ============================================================================
+// REPORT HUB DIRECTORY PAGE
+// ============================================================================
 
 class ReportsPage extends StatefulWidget {
   final int initialCategoryIndex;
@@ -12,234 +16,549 @@ class ReportsPage extends StatefulWidget {
   State<ReportsPage> createState() => _ReportsPageState();
 }
 
-class _ReportsPageState extends State<ReportsPage> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  String _searchQuery = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(
-      length: 5,
-      vsync: this,
-      initialIndex: widget.initialCategoryIndex,
-    );
-  }
+class _ReportsPageState extends State<ReportsPage> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String? _expandedCategoryTitle;
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final query = _searchCtrl.text.trim().toLowerCase();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Reports Hub'),
-        backgroundColor: AppColors.deepNavy,
+        title: const Text('Report Hub'),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-          tabs: const [
-            Tab(text: 'Sales Reports'),
-            Tab(text: 'Purchase Reports'),
-            Tab(text: 'Inventory Reports'),
-            Tab(text: 'Accounting Reports'),
-            Tab(text: 'GST & Taxation'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Search Input
+            Container(
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Search reports (e.g. Sales, GST, Stock, Ledger)...',
+                  hintStyle: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.secondaryText,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  prefixIcon: const Icon(Icons.search,
+                      size: 20, color: AppColors.secondaryText),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // SECTION 1: GST & TAXATION (MOVED TO TOP AS REQUESTED)
+            _buildSectionHeader(
+              title: 'GST & Taxation',
+              subtitle: 'Tax summaries, HSN codes & compliance tools',
+            ),
+            const SizedBox(height: 10),
+            ..._gstTaxationCategories.map((cat) => _buildExpandableReportTile(
+                  context: context,
+                  category: cat,
+                  query: query,
+                )),
+
+            const SizedBox(height: 24),
+
+            // SECTION 2: GENERAL REPORT HUB
+            _buildSectionHeader(
+              title: 'Report Hub',
+              subtitle: 'Business performance analytics & insights',
+            ),
+            const SizedBox(height: 10),
+            ..._generalReportCategories.map((cat) => _buildExpandableReportTile(
+                  context: context,
+                  category: cat,
+                  query: query,
+                )),
+            const SizedBox(height: 24),
           ],
         ),
       ),
-      body: Column(
+    );
+  }
+
+  Widget _buildSectionHeader({required String title, required String subtitle}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: AppColors.darkBlueText,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.secondaryText,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpandableReportTile({
+    required BuildContext context,
+    required _MainReportCategory category,
+    required String query,
+  }) {
+    // Check if query matches main title, subtitle, or any sub-report title
+    final bool mainMatches = query.isEmpty ||
+        category.title.toLowerCase().contains(query) ||
+        category.description.toLowerCase().contains(query);
+
+    final matchingSubReports = category.subReports.where((sub) {
+      if (query.isEmpty) return true;
+      return sub.title.toLowerCase().contains(query);
+    }).toList();
+
+    if (!mainMatches && matchingSubReports.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Auto-expand when searching and a sub-report matches
+    final bool isSearchAutoExpanded = query.isNotEmpty && matchingSubReports.isNotEmpty;
+    final bool isExpanded = isSearchAutoExpanded || (_expandedCategoryTitle == category.title);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: category.isCompliance
+              ? AppColors.primaryBlue.withValues(alpha: 0.3)
+              : AppColors.border,
+          width: category.isCompliance ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
         children: [
-          // Search Field
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: InputDecoration(
-                hintText: 'Search report name or category...',
-                prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
+          // Main Tile Header
+          InkWell(
+            onTap: () {
+              if (category.directRoute != null) {
+                context.push(category.directRoute!, extra: category.directExtra);
+              } else {
+                setState(() {
+                  if (_expandedCategoryTitle == category.title) {
+                    _expandedCategoryTitle = null;
+                  } else {
+                    _expandedCategoryTitle = category.title;
+                  }
+                });
+              }
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: category.color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(category.icon, color: category.color, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              category.title,
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.darkBlueText,
+                              ),
+                            ),
+                            if (category.isCompliance)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE6F2FF),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'GOV',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0066CC),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          category.description,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (category.directRoute != null)
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 22,
+                      color: AppColors.secondaryText.withValues(alpha: 0.6),
+                    )
+                  else
+                    AnimatedRotation(
+                      turns: isExpanded ? 0.25 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 22,
+                        color: AppColors.secondaryText.withValues(alpha: 0.6),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
 
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildReportGrid(context, _salesReports),
-                _buildReportGrid(context, _purchaseReports),
-                _buildReportGrid(context, _inventoryReports),
-                _buildReportGrid(context, _accountingReports),
-                _buildReportGrid(context, _gstReports),
-              ],
-            ),
+          // Animated Sub-report Rows
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.fastOutSlowIn,
+            child: isExpanded
+                ? Column(
+                    children: [
+                      const Divider(height: 1, thickness: 1, color: AppColors.border),
+                      Container(
+                        color: const Color(0xFFF9FAFC),
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          children: matchingSubReports.map((sub) {
+                            return InkWell(
+                              onTap: () {
+                                context.push(sub.route, extra: sub.extra);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 11),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: category.color
+                                            .withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Icon(sub.icon,
+                                          size: 15, color: category.color),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        sub.title,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.darkBlueText,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(Icons.chevron_right_rounded,
+                                        size: 18,
+                                        color: AppColors.secondaryText),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildReportGrid(BuildContext context, List<_ReportCardItem> items) {
-    final filtered = items.where((item) {
-      if (_searchQuery.trim().isEmpty) return true;
-      final q = _searchQuery.toLowerCase();
-      return item.title.toLowerCase().contains(q) || item.subtitle.toLowerCase().contains(q);
-    }).toList();
+  // ==========================================================================
+  // CATEGORIES & SUB-REPORTS DATA
+  // ==========================================================================
 
-    if (filtered.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.assessment_outlined, size: 54, color: Colors.grey.shade300),
-            const SizedBox(height: 10),
-            const Text('No Matching Reports Found', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          ],
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: filtered.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.7,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemBuilder: (ctx, idx) {
-        final item = filtered[idx];
-        return AppCard(
-          padding: const EdgeInsets.all(12),
-          onTap: () {
-            if (item.route != null) {
-              context.push(item.route!);
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Opening ${item.title}...')),
-              );
-            }
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: item.color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(item.icon, color: item.color, size: 20),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.darkBlueText),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                item.subtitle,
-                style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Categories Data
-  static final List<_ReportCardItem> _salesReports = [
-    _ReportCardItem(title: 'Sales Summary', subtitle: 'Overall sales revenue & growth', icon: Icons.insights, color: AppColors.primaryBlue, route: RouteNames.salesAnalytics),
-    _ReportCardItem(title: 'Sales by Customer', subtitle: 'Customer-wise billing analysis', icon: Icons.people_outline, color: AppColors.primaryBlue, route: RouteNames.salesAnalytics),
-    _ReportCardItem(title: 'Sales by Product', subtitle: 'Item sales breakdown & quantities', icon: Icons.category_outlined, color: AppColors.primaryBlue, route: RouteNames.salesAnalytics),
-    _ReportCardItem(title: 'Sales by Date', subtitle: 'Daily & monthly revenue trend', icon: Icons.date_range_outlined, color: AppColors.primaryBlue, route: RouteNames.salesAnalytics),
-    _ReportCardItem(title: 'Sales Return Report', subtitle: 'Credit notes & return vouchers', icon: Icons.assignment_return_outlined, color: AppColors.danger, route: RouteNames.salesReturns),
-    _ReportCardItem(title: 'Outstanding Receivables', subtitle: 'Overdue customer payments', icon: Icons.call_received, color: AppColors.success, route: RouteNames.receivables),
+  static final List<_MainReportCategory> _gstTaxationCategories = [
+    _MainReportCategory(
+      title: 'GST Report',
+      description: 'GST transaction and filing reports',
+      icon: Icons.receipt_long_outlined,
+      color: Colors.indigo,
+      isCompliance: true,
+      subReports: const [
+        _ReportSubItem(
+            title: 'GST Summary',
+            icon: Icons.summarize_outlined,
+            route: RouteNames.gstTaxation,
+            extra: 0),
+        _ReportSubItem(
+            title: 'Outward Supplies',
+            icon: Icons.outbox_outlined,
+            route: RouteNames.gstTaxation,
+            extra: 1),
+        _ReportSubItem(
+            title: 'GSTR-1 Report',
+            icon: Icons.file_present_outlined,
+            route: RouteNames.gstr1Report),
+        _ReportSubItem(
+            title: 'GSTR-3B Return',
+            icon: Icons.assignment_outlined,
+            route: RouteNames.gstr3bReturn),
+      ],
+    ),
+    _MainReportCategory(
+      title: 'GST Summary',
+      description: 'Overview of GST collected and paid',
+      icon: Icons.summarize_outlined,
+      color: Colors.indigo,
+      directRoute: RouteNames.gstTaxation,
+      directExtra: 0,
+    ),
+    _MainReportCategory(
+      title: 'Tax Summary',
+      description: 'Tax collection and liability summary',
+      icon: Icons.percent_outlined,
+      color: Colors.purple,
+      directRoute: RouteNames.taxSummary,
+    ),
+    _MainReportCategory(
+      title: 'HSN/SAC Summary',
+      description: 'HSN and SAC-wise tax summary',
+      icon: Icons.grid_view_outlined,
+      color: Colors.teal,
+      directRoute: RouteNames.hsnSacSummary,
+    ),
+    _MainReportCategory(
+      title: 'E-Way Bill',
+      description: 'E-Way Bill generation and reports',
+      icon: Icons.local_shipping_outlined,
+      color: const Color(0xFF0066CC),
+      isCompliance: true,
+      directRoute: RouteNames.eWayBill,
+    ),
   ];
 
-  static final List<_ReportCardItem> _purchaseReports = [
-    _ReportCardItem(title: 'Purchase Summary', subtitle: 'Supplier billing & order totals', icon: Icons.shopping_bag_outlined, color: AppColors.primaryBlue),
-    _ReportCardItem(title: 'Purchase by Supplier', subtitle: 'Vendor wise purchase history', icon: Icons.store_outlined, color: AppColors.primaryBlue, route: RouteNames.supplierDirectory),
-    _ReportCardItem(title: 'Purchase by Product', subtitle: 'Product cost & stock addition', icon: Icons.inventory_2_outlined, color: AppColors.primaryBlue),
-    _ReportCardItem(title: 'Purchase Return Report', subtitle: 'Debit notes & vendor returns', icon: Icons.settings_backup_restore_outlined, color: AppColors.danger, route: RouteNames.purchaseReturns),
-    _ReportCardItem(title: 'Outstanding Payables', subtitle: 'Vendor unpaid bills & aging', icon: Icons.call_made, color: AppColors.danger, route: RouteNames.payables),
-  ];
-
-  static final List<_ReportCardItem> _inventoryReports = [
-    _ReportCardItem(title: 'Stock Summary', subtitle: 'Current stock quantity & value', icon: Icons.inventory, color: AppColors.warning, route: RouteNames.inventoryAnalytics),
-    _ReportCardItem(title: 'Stock Movement', subtitle: 'Inward & outward inventory log', icon: Icons.compare_arrows_outlined, color: AppColors.warning),
-    _ReportCardItem(title: 'Stock Valuation', subtitle: 'FIFO / Average cost inventory value', icon: Icons.assessment_outlined, color: AppColors.warning),
-    _ReportCardItem(title: 'Low Stock Report', subtitle: 'Reorder point & low quantity alerts', icon: Icons.warning_amber_outlined, color: AppColors.danger, route: RouteNames.inventoryAnalytics),
-    _ReportCardItem(title: 'Product-wise Stock', subtitle: 'Detailed SKU quantity ledger', icon: Icons.format_list_bulleted, color: AppColors.warning),
-  ];
-
-  static final List<_ReportCardItem> _accountingReports = [
-    _ReportCardItem(title: 'Day Book', subtitle: 'Daily financial transaction log', icon: Icons.auto_stories_outlined, color: AppColors.primaryBlue, route: RouteNames.dailyBook),
-    _ReportCardItem(title: 'Ledger', subtitle: 'Account-wise transaction history', icon: Icons.account_balance_wallet_outlined, color: AppColors.primaryBlue, route: RouteNames.ledger),
-    _ReportCardItem(title: 'Trial Balance', subtitle: 'Debit & credit ledger balance sheet', icon: Icons.balance_outlined, color: AppColors.primaryBlue, route: RouteNames.trialBalance),
-    _ReportCardItem(title: 'Profit & Loss', subtitle: 'Net income, gross profit & expenses', icon: Icons.analytics_outlined, color: AppColors.success, route: RouteNames.financialAnalytics),
-    _ReportCardItem(title: 'Balance Sheet', subtitle: 'Assets, liabilities & equity statement', icon: Icons.account_balance_outlined, color: AppColors.primaryBlue, route: RouteNames.financialAnalytics),
-    _ReportCardItem(title: 'Cash Flow', subtitle: 'Operating & financing cash flow', icon: Icons.waves_outlined, color: Colors.teal),
-    _ReportCardItem(title: 'Journal Register', subtitle: 'All posted journal vouchers', icon: Icons.edit_note, color: Colors.purple, route: RouteNames.journal),
-    _ReportCardItem(title: 'Contra Register', subtitle: 'Cash & bank transfer register', icon: Icons.swap_horiz, color: Colors.teal, route: RouteNames.contra),
-  ];
-
-  static final List<_ReportCardItem> _gstReports = [
-    _ReportCardItem(title: 'GST Summary', subtitle: 'Tax collected vs Input Tax Credit', icon: Icons.receipt_long_outlined, color: AppColors.primaryBlue, route: RouteNames.gstTaxation),
-    _ReportCardItem(title: 'GSTR-1 Report', subtitle: 'Outward sales & tax returns', icon: Icons.file_present_outlined, color: AppColors.primaryBlue, route: RouteNames.gstTaxation),
-    _ReportCardItem(title: 'GSTR-3B Report', subtitle: 'Monthly GST summary return', icon: Icons.assignment_outlined, color: AppColors.primaryBlue, route: RouteNames.gstTaxation),
-    _ReportCardItem(title: 'Tax Collected (Output)', subtitle: 'Sales tax output ledger', icon: Icons.arrow_downward, color: AppColors.success, route: RouteNames.gstTaxation),
-    _ReportCardItem(title: 'Tax Paid (Input)', subtitle: 'Purchase tax input ledger', icon: Icons.arrow_upward, color: AppColors.danger, route: RouteNames.gstTaxation),
-    _ReportCardItem(title: 'Input Tax Credit', subtitle: 'Eligible ITC credit register', icon: Icons.credit_score, color: Colors.indigo, route: RouteNames.gstTaxation),
-    _ReportCardItem(title: 'HSN / SAC Summary', subtitle: 'HSN code-wise sales & tax report', icon: Icons.grid_view_outlined, color: Colors.teal, route: RouteNames.gstTaxation),
+  static final List<_MainReportCategory> _generalReportCategories = [
+    _MainReportCategory(
+      title: 'Sales Report',
+      description: 'View detailed sales performance',
+      icon: Icons.bar_chart_outlined,
+      color: const Color(0xFF0066CC),
+      subReports: const [
+        _ReportSubItem(
+            title: 'Sales Summary',
+            icon: Icons.insights,
+            route: RouteNames.salesReport,
+            extra: 0),
+        _ReportSubItem(
+            title: 'Sales by Customer',
+            icon: Icons.people_outline,
+            route: RouteNames.salesReport,
+            extra: 1),
+        _ReportSubItem(
+            title: 'Sales by Product / Service',
+            icon: Icons.category_outlined,
+            route: RouteNames.salesReport,
+            extra: 2),
+        _ReportSubItem(
+            title: 'Sales by Date',
+            icon: Icons.date_range_outlined,
+            route: RouteNames.salesReport,
+            extra: 3),
+        _ReportSubItem(
+            title: 'Sales Returns',
+            icon: Icons.assignment_return_outlined,
+            route: RouteNames.salesReport,
+            extra: 4),
+      ],
+    ),
+    _MainReportCategory(
+      title: 'Purchase Report',
+      description: 'Analyze purchase transactions',
+      icon: Icons.shopping_bag_outlined,
+      color: const Color(0xFF0066CC),
+      subReports: const [
+        _ReportSubItem(
+            title: 'Purchase Summary',
+            icon: Icons.store_outlined,
+            route: RouteNames.purchaseReport,
+            extra: 0),
+        _ReportSubItem(
+            title: 'Purchase by Supplier',
+            icon: Icons.people_outline,
+            route: RouteNames.purchaseReport,
+            extra: 1),
+        _ReportSubItem(
+            title: 'Purchase Returns',
+            icon: Icons.settings_backup_restore_outlined,
+            route: RouteNames.purchaseReport,
+            extra: 2),
+        _ReportSubItem(
+            title: 'Outstanding Payables',
+            icon: Icons.call_made,
+            route: RouteNames.purchaseReport,
+            extra: 3),
+      ],
+    ),
+    _MainReportCategory(
+      title: 'Inventory Report',
+      description: 'Stock and inventory insights',
+      icon: Icons.inventory_outlined,
+      color: Colors.orange,
+      subReports: const [
+        _ReportSubItem(
+            title: 'Stock Summary',
+            icon: Icons.inventory,
+            route: RouteNames.inventoryReport,
+            extra: 0),
+        _ReportSubItem(
+            title: 'Low Stock Report',
+            icon: Icons.warning_amber_outlined,
+            route: RouteNames.inventoryReport,
+            extra: 1),
+        _ReportSubItem(
+            title: 'Product Stock Ledger',
+            icon: Icons.format_list_bulleted,
+            route: RouteNames.inventoryReport,
+            extra: 2),
+      ],
+    ),
+    _MainReportCategory(
+      title: 'Account Report',
+      description: 'Financial account reports',
+      icon: Icons.analytics_outlined,
+      color: Colors.teal,
+      subReports: const [
+        _ReportSubItem(
+            title: 'Account Summary',
+            icon: Icons.account_balance_wallet_outlined,
+            route: RouteNames.accountReport,
+            extra: 0),
+        _ReportSubItem(
+            title: 'Trial Balance',
+            icon: Icons.balance_outlined,
+            route: RouteNames.accountReport,
+            extra: 1),
+        _ReportSubItem(
+            title: 'Profit & Loss',
+            icon: Icons.analytics_outlined,
+            route: RouteNames.accountReport,
+            extra: 2),
+        _ReportSubItem(
+            title: 'Balance Sheet',
+            icon: Icons.account_balance_outlined,
+            route: RouteNames.accountReport,
+            extra: 3),
+      ],
+    ),
   ];
 }
 
-class _ReportCardItem {
+class _MainReportCategory {
   final String title;
-  final String subtitle;
+  final String description;
   final IconData icon;
   final Color color;
-  final String? route;
+  final bool isCompliance;
+  final String? directRoute;
+  final Object? directExtra;
+  final List<_ReportSubItem> subReports;
 
-  _ReportCardItem({
+  _MainReportCategory({
     required this.title,
-    required this.subtitle,
+    required this.description,
     required this.icon,
     required this.color,
-    this.route,
+    this.isCompliance = false,
+    this.directRoute,
+    this.directExtra,
+    this.subReports = const [],
+  });
+}
+
+class _ReportSubItem {
+  final String title;
+  final IconData icon;
+  final String route;
+  final Object? extra;
+
+  const _ReportSubItem({
+    required this.title,
+    required this.icon,
+    required this.route,
+    this.extra,
   });
 }

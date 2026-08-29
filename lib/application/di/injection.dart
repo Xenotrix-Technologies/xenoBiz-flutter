@@ -20,7 +20,9 @@ import '../../infrastructure/repositories/accounting_repository.dart';
 import '../../infrastructure/repositories/tax_settings_repository_impl.dart';
 
 import '../../domain/repositories/billing_customer_repository.dart';
+import '../../domain/repositories/delivery_challan_repository.dart';
 import '../../infrastructure/repositories/billing_customer_repository_impl.dart';
+import '../../infrastructure/repositories/delivery_challan_repository_impl.dart';
 
 import '../../infrastructure/database/app_database.dart';
 import '../../infrastructure/services/voucher_sequence_service.dart';
@@ -126,6 +128,10 @@ Future<void> configureDependencies() async {
 
   getIt.registerLazySingleton<AccountingRepository>(
     () => AccountingRepository(getIt()),
+  );
+
+  getIt.registerLazySingleton<DeliveryChallanRepository>(
+    () => DeliveryChallanRepositoryImpl(db: getIt()),
   );
 
   // 4. Use Cases
