@@ -30,17 +30,7 @@ class AccountingRepository {
         _memoryContras.clear();
         _memoryContras.addAll(list.map((e) => ContraEntryEntity.fromJson(Map<String, dynamic>.from(e))));
       }
-
-      if (_memoryJournals.isEmpty) {
-        _seedDefaultJournalEntries();
-      }
-      if (_memoryContras.isEmpty) {
-        _seedDefaultContraEntries();
-      }
-    } catch (e) {
-      if (_memoryJournals.isEmpty) _seedDefaultJournalEntries();
-      if (_memoryContras.isEmpty) _seedDefaultContraEntries();
-    }
+    } catch (_) {}
   }
 
   Future<void> _saveToDatabase() async {
@@ -48,62 +38,6 @@ class AccountingRepository {
       await db.putKeyValue(_journalBoxKey, jsonEncode(_memoryJournals.map((j) => j.toJson()).toList()));
       await db.putKeyValue(_contraBoxKey, jsonEncode(_memoryContras.map((c) => c.toJson()).toList()));
     } catch (_) {}
-  }
-
-  void _seedDefaultJournalEntries() {
-    final now = DateTime.now();
-    _memoryJournals.addAll([
-      JournalEntryEntity(
-        id: 'jv-1',
-        date: now.subtract(const Duration(days: 2)),
-        referenceNumber: 'JV-2026-001',
-        narration: 'Depreciation adjustment for store furniture & office equipment',
-        items: const [
-          JournalLineItem(accountName: 'Depreciation Expense', accountType: 'Expense', debit: 2500.0, credit: 0.0),
-          JournalLineItem(accountName: 'Accumulated Depreciation', accountType: 'Asset', debit: 0.0, credit: 2500.0),
-        ],
-        createdAt: now.subtract(const Duration(days: 2)),
-      ),
-      JournalEntryEntity(
-        id: 'jv-2',
-        date: now.subtract(const Duration(days: 1)),
-        referenceNumber: 'JV-2026-002',
-        narration: 'Opening balance correction for petty cash fund',
-        items: const [
-          JournalLineItem(accountName: 'Petty Cash Account', accountType: 'Asset', debit: 1000.0, credit: 0.0),
-          JournalLineItem(accountName: 'Capital Account', accountType: 'Equity', debit: 0.0, credit: 1000.0),
-        ],
-        createdAt: now.subtract(const Duration(days: 1)),
-      ),
-    ]);
-  }
-
-  void _seedDefaultContraEntries() {
-    final now = DateTime.now();
-    _memoryContras.addAll([
-      ContraEntryEntity(
-        id: 'cn-1',
-        date: now.subtract(const Duration(days: 3)),
-        referenceNumber: 'CN-2026-001',
-        fromAccount: 'Cash Account',
-        toAccount: 'HDFC Bank Main A/c',
-        amount: 15000.0,
-        paymentMode: 'Cash Deposit',
-        narration: 'Cash deposited in HDFC Bank main business account',
-        createdAt: now.subtract(const Duration(days: 3)),
-      ),
-      ContraEntryEntity(
-        id: 'cn-2',
-        date: now.subtract(const Duration(days: 1)),
-        referenceNumber: 'CN-2026-002',
-        fromAccount: 'SBI Current A/c',
-        toAccount: 'Cash Account',
-        amount: 5000.0,
-        paymentMode: 'ATM Withdrawal',
-        narration: 'Cash withdrawn for shop daily operations',
-        createdAt: now.subtract(const Duration(days: 1)),
-      ),
-    ]);
   }
 
   // Journal Operations
@@ -117,6 +51,11 @@ class AccountingRepository {
     await _saveToDatabase();
   }
 
+  Future<void> deleteJournalEntry(String id) async {
+    _memoryJournals.removeWhere((j) => j.id == id);
+    await _saveToDatabase();
+  }
+
   // Contra Operations
   List<ContraEntryEntity> getContraEntries() {
     return List.unmodifiable(_memoryContras..sort((a, b) => b.date.compareTo(a.date)));
@@ -125,6 +64,11 @@ class AccountingRepository {
   Future<void> saveContraEntry(ContraEntryEntity entry) async {
     _memoryContras.removeWhere((c) => c.id == entry.id);
     _memoryContras.add(entry);
+    await _saveToDatabase();
+  }
+
+  Future<void> deleteContraEntry(String id) async {
+    _memoryContras.removeWhere((c) => c.id == id);
     await _saveToDatabase();
   }
 

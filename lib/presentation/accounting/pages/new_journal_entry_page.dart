@@ -8,7 +8,9 @@ import '../../../domain/entities/accounting_entities.dart';
 import '../../../infrastructure/repositories/accounting_repository.dart';
 
 class NewJournalEntryPage extends StatefulWidget {
-  const NewJournalEntryPage({super.key});
+  final JournalEntryEntity? entryToEdit;
+
+  const NewJournalEntryPage({super.key, this.entryToEdit});
 
   @override
   State<NewJournalEntryPage> createState() => _NewJournalEntryPageState();
@@ -42,23 +44,41 @@ class _NewJournalEntryPageState extends State<NewJournalEntryPage> {
   @override
   void initState() {
     super.initState();
-    final randomSuffix = (100 + (DateTime.now().millisecondsSinceEpoch % 899)).toString();
-    _refNoController = TextEditingController(text: 'JV-2026-$randomSuffix');
-    _narrationController = TextEditingController();
+    final edit = widget.entryToEdit;
+    if (edit != null) {
+      _entryDate = edit.date;
+      _refNoController = TextEditingController(text: edit.referenceNumber);
+      _narrationController = TextEditingController(text: edit.narration);
 
-    // Default two lines: 1 Debit, 1 Credit
-    _lines.add(_JournalLineInput(
-      accountName: 'Depreciation Expense',
-      accountType: 'Expense',
-      isDebit: true,
-      amountController: TextEditingController(text: '1000'),
-    ));
-    _lines.add(_JournalLineInput(
-      accountName: 'Accumulated Depreciation',
-      accountType: 'Asset',
-      isDebit: false,
-      amountController: TextEditingController(text: '1000'),
-    ));
+      for (var itm in edit.items) {
+        final isDebit = itm.debit > 0;
+        final amt = isDebit ? itm.debit : itm.credit;
+        _lines.add(_JournalLineInput(
+          accountName: itm.accountName,
+          accountType: itm.accountType,
+          isDebit: isDebit,
+          amountController: TextEditingController(text: amt.toStringAsFixed(2)),
+        ));
+      }
+    } else {
+      final randomSuffix = (100 + (DateTime.now().millisecondsSinceEpoch % 899)).toString();
+      _refNoController = TextEditingController(text: 'JV-2026-$randomSuffix');
+      _narrationController = TextEditingController();
+
+      // Default two lines: 1 Debit, 1 Credit
+      _lines.add(_JournalLineInput(
+        accountName: 'Depreciation Expense',
+        accountType: 'Expense',
+        isDebit: true,
+        amountController: TextEditingController(text: '1000'),
+      ));
+      _lines.add(_JournalLineInput(
+        accountName: 'Accumulated Depreciation',
+        accountType: 'Asset',
+        isDebit: false,
+        amountController: TextEditingController(text: '1000'),
+      ));
+    }
   }
 
   @override
@@ -127,7 +147,7 @@ class _NewJournalEntryPageState extends State<NewJournalEntryPage> {
     if (!isDraft && !_isBalanced) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Total Debit must equal Total Credit before saving a posted entry.'),
+          content: Text('Debit and credit totals must be equal.'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -145,7 +165,7 @@ class _NewJournalEntryPageState extends State<NewJournalEntryPage> {
     }).toList();
 
     final entry = JournalEntryEntity(
-      id: 'jv-${DateTime.now().millisecondsSinceEpoch}',
+      id: widget.entryToEdit?.id ?? 'jv-${DateTime.now().millisecondsSinceEpoch}',
       date: _entryDate,
       referenceNumber: _refNoController.text.trim().isNotEmpty
           ? _refNoController.text.trim()
@@ -153,7 +173,7 @@ class _NewJournalEntryPageState extends State<NewJournalEntryPage> {
       narration: _narrationController.text.trim(),
       items: entryItems,
       status: isDraft ? JournalEntryStatus.draft : JournalEntryStatus.posted,
-      createdAt: DateTime.now(),
+      createdAt: widget.entryToEdit?.createdAt ?? DateTime.now(),
     );
 
     final repo = getIt<AccountingRepository>();

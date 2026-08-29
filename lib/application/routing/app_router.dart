@@ -38,6 +38,7 @@ import '../../presentation/invoices/pages/delivery_challan_details_page.dart';
 import '../../presentation/invoices/pages/create_delivery_challan_page.dart';
 import '../../presentation/invoices/pages/credit_debit_notes_page.dart';
 import '../../domain/entities/delivery_challan_entity.dart';
+import '../../domain/entities/accounting_entities.dart';
 import '../../presentation/invoices/pages/invoice_list_page.dart';
 import '../../presentation/invoices/pages/invoice_result_page.dart';
 import '../../presentation/invoices/pages/payment_page.dart';
@@ -299,7 +300,10 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.newJournalEntry,
-                builder: (context, state) => const NewJournalEntryPage(),
+                builder: (context, state) {
+                  final edit = state.extra is JournalEntryEntity ? state.extra as JournalEntryEntity : null;
+                  return NewJournalEntryPage(entryToEdit: edit);
+                },
               ),
               GoRoute(
                 path: RouteNames.contra,
@@ -307,7 +311,10 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.newContraEntry,
-                builder: (context, state) => const NewContraEntryPage(),
+                builder: (context, state) {
+                  final edit = state.extra is ContraEntryEntity ? state.extra as ContraEntryEntity : null;
+                  return NewContraEntryPage(entryToEdit: edit);
+                },
               ),
               GoRoute(
                 path: RouteNames.dailyBook,
@@ -741,7 +748,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.newJournalEntry,
-        builder: (context, state) => const NewJournalEntryPage(),
+        builder: (context, state) {
+          final edit = state.extra is JournalEntryEntity ? state.extra as JournalEntryEntity : null;
+          return NewJournalEntryPage(entryToEdit: edit);
+        },
       ),
       GoRoute(
         path: RouteNames.contra,
@@ -749,7 +759,10 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.newContraEntry,
-        builder: (context, state) => const NewContraEntryPage(),
+        builder: (context, state) {
+          final edit = state.extra is ContraEntryEntity ? state.extra as ContraEntryEntity : null;
+          return NewContraEntryPage(entryToEdit: edit);
+        },
       ),
       GoRoute(
         path: RouteNames.dailyBook,
