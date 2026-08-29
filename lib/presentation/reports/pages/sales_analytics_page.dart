@@ -5,13 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../application/bloc/customer_bloc.dart';
 import '../../../application/bloc/invoice_bloc.dart';
+import '../../../application/di/injection.dart';
 import '../../../application/providers/app_providers.dart';
 import '../../../application/routing/route_names.dart';
 import '../../../const/colors.dart';
+import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/invoice_entity.dart';
+import '../../../domain/entities/invoice_return_entity.dart';
+import '../../../domain/repositories/returns_repository.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/status_chip.dart';
 import '../../widgets/ui_state_widgets.dart';
 
 class SalesAnalyticsPage extends ConsumerStatefulWidget {
@@ -23,13 +27,28 @@ class SalesAnalyticsPage extends ConsumerStatefulWidget {
 
 class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
   DateTimeRange? _customDateRange;
+  List<InvoiceReturnEntity> _salesReturnsList = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+      context.read<CustomerBloc>().add(const FetchCustomersEvent());
+      _fetchSalesReturns();
     });
+  }
+
+  Future<void> _fetchSalesReturns() async {
+    try {
+      final returnsRepo = getIt<ReturnsRepository>();
+      final returns = await returnsRepo.getReturns(InvoiceType.sale);
+      if (mounted) {
+        setState(() {
+          _salesReturnsList = returns;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _selectCustomDateRange(BuildContext context) async {
@@ -46,7 +65,7 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: AppColors.primaryBlue,
               onPrimary: Colors.white,
               surface: Colors.white,
@@ -81,6 +100,13 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
         final monthStart = DateTime(now.year, now.month, 1);
         final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
         return DateTimeRange(start: monthStart, end: monthEnd);
+      case 'This Quarter':
+        final currentQuarter = ((now.month - 1) ~/ 3) + 1;
+        final quarterStartMonth = (currentQuarter - 1) * 3 + 1;
+        final quarterStart = DateTime(now.year, quarterStartMonth, 1);
+        final quarterEndMonth = quarterStartMonth + 2;
+        final quarterEnd = DateTime(now.year, quarterEndMonth + 1, 0, 23, 59, 59);
+        return DateTimeRange(start: quarterStart, end: quarterEnd);
       case 'Last Month':
         final lastMonthStart = DateTime(now.year, now.month - 1, 1);
         final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
@@ -106,11 +132,21 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
     }
   }
 
-  List<InvoiceEntity> _filterInvoices(List<InvoiceEntity> invoices, DateTimeRange range) {
+  // Requirement 1 & 2: Filter STRICTLY completed Sales Invoices ONLY (No Quotations, No Purchases)
+  List<InvoiceEntity> _filterSalesInvoices(List<InvoiceEntity> invoices, DateTimeRange range) {
     return invoices.where((inv) {
-      if (inv.isPurchase) return false;
+      if (inv.isPurchase || inv.isQuotation || inv.type == InvoiceType.quotation) {
+        return false;
+      }
       return inv.issueDate.isAfter(range.start.subtract(const Duration(seconds: 1))) &&
           inv.issueDate.isBefore(range.end.add(const Duration(seconds: 1)));
+    }).toList();
+  }
+
+  List<InvoiceReturnEntity> _filterSalesReturns(List<InvoiceReturnEntity> returns, DateTimeRange range) {
+    return returns.where((ret) {
+      return ret.returnDate.isAfter(range.start.subtract(const Duration(seconds: 1))) &&
+          ret.returnDate.isBefore(range.end.add(const Duration(seconds: 1)));
     }).toList();
   }
 
@@ -137,69 +173,100 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
         scrolledUnderElevation: 0,
       ),
       body: BlocBuilder<InvoiceBloc, InvoiceState>(
-        builder: (context, state) {
-          if (state is InvoiceLoadingState) {
+        builder: (context, invoiceState) {
+          if (invoiceState is InvoiceLoadingState) {
             return const AnalyticsPageSkeleton();
           }
 
-          if (state is InvoiceErrorState) {
+          if (invoiceState is InvoiceErrorState) {
             return ErrorState(
-              message: state.message,
+              message: invoiceState.message,
               onRetry: () => context.read<InvoiceBloc>().add(const FetchInvoicesEvent()),
             );
           }
 
           List<InvoiceEntity> allInvoices = [];
-          if (state is InvoicesLoadedState) {
-            allInvoices = state.invoices;
+          if (invoiceState is InvoicesLoadedState) {
+            allInvoices = invoiceState.invoices;
           }
 
-          final salesInvoices = _filterInvoices(allInvoices, range);
+          final salesInvoices = _filterSalesInvoices(allInvoices, range);
+          final periodReturns = _filterSalesReturns(_salesReturnsList, range);
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+          return BlocBuilder<CustomerBloc, CustomerState>(
+            builder: (context, customerState) {
+              List<CustomerEntity> allCustomers = [];
+              if (customerState is CustomersLoadedState) {
+                allCustomers = customerState.customers;
+              }
+
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context.read<InvoiceBloc>().add(const FetchInvoicesEvent());
+                  context.read<CustomerBloc>().add(const FetchCustomersEvent());
+                  await _fetchSalesReturns();
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. TIME PERIOD SELECTOR
+                      _buildPeriodSelector(activeFilter, range),
+                      const SizedBox(height: 16),
+
+                      // SECTION 1: SALES PERFORMANCE
+                      _buildSectionHeader('SALES PERFORMANCE', Icons.trending_up_rounded),
+                      const SizedBox(height: 12),
+
+                      _buildSalesPerformanceCards(salesInvoices, periodReturns, activeFilter),
+                      const SizedBox(height: 16),
+
+                      // SALES OVERVIEW CHART
+                      _buildSalesChartCard(salesInvoices, activeFilter, range),
+                      const SizedBox(height: 16),
+
+                      // GROSS & NET SALES SUMMARY CARD
+                      _buildGrossNetSummaryCard(salesInvoices, periodReturns),
+                      const SizedBox(height: 24),
+
+                      // SECTION 2: CUSTOMER PERFORMANCE
+                      _buildSectionHeader('CUSTOMER PERFORMANCE', Icons.people_alt_rounded),
+                      const SizedBox(height: 12),
+
+                      _buildCustomerPerformanceSection(
+                        salesInvoices: salesInvoices,
+                        allCustomers: allCustomers,
+                        range: range,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              );
             },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. TIME PERIOD SELECTOR BAR
-                  _buildPeriodSelector(activeFilter, range),
-                  const SizedBox(height: 16),
-
-                  if (salesInvoices.isEmpty) ...[
-                    // EMPTY STATE
-                    _buildEmptyStateCard(activeFilter),
-                  ] else ...[
-                    // 2. HERO TOTAL SALES & SUMMARY CARDS
-                    _buildSummaryMetricsGrid(salesInvoices, activeFilter),
-                    const SizedBox(height: 20),
-
-                    // 3. SALES OVERVIEW CHART
-                    _buildSalesChartCard(salesInvoices, activeFilter, range),
-                    const SizedBox(height: 20),
-
-                    // 4. PAYMENT METHOD BREAKDOWN
-                    _buildPaymentMethodBreakdown(salesInvoices),
-                    const SizedBox(height: 20),
-
-                    // 5. TOP SELLING PRODUCTS
-                    _buildTopSellingProducts(salesInvoices),
-                    const SizedBox(height: 20),
-
-                    // 6. RECENT SALES LIST
-                    _buildRecentSalesSection(salesInvoices),
-                    const SizedBox(height: 24),
-                  ],
-                ],
-              ),
-            ),
           );
         },
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.primaryBlue),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: AppColors.darkBlueText,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
     );
   }
 
@@ -207,7 +274,15 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
   // 1. PERIOD SELECTOR WIDGET
   // ===========================================================================
   Widget _buildPeriodSelector(String activeFilter, DateTimeRange range) {
-    final filters = ['Today', 'This Week', 'This Month', 'Last Month', 'This Year', 'Custom Range'];
+    final filters = [
+      'Today',
+      'This Week',
+      'This Month',
+      'This Quarter',
+      'Last Month',
+      'This Year',
+      'Custom Range'
+    ];
 
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -277,17 +352,22 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
   }
 
   // ===========================================================================
-  // 2. HERO TOTAL SALES & SUMMARY METRICS GRID
+  // 2. SALES PERFORMANCE CARDS
   // ===========================================================================
-  Widget _buildSummaryMetricsGrid(List<InvoiceEntity> invoices, String activeFilter) {
-    final double totalSales = invoices.fold(0.0, (sum, inv) => sum + inv.grandTotal);
-    final int invoiceCount = invoices.length;
+  Widget _buildSalesPerformanceCards(
+    List<InvoiceEntity> salesInvoices,
+    List<InvoiceReturnEntity> salesReturns,
+    String activeFilter,
+  ) {
+    final double totalSales = salesInvoices.fold(0.0, (sum, inv) => sum + inv.grandTotal);
+    final int invoiceCount = salesInvoices.length;
     final double avgInvoiceValue = invoiceCount > 0 ? (totalSales / invoiceCount) : 0.0;
-    final double totalGst = invoices.fold(0.0, (sum, inv) => sum + (inv.gstEnabled ? inv.taxTotal : 0.0));
-    final double totalDiscount = invoices.fold(0.0, (sum, inv) => sum + inv.discountTotal);
-    final double totalExtraExpense = invoices.fold(0.0, (sum, inv) => sum + inv.extraExpenseAmount);
-    final double totalPaid = invoices.fold(0.0, (sum, inv) => sum + inv.paidAmount);
-    final double totalDue = invoices.fold(0.0, (sum, inv) => sum + (inv.grandTotal - inv.paidAmount).clamp(0.0, double.infinity));
+    final double totalGst = salesInvoices.fold(0.0, (sum, inv) => sum + (inv.gstEnabled ? inv.taxTotal : 0.0));
+    final double totalDiscount = salesInvoices.fold(0.0, (sum, inv) => sum + inv.discountTotal);
+    final double totalPaid = salesInvoices.fold(0.0, (sum, inv) => sum + inv.paidAmount);
+    final double totalDue = salesInvoices.fold(
+        0.0, (sum, inv) => sum + (inv.grandTotal - inv.paidAmount).clamp(0.0, double.infinity));
+    final double totalSalesReturns = salesReturns.fold(0.0, (sum, r) => sum + r.totalAmount);
 
     return Column(
       children: [
@@ -358,9 +438,17 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('INVOICES', style: TextStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.w700)),
+                          const Text('INVOICES',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w700)),
                           const SizedBox(height: 2),
-                          Text('$invoiceCount Receipts', style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w800)),
+                          Text('$invoiceCount Invoices',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800)),
                         ],
                       ),
                     ),
@@ -376,9 +464,17 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('AVG INVOICE', style: TextStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.w700)),
+                          const Text('AVG INVOICE',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w700)),
                           const SizedBox(height: 2),
-                          Text(_formatCurrency(avgInvoiceValue), style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w800)),
+                          Text(_formatCurrency(avgInvoiceValue),
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800)),
                         ],
                       ),
                     ),
@@ -443,9 +539,9 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
           children: [
             Expanded(
               child: _buildMetricTile(
-                title: 'Extra Expenses',
-                value: _formatCurrency(totalExtraExpense),
-                icon: Icons.add_card_rounded,
+                title: 'Sales Returns',
+                value: _formatCurrency(totalSalesReturns),
+                icon: Icons.assignment_return_outlined,
                 color: const Color(0xFF8B5CF6),
                 bgColor: const Color(0xFFF3E8FF),
               ),
@@ -453,9 +549,9 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
             const SizedBox(width: 10),
             Expanded(
               child: _buildMetricTile(
-                title: 'Avg Order Size',
+                title: 'Avg Invoice Value',
                 value: _formatCurrency(avgInvoiceValue),
-                icon: Icons.shopping_bag_outlined,
+                icon: Icons.receipt_long_rounded,
                 color: AppColors.darkBlueText,
                 bgColor: AppColors.surfaceContainerLow,
               ),
@@ -519,17 +615,75 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
     );
   }
 
+  // Gross & Net Sales Summary
+  Widget _buildGrossNetSummaryCard(
+    List<InvoiceEntity> salesInvoices,
+    List<InvoiceReturnEntity> salesReturns,
+  ) {
+    final grossSales = salesInvoices.fold(0.0, (sum, i) => sum + i.grandTotal);
+    final totalReturns = salesReturns.fold(0.0, (sum, r) => sum + r.totalAmount);
+    final netSales = grossSales - totalReturns;
+
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Sales Summary',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.darkBlueText,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Gross Sales',
+                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
+              Text(_formatCurrency(grossSales),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Sales Returns',
+                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
+              Text('- ${_formatCurrency(totalReturns)}',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.danger)),
+            ],
+          ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Net Sales',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText)),
+              Text(_formatCurrency(netSales),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.primaryBlue)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   // ===========================================================================
   // 3. SALES OVERVIEW CHART (fl_chart)
   // ===========================================================================
   Widget _buildSalesChartCard(List<InvoiceEntity> invoices, String activeFilter, DateTimeRange range) {
-    // Generate grouped sales data for chart
     final chartData = _generateChartData(invoices, activeFilter, range);
     double maxSales = 0.0;
     for (var spot in chartData) {
       if (spot.y > maxSales) maxSales = spot.y;
     }
     if (maxSales <= 0) maxSales = 100.0;
+
+    final hasNoData = invoices.isEmpty;
 
     return AppCard(
       padding: const EdgeInsets.all(18),
@@ -562,87 +716,109 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
           ),
           const SizedBox(height: 20),
 
-          SizedBox(
-            height: 180,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxSales * 1.15,
-                barTouchData: BarTouchData(
-                  enabled: true,
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (group) => AppColors.deepNavy,
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      return BarTooltipItem(
-                        '${chartData[groupIndex].label}\n${_formatCurrency(rod.toY)}',
-                        const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
-                      );
-                    },
+          if (hasNoData) ...[
+            Container(
+              height: 160,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.bar_chart_rounded, size: 36, color: AppColors.outline),
+                  SizedBox(height: 8),
+                  Text(
+                    'No sales data for this period',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 26,
-                      getTitlesWidget: (val, meta) {
-                        final idx = val.toInt();
-                        if (idx >= 0 && idx < chartData.length) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              chartData[idx].label,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          );
-                        }
-                        return const SizedBox.shrink();
+                ],
+              ),
+            ),
+          ] else ...[
+            SizedBox(
+              height: 180,
+              child: BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: maxSales * 1.15,
+                  barTouchData: BarTouchData(
+                    enabled: true,
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (group) => AppColors.deepNavy,
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        return BarTooltipItem(
+                          '${chartData[groupIndex].label}\n${_formatCurrency(rod.toY)}',
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        );
                       },
                     ),
                   ),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(color: AppColors.border.withValues(alpha: 0.5), strokeWidth: 1);
-                  },
-                ),
-                borderData: FlBorderData(show: false),
-                barGroups: List.generate(chartData.length, (idx) {
-                  final item = chartData[idx];
-                  return BarChartGroupData(
-                    x: idx,
-                    barRods: [
-                      BarChartRodData(
-                        toY: item.y,
-                        color: AppColors.primaryBlue,
-                        width: 14,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                        backDrawRodData: BackgroundBarChartRodData(
-                          show: true,
-                          toY: maxSales * 1.15,
-                          color: AppColors.primaryBlue.withValues(alpha: 0.05),
-                        ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 26,
+                        getTitlesWidget: (val, meta) {
+                          final idx = val.toInt();
+                          if (idx >= 0 && idx < chartData.length) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                chartData[idx].label,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
-                    ],
-                  );
-                }),
+                    ),
+                  ),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(color: AppColors.border.withValues(alpha: 0.5), strokeWidth: 1);
+                    },
+                  ),
+                  borderData: FlBorderData(show: false),
+                  barGroups: List.generate(chartData.length, (idx) {
+                    final item = chartData[idx];
+                    return BarChartGroupData(
+                      x: idx,
+                      barRods: [
+                        BarChartRodData(
+                          toY: item.y,
+                          color: AppColors.primaryBlue,
+                          width: 14,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                          backDrawRodData: BackgroundBarChartRodData(
+                            show: true,
+                            toY: maxSales * 1.15,
+                            color: AppColors.primaryBlue.withValues(alpha: 0.05),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -690,7 +866,6 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
       }
       return points;
     } else {
-      // Custom Range
       final daysDiff = range.end.difference(range.start).inDays + 1;
       if (daysDiff <= 7) {
         final List<_ChartPoint> points = [];
@@ -715,354 +890,334 @@ class _SalesAnalyticsPageState extends ConsumerState<SalesAnalyticsPage> {
   }
 
   // ===========================================================================
-  // 4. PAYMENT METHOD BREAKDOWN
+  // 4. SECTION 2: CUSTOMER PERFORMANCE SECTION
   // ===========================================================================
-  Widget _buildPaymentMethodBreakdown(List<InvoiceEntity> invoices) {
-    final double totalSales = invoices.fold(0.0, (sum, inv) => sum + inv.grandTotal);
-    Map<String, double> methodTotals = {
-      'Cash': 0.0,
-      'GPay/UPI': 0.0,
-      'Card': 0.0,
-      'Other': 0.0,
-    };
+  Widget _buildCustomerPerformanceSection({
+    required List<InvoiceEntity> salesInvoices,
+    required List<CustomerEntity> allCustomers,
+    required DateTimeRange range,
+  }) {
+    // Group sales invoices by customer name / id
+    final Map<String, _CustomerSalesStat> customerStats = {};
 
-    for (var inv in invoices) {
-      String mode = 'Cash';
-      final notes = inv.notes.toLowerCase();
-      if (notes.contains('upi') || notes.contains('gpay') || notes.contains('online')) {
-        mode = 'GPay/UPI';
-      } else if (notes.contains('card') || notes.contains('credit') || notes.contains('debit')) {
-        mode = 'Card';
-      } else if (notes.contains('cheque') || notes.contains('net')) {
-        mode = 'Other';
+    for (var inv in salesInvoices) {
+      final custKey = inv.customerId.isNotEmpty
+          ? inv.customerId
+          : (inv.customerName.isNotEmpty ? inv.customerName : 'Cash Customer');
+
+      if (!customerStats.containsKey(custKey)) {
+        customerStats[custKey] = _CustomerSalesStat(
+          customerId: inv.customerId,
+          name: inv.customerName.isNotEmpty ? inv.customerName : 'Cash Customer',
+          phone: inv.customerPhone,
+        );
       }
-      methodTotals[mode] = (methodTotals[mode] ?? 0.0) + inv.grandTotal;
+
+      final stat = customerStats[custKey]!;
+      stat.totalSales += inv.grandTotal;
+      stat.invoiceCount += 1;
+      stat.outstandingDue += (inv.grandTotal - inv.paidAmount).clamp(0.0, double.infinity);
     }
 
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Payment Methods Breakdown',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.darkBlueText,
-            ),
-          ),
-          const SizedBox(height: 16),
+    final sortedStats = customerStats.values.toList()
+      ..sort((a, b) => b.totalSales.compareTo(a.totalSales));
 
-          ...methodTotals.entries.map((entry) {
-            final pct = totalSales > 0 ? (entry.value / totalSales) : 0.0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    final totalCustomersWithSales = customerStats.length;
+    final newCustomers = allCustomers.where((c) {
+      return c.createdAt.isAfter(range.start.subtract(const Duration(seconds: 1))) &&
+          c.createdAt.isBefore(range.end.add(const Duration(seconds: 1)));
+    }).length;
+
+    final repeatCustomers = customerStats.values.where((c) => c.invoiceCount > 1).length;
+    final topCustomerName = sortedStats.isNotEmpty ? sortedStats.first.name : 'N/A';
+    final topCustomerAmount = sortedStats.isNotEmpty ? sortedStats.first.totalSales : 0.0;
+
+    return Column(
+      children: [
+        // 4 Summary Chips for Customer Stats
+        Row(
+          children: [
+            Expanded(
+              child: _buildCustomerStatTile(
+                title: 'CUSTOMERS',
+                value: '$totalCustomersWithSales',
+                sub: 'With Sales',
+                icon: Icons.groups_rounded,
+                color: AppColors.primaryBlue,
+                bgColor: AppColors.blueTint,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildCustomerStatTile(
+                title: 'NEW',
+                value: '$newCustomers',
+                sub: 'In Period',
+                icon: Icons.person_add_alt_1_rounded,
+                color: AppColors.success,
+                bgColor: AppColors.successContainer,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _buildCustomerStatTile(
+                title: 'REPEAT',
+                value: '$repeatCustomers',
+                sub: '>1 Invoice',
+                icon: Icons.replay_rounded,
+                color: const Color(0xFF8B5CF6),
+                bgColor: const Color(0xFFF3E8FF),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildCustomerStatTile(
+                title: 'TOP CUSTOMER',
+                value: topCustomerName,
+                sub: _formatCurrency(topCustomerAmount),
+                icon: Icons.emoji_events_rounded,
+                color: AppColors.warning,
+                bgColor: AppColors.warningContainer,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // TOP CUSTOMERS RANKING CARD
+        AppCard(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  const Text(
+                    'Top Customers',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.darkBlueText,
+                    ),
+                  ),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+                    children: const [
+                      Icon(Icons.military_tech_rounded, size: 18, color: AppColors.warning),
+                      SizedBox(width: 4),
                       Text(
-                        entry.key,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlueText),
-                      ),
-                      Text(
-                        '${_formatCurrency(entry.value)} (${(pct * 100).toStringAsFixed(1)}%)',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                        'By Sales Volume',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondaryText),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: pct,
-                      minHeight: 8,
-                      backgroundColor: AppColors.border,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        entry.key == 'Cash'
-                            ? AppColors.success
-                            : entry.key == 'GPay/UPI'
-                                ? AppColors.primaryBlue
-                                : entry.key == 'Card'
-                                    ? AppColors.warning
-                                    : const Color(0xFF8B5CF6),
-                      ),
-                    ),
-                  ),
                 ],
               ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
+              const SizedBox(height: 14),
 
-  // ===========================================================================
-  // 5. TOP SELLING PRODUCTS
-  // ===========================================================================
-  Widget _buildTopSellingProducts(List<InvoiceEntity> invoices) {
-    Map<String, _ProductStat> productMap = {};
-
-    for (var inv in invoices) {
-      for (var item in inv.items) {
-        final key = item.productName;
-        if (!productMap.containsKey(key)) {
-          productMap[key] = _ProductStat(name: key);
-        }
-        productMap[key]!.quantity += item.quantity;
-        productMap[key]!.revenue += item.total;
-      }
-    }
-
-    final topProducts = productMap.values.toList()
-      ..sort((a, b) => b.revenue.compareTo(a.revenue));
-
-    final displayList = topProducts.take(5).toList();
-
-    if (displayList.isEmpty) return const SizedBox.shrink();
-
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'Top Selling Products',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
-                ),
-              ),
-              Icon(Icons.star_rounded, color: AppColors.warning, size: 20),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: displayList.length,
-            separatorBuilder: (_, __) => const Divider(height: 16),
-            itemBuilder: (ctx, idx) {
-              final prod = displayList[idx];
-              return Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: idx == 0
-                          ? AppColors.warning.withValues(alpha: 0.15)
-                          : AppColors.primaryBlue.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
+              if (sortedStats.isEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
                     child: Text(
-                      '#${idx + 1}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        color: idx == 0 ? AppColors.warning : AppColors.primaryBlue,
-                      ),
+                      'No customer sales in this period',
+                      style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          prod.name,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${prod.quantity} units sold',
-                          style: const TextStyle(fontSize: 12, color: AppColors.secondaryText, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    _formatCurrency(prod.revenue),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ===========================================================================
-  // 6. RECENT SALES LIST
-  // ===========================================================================
-  Widget _buildRecentSalesSection(List<InvoiceEntity> invoices) {
-    final sortedInvoices = List<InvoiceEntity>.from(invoices)
-      ..sort((a, b) => b.issueDate.compareTo(a.issueDate));
-    final recentList = sortedInvoices.take(5).toList();
-
-    final dateFormatter = DateFormat('dd MMM, hh:mm a');
-
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recent Invoices',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.darkBlueText,
                 ),
-              ),
-              InkWell(
-                onTap: () => context.push(RouteNames.invoices),
-                child: const Text(
-                  'View All',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryBlue),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: recentList.length,
-            separatorBuilder: (_, __) => const Divider(height: 16),
-            itemBuilder: (ctx, idx) {
-              final inv = recentList[idx];
-              final isCashSale = inv.customerName.isEmpty || inv.customerName == 'Cash Sale';
-
-              StatusChip chipWidget;
-              if (inv.status == InvoiceStatus.paid) {
-                chipWidget = StatusChip.paid();
-              } else if (inv.status == InvoiceStatus.partiallyPaid) {
-                chipWidget = StatusChip.partiallyPaid();
-              } else {
-                chipWidget = StatusChip.unpaid();
-              }
-
-              return InkWell(
-                onTap: () {
-                  context.push(RouteNames.invoiceResult, extra: inv);
-                },
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.blueTint,
-                        borderRadius: BorderRadius.circular(12),
+              ] else ...[
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: sortedStats.take(5).length,
+                  separatorBuilder: (_, __) => const Divider(height: 16),
+                  itemBuilder: (ctx, idx) {
+                    final stat = sortedStats[idx];
+                    final matchingCustomer = allCustomers.firstWhere(
+                      (c) => c.id == stat.customerId || c.name == stat.name,
+                      orElse: () => CustomerEntity(
+                        id: stat.customerId,
+                        name: stat.name,
+                        phone: stat.phone,
+                        email: '',
+                        address: '',
+                        createdAt: DateTime.now(),
                       ),
-                      child: const Icon(Icons.receipt_long_rounded, color: AppColors.primaryBlue, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    );
+
+                    return InkWell(
+                      onTap: () {
+                        context.push(RouteNames.customerDetails, extra: matchingCustomer);
+                      },
+                      child: Row(
                         children: [
-                          Text(
-                            '#${inv.invoiceNumber}',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
+                          Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: idx == 0
+                                  ? AppColors.warning.withValues(alpha: 0.15)
+                                  : AppColors.primaryBlue.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '#${idx + 1}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: idx == 0 ? AppColors.warning : AppColors.primaryBlue,
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isCashSale ? 'Cash Sale' : inv.customerName,
-                            style: const TextStyle(fontSize: 12, color: AppColors.secondaryText, fontWeight: FontWeight.w600),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  stat.name,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.darkBlueText,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${stat.invoiceCount} ${stat.invoiceCount == 1 ? 'invoice' : 'invoices'}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.secondaryText,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            dateFormatter.format(inv.issueDate),
-                            style: const TextStyle(fontSize: 11, color: AppColors.outline),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                _formatCurrency(stat.totalSales),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.darkBlueText,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                stat.outstandingDue > 0
+                                    ? 'Due ${_formatCurrency(stat.outstandingDue)}'
+                                    : '₹0 Due',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: stat.outstandingDue > 0
+                                      ? AppColors.danger
+                                      : AppColors.success,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          _formatCurrency(inv.grandTotal),
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.darkBlueText),
-                        ),
-                        const SizedBox(height: 4),
-                        chipWidget,
-                      ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              );
-            },
+              ],
+              const SizedBox(height: 16),
+
+              // VIEW ALL CUSTOMERS BUTTON
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryBlue,
+                    side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    context.push(RouteNames.accounts);
+                  },
+                  icon: const Icon(Icons.people_outline_rounded, size: 18),
+                  label: const Text('View All Customers', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  // ===========================================================================
-  // 7. EMPTY STATE CARD
-  // ===========================================================================
-  Widget _buildEmptyStateCard(String activeFilter) {
+  Widget _buildCustomerStatTile({
+    required String title,
+    required String value,
+    required String sub,
+    required IconData icon,
+    required Color color,
+    required Color bgColor,
+  }) {
     return AppCard(
-      padding: const EdgeInsets.all(32),
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.blueTint,
-              shape: BoxShape.circle,
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.analytics_outlined,
-              size: 48,
-              color: AppColors.primaryBlue,
-            ),
+            child: Icon(icon, color: color, size: 18),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'No sales found for $activeFilter',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.darkBlueText,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.secondaryText,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  sub,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.secondaryText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'There are no completed sales invoices recorded during this selected date range.',
-            style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primaryBlue,
-              side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              ref.read(analyticsDateFilterProvider.notifier).state = 'This Month';
-            },
-            child: const Text('Reset Filter to This Month', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -1076,9 +1231,17 @@ class _ChartPoint {
   const _ChartPoint({required this.label, required this.y});
 }
 
-class _ProductStat {
+class _CustomerSalesStat {
+  final String customerId;
   final String name;
-  int quantity = 0;
-  double revenue = 0.0;
-  _ProductStat({required this.name});
+  final String phone;
+  double totalSales = 0.0;
+  int invoiceCount = 0;
+  double outstandingDue = 0.0;
+
+  _CustomerSalesStat({
+    required this.customerId,
+    required this.name,
+    required this.phone,
+  });
 }
