@@ -91,6 +91,8 @@ import '../../presentation/reports/pages/purchase_report_page.dart';
 import '../../presentation/reports/pages/inventory_report_page.dart';
 import '../../presentation/reports/pages/account_report_page.dart';
 import '../../presentation/tools/pages/business_tools_subpages.dart';
+import '../../presentation/tools/pages/import_data_page.dart';
+import '../../presentation/settings/pages/staff_users_page.dart';
 import 'route_names.dart';
 
 Widget _buildCreateMasterPage(GoRouterState state) {
@@ -440,11 +442,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.importData,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Import Data',
-                  icon: Icons.file_upload,
-                  description: 'Bulk import products, customers & invoices from Excel/CSV.',
-                ),
+                builder: (context, state) => const ImportDataPage(),
               ),
               GoRoute(
                 path: RouteNames.exportData,
@@ -456,11 +454,7 @@ class AppRouter {
               ),
               GoRoute(
                 path: RouteNames.staffUsers,
-                builder: (context, state) => const SecondaryModulePage(
-                  title: 'Staff & Users',
-                  icon: Icons.people_outline,
-                  description: 'Manage staff access, cashier permissions & user roles.',
-                ),
+                builder: (context, state) => const StaffUsersPage(),
               ),
               GoRoute(
                 path: RouteNames.voucherPrefixSettings,
@@ -939,11 +933,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.importData,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Import Data',
-          icon: Icons.file_upload,
-          description: 'Bulk import products, customers & invoices from Excel/CSV.',
-        ),
+        builder: (context, state) => const ImportDataPage(),
       ),
       GoRoute(
         path: RouteNames.exportData,
@@ -963,11 +953,7 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.staffUsers,
-        builder: (context, state) => const SecondaryModulePage(
-          title: 'Staff & Users',
-          icon: Icons.people_outline,
-          description: 'Manage staff access, cashier permissions & user roles.',
-        ),
+        builder: (context, state) => const StaffUsersPage(),
       ),
       GoRoute(
         path: RouteNames.printerSettings,

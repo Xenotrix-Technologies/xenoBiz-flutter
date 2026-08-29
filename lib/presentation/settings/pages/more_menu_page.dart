@@ -375,13 +375,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
           color: Color(0xFF0066CC),
         ),
         _MenuItem(
-          icon: Icons.file_download_outlined,
-          title: 'Export Data',
-          description: 'Export your business data',
-          route: RouteNames.exportData,
-          color: Color(0xFF0066CC),
-        ),
-        _MenuItem(
           icon: Icons.people_outline,
           title: 'Staff & Users',
           description: 'Manage staff access and permissions',
